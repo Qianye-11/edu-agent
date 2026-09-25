@@ -3,12 +3,12 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 rem ============================================================
 rem  ppt-master 安装脚本（「边框里的 PPT 优化」一期依赖）
-rem  为什么装在仓库外：第三方代码不进仓库（与 wps-skills 同策略）
+rem  为什么装在项目内 .deps：第三方代码不进仓库（gitignore），但放在项目盘（老师 C 盘紧张）
 rem  为什么用 gh-proxy：本机 hosts 把 github.com 指到 127.0.0.1（加速器），直连不可用
 rem  用法：deploy\setup_ppt_master.cmd        （双击或命令行都行）
 rem ============================================================
 
-set "DEST=%LOCALAPPDATA%\edu-agent\deps\ppt-master"
+set "DEST=%~dp0..\.deps\ppt-master"
 set "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
 set "REPO=https://gh-proxy.com/https://github.com/hugohe3/ppt-master.git"
 
@@ -16,7 +16,7 @@ echo [1/5] 目标目录：%DEST%
 if exist "%DEST%\.git" (
   echo       已存在，跳过克隆（升级请跑：python "%DEST%\skills\ppt-master\scripts\update_repo.py"）
 ) else (
-  if not exist "%LOCALAPPDATA%\edu-agent\deps" mkdir "%LOCALAPPDATA%\edu-agent\deps"
+  if not exist "%~dp0..\.deps" mkdir "%~dp0..\.deps"
   echo       克隆中（gh-proxy，depth=1）...
   git clone --depth 1 --single-branch "%REPO%" "%DEST%"
   if errorlevel 1 (
@@ -38,8 +38,9 @@ echo [3/5] 装一期需要的依赖（避开 AGPL 的 PyMuPDF 与旁白/图片�
 if errorlevel 1 echo       [!] 依赖安装有失败项，自检会报出来（见第 5 步）
 
 echo [4/5] 写安装记录
-> "%LOCALAPPDATA%\edu-agent\ppt_master.json" echo {"home": "%DEST:\=\\%"}
-"%VENV_PY%" -c "import json,os,subprocess;p=os.path.join(os.environ['LOCALAPPDATA'],'edu-agent','ppt_master.json');d=json.load(open(p,encoding='utf-8'));d['commit']=subprocess.run(['git','-C',d['home'],'rev-parse','--short','HEAD'],capture_output=True,text=True).stdout.strip();json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=1);print('      commit',d['commit'])"
+if not exist "%~dp0..\data" mkdir "%~dp0..\data"
+> "%~dp0..\data\ppt_master.json" echo {"home": "%DEST:\=\\%"}
+"%VENV_PY%" -c "import json,os,subprocess;p=os.path.join(os.getcwd(),'data','ppt_master.json');d=json.load(open(p,encoding='utf-8'));d['commit']=subprocess.run(['git','-C',d['home'],'rev-parse','--short','HEAD'],capture_output=True,text=True).stdout.strip();json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=1);print('      commit',d['commit'])"
 
 echo [5/5] 自检
 pushd "%~dp0.."

@@ -15,7 +15,7 @@
 | Node | **v24.20.0**（npm 11.19.0） |
 | Python | 3.13.2（项目自带 `.venv`） |
 | wps-skills 版本锁 | 上游 commit **`a82533662268b3245f93d8685bc45dffede048b6`**（main，2026-06-30，`fix(install): install.ps1 补齐 publish.xml 创建…`） |
-| 安装位置（仓库外） | `%LOCALAPPDATA%\edu-agent\deps\wps-skills` |
+| 安装位置（项目内、不入库） | `<repo>\.deps\wps-skills` |
 | 是否需要 WPS 加载项 | **不需要**（加载项是 macOS/Linux 的 HTTP 轮询模式；Windows 走 PowerShell COM 桥 `scripts/wps-com.ps1`） |
 
 ## 2. 从零复现（每条都是原样可跑的命令）
@@ -80,7 +80,7 @@ tools/wps_spike/              本文档 + evidence/
 ```
 
 路径解析优先级（**第三方永远在仓库外**）：`WPS_MCP_ENTRY` > `WPS_MCP_DIR` >
-`data/wps_mcp.json` > 默认 `%LOCALAPPDATA%\edu-agent\deps\wps-skills`。
+`data/wps_mcp.json` > 项目内 `.deps\wps-skills` > 旧的 `%LOCALAPPDATA%\edu-agent\deps\wps-skills`。
 `.gitignore` 里加了护栏 `mcp_servers/wps-office-mcp/`、`skills/`，防止第三方被误提交。
 
 ## 4. 踩过的坑（这部分最值钱）

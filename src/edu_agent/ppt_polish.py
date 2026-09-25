@@ -28,7 +28,9 @@ from pathlib import Path
 # ---------- 安装位置 ----------
 
 _ENV_HOME = "PPT_MASTER_HOME"
-_DEFAULT_HOME = Path(os.environ.get("LOCALAPPDATA", "")) / "edu-agent" / "deps" / "ppt-master"
+# 2026-09-25：默认装在**项目内** `.deps/ppt-master`（老师 C 盘紧张，第三方与缓存都收进项目盘）；
+# 旧的 %LOCALAPPDATA%\edu-agent\deps\ppt-master 仍兼容（项目内那份不存在时才回退）。
+_OLD_HOME = Path(os.environ.get("LOCALAPPDATA", "")) / "edu-agent" / "deps" / "ppt-master"
 
 # 一期用到的确定性脚本（缺任何一个，"体检/校验"就不可用）
 _REQUIRED_SCRIPTS = ("pptx_intake.py", "beautify_inventory.py", "beautify_identity.py")
@@ -46,9 +48,12 @@ _PY_DEPS = (("pptx", "python-pptx", "生成/改写 pptx"),
 
 
 def home() -> Path:
-    """ppt-master 根目录：环境变量 > %LOCALAPPDATA%\\edu-agent\\deps\\ppt-master。"""
+    """ppt-master 根目录：环境变量 > 项目内 `.deps/ppt-master` > 旧的 %LOCALAPPDATA% 位置。"""
     env = os.environ.get(_ENV_HOME)
-    return Path(env) if env else _DEFAULT_HOME
+    if env:
+        return Path(env)
+    local = Path(__file__).resolve().parents[2] / ".deps" / "ppt-master"
+    return local if local.exists() else _OLD_HOME
 
 
 def scripts_dir() -> Path:

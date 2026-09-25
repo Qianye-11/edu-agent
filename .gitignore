@@ -39,3 +39,9 @@ content/wiki/
 # UI 检查脚本的依赖（按需 npm i jsdom，不入库）
 tools/uicheck/node_modules/
 tools/uicheck/package-lock.json
+
+# 第三方依赖（ppt-master / wps-skills）：装项目内但不入库（2026-09-25 从 C 盘迁入）
+.deps/
+
+# 构建缓存（uv / pip）：迁到项目盘，避免占 C 盘
+.cache/

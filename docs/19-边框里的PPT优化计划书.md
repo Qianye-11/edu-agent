@@ -59,7 +59,7 @@
 1. 预览链路**不落盘、不调 WPS**（本次要给"优化任务"开**受控例外**，见 §8）；
 2. `wps_export.py` / `/api/wps/export` / `/api/wps/download` / WPS MCP 白名单**行为不变**；
 3. 面板外壳与既有页签**只增不改**：加"优化"入口与结果区，不推倒重来；
-4. 第三方工具**装在仓库外**（与 `wps-skills` 同策略：`%LOCALAPPDATA%\edu-agent\deps\`），仓库里只放安装脚本与文档。
+4. 第三方工具装**项目内 `.deps/`**（不入库，gitignore；2026-09-25 起与 `wps-skills` 同策略），仓库里只放安装脚本与文档。
 
 ---
 
@@ -164,7 +164,7 @@
 ```cmd
 :: deploy\setup_ppt_master.cmd（新增，一次性）
 :: 1) 仓库外安装目录（与 wps-skills 同策略，不进仓库）
-set DEST=%LOCALAPPDATA%\edu-agent\deps\ppt-master
+set DEST=<repo>\.deps\ppt-master
 :: 2) 克隆走 gh-proxy（本机 github.com 被 hosts 指向 127.0.0.1，直连不可用；该项目此前实测 gh-proxy 约 10MB/s）
 git clone https://gh-proxy.com/https://github.com/hugohe3/ppt-master.git "%DEST%"
 :: 3) 依赖走国内镜像（venv 已装 python-pptx / python-docx，只会补差量）

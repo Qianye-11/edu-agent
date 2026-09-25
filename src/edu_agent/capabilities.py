@@ -31,15 +31,25 @@ _TOOLS_CACHE_TTL = 300.0  # MCP 工具清单缓存（要起子进程，慢）
 
 
 # ---------- 第三方 WPS MCP（wps-skills）安装位置解析 ----------
-# 交接约定（docs/09-WPS接入交接要求.md）：第三方源码/node_modules **不入库**，
-# 由 deploy/setup_wps_mcp.cmd 克隆到仓库外的固定位置。解析优先级：
+# 交接约定（docs/09-WPS接入交接要求.md）：第三方源码/node_modules **不入库**。
+# 2026-09-25 起**优先装在项目内 `.deps/`**（老师 C 盘紧张，把第三方与缓存都收进项目盘）；
+# 解析优先级：
 #   1) 环境变量 WPS_MCP_ENTRY（直接指向 dist/index.js）
 #   2) 环境变量 WPS_MCP_DIR（wps-skills 克隆目录）
 #   3) data/wps_mcp.json（安装脚本写的运行时配置）
-#   4) 默认 %LOCALAPPDATA%\edu-agent\deps\wps-skills
+#   4) 项目内 <repo>/.deps/wps-skills（推荐）
+#   5) 旧位置 %LOCALAPPDATA%\edu-agent\deps\wps-skills（兼容老安装）
+def _project_deps_root(name: str) -> Path:
+    """项目内 `.deps/<name>`（仓库根 = 本文件的上两级）。"""
+    return Path(__file__).resolve().parents[2] / ".deps" / name
+
+
 def _default_wps_root() -> Path:
     import os
 
+    local = _project_deps_root("wps-skills")
+    if local.exists():
+        return local
     base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~")
     return Path(base) / "edu-agent" / "deps" / "wps-skills"
 

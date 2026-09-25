@@ -22,7 +22,7 @@
 - 新 skill **`ppt-polish`**（「PPT 优化」，内置，**默认关** —— 它会改写老师的稿，必须显式开）；
   `/api/mcp/status` 与 `/api/capabilities` 新增 **`ppt_polish_ready`**（= 开关 ∧ ppt-master 装好）。
 - 安装脚本 **`deploy/setup_ppt_master.cmd`**：gh-proxy 克隆到仓库外
-  （`%LOCALAPPDATA%\edu-agent\deps\ppt-master`，与 wps-skills 同策略）+ pip 清华镜像只装一期所需
+  （装**项目内** `.deps\ppt-master`，不入库；与 wps-skills 同策略）+ pip 清华镜像只装一期所需
   （**不装 AGPL 的 PyMuPDF**）+ 写安装记录 + 跑自检。
 - **UI 检查脚本进仓库**：`tools/uicheck/panel_check.js`（jsdom 真 DOM，23 项）——
   以前放在临时目录被清过两次，历史结论没法复跑，现在跟着仓库走。
@@ -30,6 +30,13 @@
   包完整性深检 → WPS 真打开 → 不碰 `content/plans`）。首跑 **14/14 全过**，含
   **WPS 经 MCP 真打开优化稿「演示文稿打开成功！」**、文字多重集与源稿一致（42 段）、
   中文字体写进 `<a:ea>` 42 处、无 `<p:timing`。
+
+### 变更
+- **第三方依赖与构建缓存从 C 盘迁到项目盘**（老师 C 盘紧张）：
+  `ppt-master`（206MB）与 `wps-skills`（77MB）→ `<repo>\.deps\`；
+  uv 缓存（524MB）与 pip 缓存（191MB）→ `<repo>\.cache\`（并设 `UV_CACHE_DIR` / `PIP_CACHE_DIR` 用户环境变量）；
+  代码解析顺序改为：环境变量 → **项目内 `.deps`** → 旧的 `%LOCALAPPDATA%\edu-agent\deps`（老安装仍兼容）；
+  安装脚本 `deploy/setup_ppt_master.cmd`、`deploy/setup_wps_mcp.cmd` 默认目标同步改到项目内；`.deps/`、`.cache/` 已 gitignore。
 
 ### 说明
 - **一期不做"整套重排/美化"**：ppt-master 的 `beautify-pptx` 档是**模型驱动的 SVG 重排**

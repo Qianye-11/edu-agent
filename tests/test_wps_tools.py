@@ -232,12 +232,23 @@ class TestSessionDocPreview(_EnvSandbox):
 
 
 class TestPathResolution(_EnvSandbox):
-    """第三方装在仓库外：路径解析优先级 + 未安装时的表现。"""
+    """第三方依赖的位置策略：**仓库外，或仓库内的 `.deps/`（不入库）**。
 
-    def test_entry_outside_repo(self):
+    2026-09-25 变更：老师 C 盘紧张，第三方（wps-skills / ppt-master）与构建缓存迁进项目盘；
+    但"不进仓库"这条没变 —— 落在 `.deps/` 时必须被 .gitignore 挡住。
+    """
+
+    def test_entry_not_tracked_by_git(self):
+        """入口要么在仓库外，要么在 `.deps/` 且该目录已 gitignore（不进仓库）。"""
         repo = _PROJ.resolve()
-        entry = cap.wps_entry()
-        self.assertNotIn(str(repo), str(entry), "WPS MCP 入口不应落在仓库内")
+        entry = cap.wps_entry().resolve()
+        inside = str(entry).startswith(str(repo))
+        if inside:
+            self.assertTrue(str(entry).startswith(str(repo / ".deps")),
+                            f"仓库内的第三方入口只允许放 .deps/：{entry}")
+            gi = (_PROJ / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn(".deps/", gi, ".deps/ 必须写进 .gitignore，否则第三方会进仓库")
+        # 仓库外（旧的 %LOCALAPPDATA% 位置）也仍然合法 —— 老安装不该因此报错
 
     def test_env_entry_wins(self):
         fake = Path(self._tmp.name) / "deps" / "wps-office-mcp" / "dist" / "index.js"
