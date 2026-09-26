@@ -129,6 +129,31 @@ def slide_deck_build() -> dict:
     return slide_deck.build_deck("tech-editorial", slide_deck.SAMPLE_DECK, title="3.3 幂函数")
 
 
+def slides_export(with_wps: bool = False) -> None:
+    """幻灯片导出验收：同一份 SVG → 原生可编辑 pptx（docs/23 M3 的 T3.1/T3.4）。"""
+    from edu_agent import slide_deck
+
+    print("\n[8] 幻灯片导出（新版式 → 原生可编辑 pptx）")
+    out = slide_deck.export_deck_pptx("tech-editorial", slide_deck.SAMPLE_DECK, title="3.3 幂函数")
+    check("导出成功", out.get("ok"), out.get("error") or f"status={out.get('status')}")
+    if not out.get("ok"):
+        return
+    for c in (out.get("verify") or {}).get("checks") or []:
+        check(f"硬验收：{c['name']}", c["ok"], c["detail"][:90])
+    pptx = Path(out["file"])
+    print(f"       产物：{pptx}")
+    if with_wps:
+        print("\n[9] WPS 真机打开（新版式产物）")
+        try:
+            from edu_agent import mcp_tools
+
+            r = mcp_tools.call_tool("wps-office", "wps_ppt_open_presentation",
+                                    {"filePath": str(pptx)}, timeout=120)
+            check("WPS 打开了新版式 pptx", bool(r), str(r)[:120])
+        except Exception as e:  # noqa: BLE001
+            check("WPS 打开了新版式 pptx", False, f"{type(e).__name__}: {e}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", default=str(DEFAULT_SAMPLE), help="要验收的 .pptx（默认用仓库样例）")
@@ -201,6 +226,7 @@ def main() -> int:
 
     if not args.skip_slides:
         slides_audit()
+        slides_export(with_wps=args.with_wps)
 
     print(f"\n产物：{out}")
     print(f"任务目录：{job['dir']}")

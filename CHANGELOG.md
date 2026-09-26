@@ -28,11 +28,32 @@
 - **基线实测**（写回 `docs/22` §7.2）：三套主题的示例 deck —— 内容纵向占比 77–79%、底部空白 76–84px、
   安全边距 72/80px、文字碰撞 0、主色墨迹 ≤0.2%、字号正好 tokens 五档 ⇒ **error 0 / warn 0**。
 
-### 修正
+### 新增（R3 · 导出接进面板 + WPS 真机，2026-09-25）
+- **新版式导出**：面板「下载▾」→ **PPT（新版式 · 与预览同一份 · 字可改）**——把面板正在显示的那份
+  幻灯片（`slides` + 主题）交给服务端，用**同一份 SVG** 转成原生可编辑 pptx
+  （`slide_deck.export_deck_pptx()`：`data/tmp/ppt_jobs/deck-<时间戳>/svg_output/` → 质量检查 →
+  `svg_to_pptx.py --quick-generate` → `data/ppt_out/教案_<标题>_<时间戳>.pptx`，三页约 4 秒）。
+  - 导出即验：`slide_deck.verify_pptx()` 跑四条硬验收（页数 / 原生文本 / 不嵌字体+中文字体按 run 核 / 内容零丢失）；
+  - `POST /api/wps/export` 新增 `kind="pptx-deck"`（权限闸门沿用 `export_pptx`；未装 ppt-master → `gate:"install"`）；
+  - **双轨回退**：转换没过验收、主题坏掉、或设了 `EDU_PPT_EXPORT=legacy` ⇒ 自动回退旧 `pptx_native`，
+    响应带 `fallback/reason`，面板结果条如实写明「已回退到旧版式」（不静默降级）；
+  - 旧的 `kind="pptx"`（每环节一页）保留为「PPT（旧版式）」。
+- 验收脚本 `tools/ppt_acceptance.py` 增第 8 步（新版式导出 + 5 条硬验收）与第 9 步（WPS 真机打开产物）；
+  面板检查增 7 条导出接线用例（含回退提示）。
+
+### 实测（R3）
+- `tools/ppt_acceptance.py --with-wps` → **28/28 全过**：导出 `status=passed-with-warnings`、页数 3/3、
+  51 个原生形状、包内 `fntdata` 0 个、含中文 run 19 个全部显式 `ea=Microsoft YaHei`、内容零丢失，
+  且 **WPS 返回「演示文稿打开成功！」**。
+
+### 修正（R2）
 - `docs/22` §7.1 原「空白率 = 1 − 文字并集面积 / 画布面积，目标 ≤45%」**算不出来也不可达**（任何正常版式都 >85%），
   改为「内容纵向占比 ≥74% + 底部空白 ≤170px + 安全边距 + 最大空矩形（只记录）」；主色占比改用**墨迹面积**
   （矩形=面积、线=长×线宽、文字=包围盒×0.5）——用包围盒量曲线会把 2px 细线算成 11%，改后 0.2%。
 - `tools/ppt_acceptance.py` 补 `sys.stdout.reconfigure(encoding="utf-8")`（控制台默认 GBK，打印 ✅/❌ 会当场 UnicodeEncodeError）。
+
+### 修正（R3）
+- `docs/19` §13.2 的真机验收命令与清单更新到 v1.16.0（含版式审计与新版式导出两段），并补记 `--selftest`。
 
 ## [v1.15.0] - 2026-09-23
 

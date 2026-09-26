@@ -1664,7 +1664,8 @@ svg{display:block}
           'style="margin-left:3px;vertical-align:-1px"><path d="M6 9l6 6 6-6"/></svg></button>' +
           '<div class="dp-menu" id="docPanelMenu">' +
             '<button data-dl="docx"><b>Word（.docx）</b><span>经 WPS 导出 · 落盘</span></button>' +
-            '<button data-dl="pptx"><b>PPT（.pptx）</b><span>本地生成 · 每环节一页</span></button>' +
+            '<button data-dl="pptx-deck"><b>PPT（.pptx）</b><span>新版式 · 与预览同一份 · 字可改</span></button>' +
+            '<button data-dl="pptx"><b>PPT（旧版式）</b><span>兼容导出 · 每环节一页</span></button>' +
             '<button data-dl="html"><b>HTML</b><span>网页版 · 直接下载</span></button>' +
           '</div>' +
         '</span>' +
@@ -3241,24 +3242,31 @@ svg{display:block}
   function expViaServer(o){
     var gate = expGate(o.kind);
     if(gate){ if(o.onResult) o.onResult('<span style="color:#dc2626">✗ ' + escHtml(gate) + '</span>'); return; }
+    var isPpt = String(o.kind || '').indexOf('pptx') === 0;
     var body = { kind: o.kind, outDir: dzOutDirGet() };
     if(o.payload) body.payload = o.payload;
     if(o.template) body.template = o.template;
     if(o.markdown) body.markdown = o.markdown;
+    if(o.slides) body.slides = o.slides;            /* 新版式导出：把面板那份数据一起带上 */
+    if(o.theme_id) body.theme_id = o.theme_id;
+    if(o.title) body.title = o.title;
     var label = o.btn ? o.btn.textContent : '';
     var done = function(){ if(o.btn){ o.btn.disabled = false; o.btn.textContent = label; } };
-    if(o.btn){ o.btn.disabled = true; o.btn.textContent = (o.kind === 'pptx' ? '正在生成 PPT…' : '正在导出…（约 1 分钟）'); }
+    if(o.btn){ o.btn.disabled = true; o.btn.textContent = (isPpt ? '正在生成 PPT…' : '正在导出…（约 1 分钟）'); }
     spJsonPermission('/api/wps/export', 'POST', body).then(function(r){
       done();
       if(r && r.ok){
-        if(o.onResult) o.onResult(expResultHtml(r));
+        /* 回退到旧版式时如实说明（不静默降级） */
+        var note = r.fallback
+          ? '<span style="color:#8A5A00">　（已回退到旧版式：' + escHtml(r.reason || '') + '）</span>' : '';
+        if(o.onResult) o.onResult(expResultHtml(r) + note);
         showToast(r.detail || ('已导出 ' + r.filename));
         return;
       }
       var msg = (r && r.gate === 'capability') ? 'WPS Office 服务已关闭，请到「MCP 服务」开启'
                                               : ((r && r.error) || '未知错误');
       if(o.onResult) o.onResult('<span style="color:#dc2626">✗ ' + escHtml(msg) + '</span>');
-      showToast((o.kind === 'pptx' ? '生成失败：' : '导出失败：') + msg, false);
+      showToast((isPpt ? '生成失败：' : '导出失败：') + msg, false);
     }).catch(function(e){
       done();
       var m = (e && e.message ? e.message : e);
@@ -3470,12 +3478,16 @@ svg{display:block}
   function docpExport(kind, btn){
     if(!DOCP){ showToast('没有可下载的文档', false); return; }
     docpResult('处理中…');
-    showToast(kind === 'pptx' ? '正在生成 PPT，请稍候…' : '正在经 WPS 导出 Word，请稍候…');
+    var isPpt = kind.indexOf('pptx') === 0;
+    showToast(kind === 'pptx-deck' ? '正在生成 PPT（新版式，原生可编辑）…'
+             : (isPpt ? '正在生成 PPT，请稍候…' : '正在经 WPS 导出 Word，请稍候…'));
     /* 导出走既有链路（落盘 + 受 MCP 开关约束）；预览面板本身不碰磁盘。
-       导入的 .docx 走 template: 分支（按原格式直出），会话教案走 markdown: 分支。 */
+       导入的 .docx 走 template: 分支（按原格式直出），会话教案走 markdown: 分支。
+       新版式（pptx-deck）把**面板正在显示的那份幻灯片**（slides + 主题）一起带过去 —— 这就是"预览=导出"。 */
     var body = (DOCP.kind === 'rich')
       ? { template: DOCP.rich || {}, kind: kind, btn: btn, onResult: docpResult }
-      : { markdown: DOCP.markdown || '', kind: kind, btn: btn, onResult: docpResult };
+      : { markdown: DOCP.markdown || '', kind: kind, btn: btn, onResult: docpResult,
+          slides: DOCP.slides || [], theme_id: docpThemeGet(), title: DOCP.title || '' };
     expViaServer(body);
   }
   /* 富文档（导入的 .docx / ③填入结果）→ HTML：逐 run 保格式，纯前端渲染 */

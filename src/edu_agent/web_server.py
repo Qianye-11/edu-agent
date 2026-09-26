@@ -1286,21 +1286,81 @@ def api_mcp_status():
 
 
 # ---------- WPS 导出（教案中心 -> .docx / .pptx） ----------
+def _export_pptx_deck(body: dict) -> dict:
+    """幻灯片导出：**同一份 SVG**（面板预览用的那份）→ 原生可编辑 pptx。
+
+    `docs/22` D15 双轨：默认走 `slide_deck.export_deck_pptx`（ppt-master 转换）；
+    转换没通过硬验收、或设了 `EDU_PPT_EXPORT=legacy` ⇒ **自动回退**旧的 `pptx_native`，
+    并在响应里带 `fallback/reason`（面板会明示，不静默降级）。
+    """
+    from edu_agent import slide_deck
+
+    slides = [s for s in (body.get("slides") or []) if isinstance(s, dict)]
+    theme_id = str(body.get("theme_id") or "").strip()
+    title = str(body.get("title") or "").strip()
+    out_dir = (body.get("outDir") or "").strip() or None
+    md = _strip_agent_tag(str(body.get("markdown") or ""))
+
+    def _legacy(reason: str) -> dict:
+        from edu_agent import wsl_docx
+
+        r = wsl_docx.export_best(body.get("payload") or {}, markdown=md, kind="pptx", out_dir=out_dir)
+        r = dict(r or {})
+        r["fallback"] = True
+        r["reason"] = reason
+        r["backend"] = f"legacy（{r.get('backend') or 'pptx_native'}）"
+        if r.get("ok"):
+            r["detail"] = (r.get("detail") or "已用旧版式导出") + f"　（回退原因：{reason}）"
+        return r
+
+    if slide_deck.export_backend() == "legacy":
+        return _legacy("设置了 EDU_PPT_EXPORT=legacy")
+
+    theme_ok = True
+    try:                                  # 主题不合法（文件被改坏）也算回退理由，别直接 500
+        slide_deck.theme(theme_id)
+    except Exception as exc:  # noqa: BLE001
+        theme_ok = False
+        theme_reason = f"主题不可用：{exc}"
+
+    if not theme_ok:
+        return _legacy(theme_reason)
+
+    out = slide_deck.export_deck_pptx(theme_id, slides, title=title, out_dir=out_dir)
+    if not out.get("ok"):
+        if out.get("gate") == "install":
+            return {"ok": False, "gate": "install", "error": out.get("error") or "ppt-master 未就绪"}
+        return _legacy(f"新版式导出没通过验收：{out.get('error') or '未知原因'}")
+
+    v = out.get("verify") or {}
+    return {"ok": True, "backend": "native", "filename": out["filename"], "outDir": out["outDir"],
+            "file": out["file"], "pages": out["pages"], "theme_id": out["theme_id"],
+            "fallback": False,
+            "detail": f"已导出 {out['pages']} 页（原生可编辑）· " + "；".join(
+                f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in (v.get("checks") or [])),
+            "verify": v, "download_url": "/api/wps/download?path=" + str(out["file"])}
+
+
 @app.post("/api/wps/export")
 def api_wps_export(body: dict):
     """教案 -> WPS 文件。payload=教案中心 DZ 模型；markdown=Agent B 教案时改用。
 
-    body: {"payload": {...}, "markdown": "...", "kind": "docx"|"pptx", "outDir": "F:\\导出目录"}
+    body: {"payload": {...}, "markdown": "...", "kind": "docx"|"pptx"|"pptx-deck",
+           "slides": [...], "theme_id": "...", "outDir": "F:\\导出目录"}
+    · `pptx-deck` = **新版式导出**（面板「幻灯片」页签看到的那份，原生可编辑）；
+    · `pptx` = 旧版式导出（保留，回退与兼容都用它）。
     能力关闭时返回 {ok:false, gate:'capability'}，与 MCP/skill 开关状态一致。
     """
     try:
         from edu_agent import permissions
 
         _kind = str(body.get("kind") or "docx").lower()
-        blocked = permissions.guard("export_pptx" if _kind in ("pptx", "ppt") else "export_docx",
+        blocked = permissions.guard("export_pptx" if _kind.startswith("ppt") else "export_docx",
                                     bool(body.get("confirm")))      # 落盘 = 有副作用，先过权限闸门
         if blocked:
             return blocked
+        if _kind in ("pptx-deck", "pptx-native"):
+            return _export_pptx_deck(body)
         # WPS 可用 → 照旧；WPS 不可用且本机有 WSL 后路 → 改道 WSL 渲染（见 edu_agent/wsl_docx.py）
         from edu_agent import wsl_docx
 

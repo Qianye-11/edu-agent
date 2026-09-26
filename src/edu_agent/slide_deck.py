@@ -11,7 +11,16 @@
 
 from __future__ import annotations
 
+import html
+import json
 import math
+import os
+import re
+import subprocess
+import sys
+import time
+import zipfile
+from pathlib import Path
 
 from . import ppt_svg
 from . import ppt_tokens as tk
@@ -235,6 +244,197 @@ def fit_height(container_w: float) -> int:
     两边不一致就会差 1px —— 审计算出来的高度必须与面板实际设的一致。
     """
     return int(math.floor(CANVAS_H * fit_scale(container_w) + 0.5))
+
+
+# ---------------------------------------------------------------- 导出（docs/23 M3）
+
+#: 导出后端开关：不设/`native` = 走 ppt-master（新，原生可编辑）；`legacy` = 回退旧版式导出
+ENV_EXPORT = "EDU_PPT_EXPORT"
+#: 允许作为中文字体的族名（本机已装：微软雅黑 / Noto Sans SC）
+EA_OK = ("微软雅黑", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans", "思源黑体")
+
+
+def export_backend() -> str:
+    """当前导出后端：`native`（默认）或 `legacy`（一键回退，见 docs/22 §6.3）。"""
+    v = (os.environ.get(ENV_EXPORT) or "").strip().lower()
+    return "legacy" if v in ("legacy", "old", "0", "off") else "native"
+
+
+def safe_name(s: str, fallback: str = "教案") -> str:
+    """文件名安全化（老师给的课题里什么都可能有）。"""
+    bad = '<>:"/\\|?*'
+    out = "".join("_" if ch in bad else ch for ch in str(s or "")).strip().strip(".")
+    return (out or fallback)[:40]
+
+
+def svg_texts(svg: str) -> list[str]:
+    """抠出一页 SVG 里的可见文字（导出后比对内容没丢）。"""
+    return [html.unescape(t) for t in re.findall(r"<text[^>]*>(.*?)</text>", svg, re.S) if t.strip()]
+
+
+def _has_cjk(s: str) -> bool:
+    return any(ord(ch) > 0x2E80 for ch in s)
+
+
+def pptx_font_audit(slides_xml: list[str], theme_xml: str = "") -> tuple[bool, str]:
+    """查"中文字体有没有掉回宋体"：**只看含中文的 run**（纯西文 run 的 ea 无害）。
+
+    转换器会给纯西文 run 写 `<a:ea typeface="Arial">`，这不是问题；
+    真会出事的是含中文的 run 没写 ea —— 那时渲染器按主题缺省走，中文 Windows 上就是宋体。
+    """
+    total = explicit = 0
+    bad: list[str] = []
+    eas: set[str] = set()
+    latins: set[str] = set()
+    for xml in slides_xml:
+        for run in re.findall(r"<a:r>(.*?)</a:r>", xml, re.S):
+            txt = html.unescape("".join(re.findall(r"<a:t>([^<]*)</a:t>", run)))
+            lat = re.search(r'<a:latin typeface="([^"]*)"', run)
+            ea = re.search(r'<a:ea typeface="([^"]*)"', run)
+            if lat and lat.group(1):
+                latins.add(lat.group(1))
+            if not _has_cjk(txt):
+                continue
+            total += 1
+            if ea and ea.group(1):
+                explicit += 1
+                eas.add(ea.group(1))
+                if ea.group(1) not in EA_OK:
+                    bad.append(f"「{txt[:8]}」→ ea={ea.group(1)}")
+            else:
+                bad.append(f"「{txt[:8]}」→ 没写 ea（会跟主题缺省，中文环境多半掉宋体）")
+    theme_ea = ""
+    if theme_xml:
+        m = re.search(r"<a:minorFont>.*?<a:ea typeface=\"([^\"]*)\"", theme_xml, re.S)
+        theme_ea = (m.group(1) if m else "") or "（空 = 跟随系统默认）"
+    ok = total > 0 and not bad
+    msg = (f"含中文 run {total} 个，显式 ea {explicit} 个 → {sorted(eas) or '—'}"
+           f"；主题缺省 ea={theme_ea}；西文 latin={sorted(latins) or '—'}")
+    if bad:
+        msg += "；问题：" + "；".join(bad[:3])
+    return ok, msg
+
+
+def verify_pptx(pptx: Path, pages: list[str]) -> dict:
+    """`docs/22` §6.2 的四条硬验收：页数 / 原生文本 / 不嵌字体+中文字体 / 内容零丢失。
+
+    返回 `{ok, checks:[{name, ok, detail}], detail}`；**只看报告与包内容，不看退出码**
+    （`svg_to_pptx.py` 在 `passed-with-warnings` 时退出码仍是 1）。
+    """
+    checks: list[dict] = []
+
+    def add(name: str, ok: bool, detail: str = "") -> None:
+        checks.append({"name": name, "ok": bool(ok), "detail": detail})
+
+    if not pptx.is_file():
+        add("产物存在", False, str(pptx))
+        return {"ok": False, "checks": checks, "detail": "没有产出 pptx"}
+
+    z = zipfile.ZipFile(pptx)
+    parts = z.namelist()
+    slides = sorted(n for n in parts if re.fullmatch(r"ppt/slides/slide\d+\.xml", n))
+    per_slide, shapes, slides_xml = [], 0, []
+    for name in slides:
+        xml = z.read(name).decode("utf-8")
+        slides_xml.append(xml)
+        per_slide.append([html.unescape(t) for t in re.findall(r"<a:t>([^<]*)</a:t>", xml)])
+        shapes += len(re.findall(r"<p:sp>", xml))
+    theme_xml = ""
+    for name in parts:
+        if re.fullmatch(r"ppt/theme/theme\d+\.xml", name):
+            theme_xml = z.read(name).decode("utf-8")
+            break
+    embedded = [n for n in parts if "fntdata" in n]
+    want = [svg_texts(p) for p in pages]
+
+    font_ok, font_msg = pptx_font_audit(slides_xml, theme_xml)
+    add("页数一致", len(slides) == len(pages), f"pptx {len(slides)} 页 / SVG {len(pages)} 页")
+    add("原生文本（不是图片）", bool(shapes) and all(per_slide),
+        f"{shapes} 个形状，每页文字块 {[len(p) for p in per_slide]}")
+    add("不嵌字体（WPS 不读内嵌裸 TTF）", not embedded, f"包内 fntdata {len(embedded)} 个")
+    add("中文字体显式指定", font_ok, font_msg)
+    missing = []
+    for i, (w, got) in enumerate(zip(want, per_slide), 1):
+        lack = [t for t in w if t.strip() and t.strip() not in [g.strip() for g in got]]
+        if lack:
+            missing.append(f"第 {i} 页缺 {lack[:3]}")
+    add("内容零丢失", not missing and len(want) == len(per_slide),
+        "逐页逐串比对通过" if not missing else "；".join(missing))
+
+    ok = all(c["ok"] for c in checks)
+    return {"ok": ok, "checks": checks,
+            "detail": "；".join(f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in checks)}
+
+
+def export_deck_pptx(theme_id: str, slides: list[dict] | None, title: str = "", *,
+                     out_dir: str | Path | None = None) -> dict:
+    """把幻灯片导出成**原生可编辑 pptx**（同一份 SVG 交给 ppt-master 转换）。
+
+    落盘规则（`docs/23` §5）：中间件进 `data/tmp/ppt_jobs/<job>/`（24h 自清），
+    产物进 `data/ppt_out/`（或老师选的目录）；**`content/plans/` 一个字不写**。
+    """
+    from . import ppt_polish                       # 复用它的 home/scripts/workroot/outdir
+
+    built = build_deck(theme_id, slides, title=title)
+    pages = built["pages"]
+    if not pages:
+        return {"ok": False, "error": "没有可导出的页（slides 为空？）", "backend": "native"}
+
+    scripts = ppt_polish.scripts_dir()
+    if not (scripts / "svg_to_pptx.py").is_file():
+        return {"ok": False, "backend": "native", "gate": "install",
+                "error": f"ppt-master 未就绪：{scripts}（跑 deploy\\setup_ppt_master.cmd）"}
+
+    try:
+        ppt_polish.cleanup_stale()
+    except Exception:  # noqa: BLE001 清理失败不该挡住导出
+        pass
+
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    job = ppt_polish.workroot() / f"deck-{stamp}"
+    svg_out = job / "svg_output"
+    svg_out.mkdir(parents=True, exist_ok=True)
+    for i, svg in enumerate(pages, 1):
+        (svg_out / f"{i:02d}_{built['layouts'][i - 1]}.svg").write_text(svg, encoding="utf-8")
+
+    target_dir = Path(out_dir) if out_dir else ppt_polish.outdir()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"教案_{safe_name(title or '未命名')}_{stamp}.pptx"
+
+    logs: list[str] = []
+    steps = (
+        ([sys.executable, str(scripts / "svg_quality_checker.py"), str(job),
+          "--canonical-authoring", "--stage", "final", "--quick-generate", "--json"], "质量检查"),
+        ([sys.executable, str(scripts / "svg_to_pptx.py"), str(job),
+          "--quick-generate", "-o", str(target)], "转换"),
+    )
+    for cmd, tag in steps:
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace", timeout=600, cwd=str(job))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return {"ok": False, "backend": "native", "job": str(job),
+                    "error": f"{tag}没跑起来：{exc}"}
+        tail = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
+        logs.append(f"{tag}：{(tail[-1] if tail else '')[:120]}")
+        if tag == "转换" and not target.is_file():
+            return {"ok": False, "backend": "native", "job": str(job), "logs": logs,
+                    "error": f"转换未产出文件（exit={proc.returncode}）"}
+
+    report = job / "validation" / f"{target.stem}.report.json"
+    status = ""
+    if report.is_file():
+        try:
+            status = json.loads(report.read_text(encoding="utf-8")).get("status", "")
+        except Exception:  # noqa: BLE001 报告坏了不当失败
+            status = ""
+    verify = verify_pptx(target, pages)
+    ok = verify["ok"] and (not status or status.startswith("passed"))
+    return {"ok": ok, "backend": "native", "file": str(target), "filename": target.name,
+            "outDir": str(target_dir), "job": str(job), "status": status,
+            "pages": len(pages), "theme_id": built["theme_id"], "layouts": built["layouts"],
+            "verify": verify, "logs": logs,
+            "error": "" if ok else (f"转换报告 status={status or '（缺失）'}；" + verify["detail"])}
 
 
 if __name__ == "__main__":        # 冒烟：python -m edu_agent.slide_deck

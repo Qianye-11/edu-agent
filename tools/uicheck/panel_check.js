@@ -55,6 +55,7 @@ function makeDom(opts) {
   const o = opts || {};
   const errors = [];
   const renderCalls = [];
+  const exports = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => { if (!/Could not load script/.test(e.message || '')) errors.push(e.message); });
   vc.on('error', (...a) => errors.push(a.join(' ')));
@@ -102,6 +103,17 @@ function makeDom(opts) {
         if (p === '/api/ppt/intake') return new Response(JSON.stringify(REPORT), { status: 200, headers: { 'Content-Type': 'application/json' } });
         if (p === '/api/ppt/polish') return new Response(JSON.stringify(POLISH), { status: 200, headers: { 'Content-Type': 'application/json' } });
         if (p === '/api/slide/themes') return new Response(JSON.stringify(THEMES), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        if (p === '/api/wps/export') {
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          exports.push(b);
+          const okBody = o.wpsFallback
+            ? { ok: true, filename: '教案_旧版式.pptx', outDir: 'D:\\out', download_url: '/api/wps/download?path=x',
+                detail: '已用旧版式导出', fallback: true, reason: '新版式导出没通过验收：转换报告缺失' }
+            : { ok: true, filename: '教案_3.3 幂函数.pptx', outDir: 'D:\\out', download_url: '/api/wps/download?path=x',
+                detail: '已导出 3 页（原生可编辑）· ✅ 页数一致；✅ 内容零丢失', fallback: false };
+          return new Response(JSON.stringify(okBody), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/render') {
           if (o.slideFail) return new Response(JSON.stringify({ ok: false, error: 'stub down' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
           let n = 3;
@@ -115,7 +127,7 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports };
 }
 
 async function openDocPanel(doc) {
@@ -163,8 +175,50 @@ async function openDocPanel(doc) {
     w.close();
   }
 
-  console.log('== 幻灯片：窄屏（模拟 320px 视口） ==');
+  console.log('== 导出：新版式 PPT 接线（桩 /api/wps/export） ==');
   {
+    const { w, doc, errors, exports } = makeDom();
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    const items = Array.from(doc.querySelectorAll('#docPanelMenu [data-dl]')).map((b) => b.dataset.dl);
+    check('下载菜单 = Word + 新旧两条 PPT + HTML',
+      items.join(',') === 'docx,pptx-deck,pptx,html', items.join(','));
+    check('新版式那项写明了与预览同源', /与预览同一份/.test(txt(doc.querySelector('[data-dl="pptx-deck"]'))),
+      txt(doc.querySelector('[data-dl="pptx-deck"]')));
+    doc.getElementById('docPanelDownBtn').click();
+    doc.querySelector('[data-dl="pptx-deck"]').click();
+    for (let i = 0; i < 12 && !exports.length; i++) await sleep(300);
+    for (let i = 0; i < 12 && /处理中/.test(txt(doc.getElementById('docPanelRes'))); i++) await sleep(300);
+    const body = exports[0] || {};
+    check('点它 POST 的是 pptx-deck', body.kind === 'pptx-deck', String(body.kind));
+    check('带上面板那份 slides（预览=导出的关键）',
+      Array.isArray(body.slides) && body.slides.length > 0, (body.slides || []).length + ' 页');
+    check('带上当前主题 id', !!body.theme_id, String(body.theme_id || ''));
+    check('结果条给文件名与下载链接',
+      /教案_3\.3 幂函数\.pptx/.test(txt(doc.getElementById('docPanelRes'))) &&
+      !!doc.querySelector('#docPanelRes a[href*="/api/wps/download"]'),
+      txt(doc.getElementById('docPanelRes')).slice(0, 60));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== 导出：新版式失败时如实说明已回退 ==');
+  {
+    const { w, doc, errors } = makeDom({ wpsFallback: true });
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    doc.getElementById('docPanelDownBtn').click();
+    doc.querySelector('[data-dl="pptx-deck"]').click();
+    await sleep(900);
+    check('结果条注明"已回退到旧版式"', /已回退到旧版式/.test(txt(doc.getElementById('docPanelRes'))),
+      txt(doc.getElementById('docPanelRes')).slice(0, 80));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== 幻灯片：窄屏（模拟 320px 视口） ==');  {
     const { w, doc, errors } = makeDom({ innerWidth: 320 });
     await sleep(2500);
     await openDocPanel(doc);

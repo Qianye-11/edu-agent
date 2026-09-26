@@ -33,6 +33,14 @@ DECK = [
     {"name": "小结", "minutes": "3", "bullets": ["三条结论"]},
 ]
 
+#: 真导出用例的开关（装饰器在**类创建时**求值，所以必须在模块层算好，不能引用类属性）
+try:
+    from edu_agent import ppt_polish as _ppt_polish
+
+    PPT_MASTER_READY = bool(_ppt_polish.status().get("intake_ready"))
+except Exception:  # noqa: BLE001 没装 ppt-master 也不该让整个测试文件炸
+    PPT_MASTER_READY = False
+
 
 def _snapshot(*dirs: Path) -> dict[str, float]:
     out: dict[str, float] = {}
@@ -234,6 +242,159 @@ class EndpointTest(_NoDiskWrites):
     def test_render_endpoint_bad_theme_is_400(self):
         r = ws.api_slide_render(ws.SlideRenderReq(theme_id="nope", slides=DECK))
         self.assertEqual(getattr(r, "status_code", 200), 400)
+
+
+class ExportTest(_NoDiskWrites):
+    """导出链路（docs/23 M3）：同一份 SVG → 原生 pptx；四条硬验收；回退开关。"""
+
+    WATCH = (_PROJ / "content" / "plans",)
+    tmp = None
+    out = None
+    ready = False
+
+    @classmethod
+    def setUpClass(cls):
+        from edu_agent import ppt_polish
+
+        cls.tmp = tempfile.TemporaryDirectory(prefix="edu_slide_export_")
+        cls.out = Path(cls.tmp.name)
+        cls.ready = bool(ppt_polish.status().get("intake_ready"))
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.tmp:
+            cls.tmp.cleanup()
+        cls.tmp = None
+
+    def test_backend_switch(self):
+        self.assertEqual(slide_deck.export_backend(), "native")
+        os.environ["EDU_PPT_EXPORT"] = "legacy"
+        try:
+            self.assertEqual(slide_deck.export_backend(), "legacy")
+        finally:
+            os.environ.pop("EDU_PPT_EXPORT", None)
+
+    def test_safe_name(self):
+        self.assertEqual(slide_deck.safe_name('3.3 幂函数 / 第一课时?'), "3.3 幂函数 _ 第一课时_")
+        self.assertEqual(slide_deck.safe_name(""), "教案")
+
+    @unittest.skipUnless(PPT_MASTER_READY, "需要装好 ppt-master（deploy\\setup_ppt_master.cmd）")
+    def test_export_produces_native_pptx(self):
+        out = slide_deck.export_deck_pptx("tech-editorial", DECK, title="3.3 幂函数", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        self.assertTrue(out["status"].startswith("passed"), out["status"])
+        self.assertTrue(Path(out["file"]).is_file())
+        self.assertTrue(Path(out["file"]).name.startswith("教案_3.3 幂函数_"))
+        self.assertEqual(out["pages"], len(DECK))
+        for c in out["verify"]["checks"]:
+            with self.subTest(check=c["name"]):
+                self.assertTrue(c["ok"], c["detail"])
+        # 中间件在受控目录里，产物在指定目录
+        self.assertIn("ppt_jobs", out["job"])
+        self.assertNotIn("content\\plans", out["job"])
+
+    @unittest.skipUnless(PPT_MASTER_READY, "需要装好 ppt-master")
+    def test_verify_catches_page_mismatch(self):
+        out = slide_deck.export_deck_pptx("hand-drawn", DECK, title="页数校验", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        pages = slide_deck.build_deck("hand-drawn", DECK, title="页数校验")["pages"]
+        bad = slide_deck.verify_pptx(Path(out["file"]), pages[:-1])       # 少给一页 → 必须报
+        self.assertFalse(bad["ok"])
+        self.assertFalse([c for c in bad["checks"] if c["name"] == "页数一致"][0]["ok"])
+
+    def test_export_without_pages_is_explicit(self):
+        out = slide_deck.export_deck_pptx("tech-editorial", [], title="空的")
+        self.assertFalse(out["ok"])
+        self.assertIn("没有可导出的页", out["error"])
+
+
+class ExportEndpointTest(_NoDiskWrites):
+    """`/api/wps/export` 的分支与回退（桩掉真实转换，只验接线与响应形状）。"""
+
+    WATCH = (_PROJ / "content" / "plans",)
+
+    def setUp(self):
+        super().setUp()
+        import unittest.mock as mock
+
+        self.mock = mock
+        self._env = {k: os.environ.get(k) for k in ("EDU_DATA_DIR", "EDU_PPT_EXPORT")}
+        os.environ["EDU_DATA_DIR"] = tempfile.mkdtemp(prefix="edu_test_data_")
+        os.environ.pop("EDU_PPT_EXPORT", None)
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        for k, v in self._env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def _body(self, **kw) -> dict:
+        # confirm=True 模拟"面板已确认"：落盘类导出本来就要过权限闸门（新 kind 也走同一道）
+        body = {"kind": "pptx-deck", "slides": DECK, "theme_id": "tech-editorial",
+                "title": "3.3 幂函数", "confirm": True,
+                "outDir": tempfile.mkdtemp(prefix="edu_out_")}
+        body.update(kw)
+        return body
+
+    def test_permission_gate_applies_to_new_kind(self):
+        body = self._body()
+        body.pop("confirm")
+        r = ws.api_wps_export(body)
+        self.assertFalse(r.get("ok"))
+        self.assertEqual(r.get("gate"), "permission")
+
+    def test_native_success_shape(self):
+        fake = {"ok": True, "backend": "native", "filename": "教案_x.pptx", "outDir": "D:\\out",
+                "file": "D:\\out\\教案_x.pptx", "pages": 4, "theme_id": "tech-editorial",
+                "verify": {"ok": True, "checks": [{"name": "页数一致", "ok": True, "detail": "4/4"}]}}
+        with self.mock.patch.object(ws.slide_deck, "export_deck_pptx", return_value=fake):
+            r = ws.api_wps_export(self._body())
+        self.assertTrue(r["ok"])
+        self.assertFalse(r["fallback"])
+        self.assertIn("download_url", r)
+        self.assertIn("页数一致", r["detail"])
+
+    def test_legacy_env_falls_back(self):
+        os.environ["EDU_PPT_EXPORT"] = "legacy"
+        fake = {"ok": True, "filename": "旧.pptx", "backend": "native"}
+        with self.mock.patch("edu_agent.wsl_docx.export_best", return_value=fake) as m:
+            r = ws.api_wps_export(self._body())
+        self.assertTrue(r["ok"] and r["fallback"])
+        self.assertIn("EDU_PPT_EXPORT", r["reason"])
+        self.assertEqual(m.call_args.kwargs["kind"], "pptx")
+
+    def test_conversion_failure_falls_back(self):
+        fake = {"ok": False, "backend": "native", "error": "转换报告 status=（缺失）"}
+        legacy = {"ok": True, "filename": "旧.pptx"}
+        with self.mock.patch.object(ws.slide_deck, "export_deck_pptx", return_value=fake), \
+             self.mock.patch("edu_agent.wsl_docx.export_best", return_value=legacy):
+            r = ws.api_wps_export(self._body())
+        self.assertTrue(r["ok"] and r["fallback"])
+        self.assertIn("没通过验收", r["reason"])
+
+    def test_bad_theme_falls_back(self):
+        legacy = {"ok": True, "filename": "旧.pptx"}
+        with self.mock.patch("edu_agent.wsl_docx.export_best", return_value=legacy):
+            r = ws.api_wps_export(self._body(theme_id="nope"))
+        self.assertTrue(r["fallback"])
+        self.assertIn("主题不可用", r["reason"])
+
+    def test_missing_install_is_reported_not_silent(self):
+        fake = {"ok": False, "backend": "native", "gate": "install", "error": "ppt-master 未就绪"}
+        with self.mock.patch.object(ws.slide_deck, "export_deck_pptx", return_value=fake):
+            r = ws.api_wps_export(self._body())
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["gate"], "install")
+        self.assertNotIn("fallback", r)
+
+    def test_old_kinds_untouched(self):
+        """旧的两个 kind 仍然走原链路（不能因为新分支改动而回归）。"""
+        with self.mock.patch("edu_agent.wsl_docx.export_best", return_value={"ok": True}) as m:
+            ws.api_wps_export({"kind": "docx", "markdown": "# x", "confirm": True})
+            ws.api_wps_export({"kind": "pptx", "markdown": "# x", "confirm": True})
+        self.assertEqual([c.kwargs["kind"] for c in m.call_args_list], ["docx", "pptx"])
 
 
 if __name__ == "__main__":

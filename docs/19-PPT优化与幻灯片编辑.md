@@ -345,9 +345,11 @@ content/ppt_templates/
 ```bash
 # 后端离线单测 / 全量 / UI 检查 / 真机验收
 .venv/Scripts/python.exe -m unittest tests.test_ppt_polish -v
-.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"     # 320 例 OK（合并 main 后）
-cd tools/uicheck && npm i jsdom && node panel_check.js                    # 23 项检查
-.venv/Scripts/python.exe tools/ppt_acceptance.py --with-wps               # 14 项：体检→优化→校验→包深检→WPS 真打开→不碰 content/plans
+.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"     # 388 例 OK（v1.16.0 R3）
+cd tools/uicheck && npm i jsdom && node panel_check.js                    # 47 项检查
+.venv/Scripts/python.exe tools/slide_audit.py --gate                      # 版式审计（模型内，0 error 才算过）
+.venv/Scripts/python.exe tools/slide_audit.py --selftest                  # 闸门自证：4 个负样本必须被抓到
+.venv/Scripts/python.exe tools/ppt_acceptance.py --with-wps               # 28 项：体检→优化→校验→包深检→WPS 真打开→不碰 plans→版式审计→新版式导出→WPS 再打开
 ```
 
 **2026-09-24 实跑记录（14/14 全过）**，源文件 = `content/plans/完整课时模板（默认）.pptx`（11 页 / 1310 字）：
@@ -363,6 +365,16 @@ cd tools/uicheck && npm i jsdom && node panel_check.js                    # 23 �
 | [6] 没碰 `content/plans` | ✅ 前后目录清单一致 |
 
 > 人工还需看一眼（机器验不了）：WPS 里**没有"需要修复"弹窗**、母版还在、**每个元素仍可单独选中编辑**、未勾的动作确实没被动。
+
+**2026-09-25 实跑记录（v1.16.0 R3 后：28/28 全过）** —— 新增两段（详见 `docs/23` M2/M3）：
+
+| 新增步骤 | 结果 |
+|---|---|
+| [7] 幻灯片版式审计（模型内，`docs/22` §7.1/§7.1b） | ✅ 三套主题示例 deck 全部 **error 0 / warn 0**（纵向占比 77–79% · 底部空白 76–84px · 主色 ≤0.2%）；4 个负样本（越界/白名单/字号阶梯/边距）**全部被抓到** |
+| [8] 新版式导出（同一份 SVG → 原生可编辑 pptx） | ✅ `status=passed-with-warnings`；页数 3/3 · 51 个原生形状 · 包内 `fntdata` 0 个 · 含中文 run 19 个全部显式 `ea=Microsoft YaHei` · **内容零丢失**；产物 `data/ppt_out/教案_3.3 幂函数_*.pptx`（导出耗时约 4 秒） |
+| [9] **WPS 真机打开新版式产物** | ✅ 经 wps-office MCP → **「演示文稿打开成功！」** |
+
+> 新版式产物人工还需看一眼：WPS 里无"需要修复"提示、**每个文本框都能直接改字**、三套主题的颜色/字体与你挑的那套一致。
 
 ### 13.3 下一步（编辑器/模板）的测试计划
 
