@@ -3,7 +3,7 @@
 > **本文由原 19 号《边框里的 PPT 优化计划书》、20 号《PPT 优化》落地说明、21 号《幻灯片可编辑 + 可导入模板计划书》合并而成**（2026-09-25）。
 > 三份讲的是同一条线：**面板里的 PPT**。合并后：§1~§7 是"已有 .pptx 的优化"（**已交付**），§8~§12 是"幻灯片页签做成编辑器 + 模板"（**下一步**），§13~§17 是验收/风险/分期/待定。
 >
-> 相关：`docs/14-会话内文档预览.md`（面板与四页签）、`docs/22-预览版式优化方案（外部调研版）.md`（**版式好不好看**的专门方案）。
+> 相关：`docs/14-会话内文档预览.md`（面板与四页签）、`docs/22-预览版式与导出规格.md`（**版式与导出**的规格：数值、路线、指标闸门）。
 
 ---
 
@@ -16,7 +16,7 @@
 | 一期实际交付了什么？ | **体检 / 逐页台账 / 内容零丢失校验（用它的脚本）+ 保守原地统一（我们自己写的 python-pptx）**；入口在面板「文档」视图 →【幻灯片】页签；skill `ppt-polish` 默认关（§3、§6） |
 | 为什么不做"整套重排"？ | 它的 `beautify-pptx` 档明确**"不是补丁"**：文字逐字冻结 + 版式用 SVG 管线**重做**，那是**模型逐页手写 SVG** 的活，我们默认模型喂不饱（§2） |
 | 下一步做什么？ | **幻灯片页签做成面板内编辑器**（版式 6 个 + 就地改）+ **主题做成可导入模板** + **会话内容替换模板文字**（§8~§12） |
-| 版式"不好看"怎么办？ | 单独一份方案：`docs/22`（成熟 design tokens + PptxGenJS 母版 + 四项可验证指标） |
+| 版式"不好看"怎么办？ | 规格与数值在 `docs/22`（tokens 单一数值源 + SVG 单源渲染与导出 + 四项可验证指标） |
 
 ---
 
@@ -196,24 +196,21 @@ git clone https://gh-proxy.com/https://github.com/hugohe3/ppt-master.git "%DEST%
 
 | 版式 id | 名字 | 槽 | 用途 / 规则 |
 |---|---|---|---|
-| `cover` | 封面 | `title` `subtitle` `meta`(课题/学情/课时) | 第 1 页；主标题 40pt 左对齐 + 主色细线 |
-| `section` | 章节过渡 | `index` `title` | 环节切换；大号序号 + 环节名 32pt，整页大留白 |
-| `bullets` | 要点页 | `title` `bullets[]` | 主体；**每页 ≤6 条、每条 ≤22 字**，超了给"拆页"提示 |
-| `two-col` | 两栏 | `title` `left{heading,bullets[]}` `right{heading,bullets[]}` | 对比/并列；栏间距 48px |
-| `media` | 图文 | `title` `image` `caption` `bullets[]` | 有图/有表；图 55% 宽，注释 15pt |
+| `cover` | 封面 | `title` `subtitle` `meta`(课题/学情/课时) | 第 1 页；主标题按 tokens 的封面字号左对齐 + 主色细线 |
+| `section` | 章节过渡 | `index` `title` | 环节切换；大号序号 + 环节名，整页大留白 |
+| `bullets` | 要点页 | `title` `bullets[]` | 主体；每页模块数与每模块字数上限见 tokens 的 `density`，超了给"拆页"提示 |
+| `two-col` | 两栏 | `title` `left{heading,bullets[]}` `right{heading,bullets[]}` | 对比/并列；栏间距 = tokens 的 `canvas.gutter` × 2 |
+| `media` | 图文 | `title` `image` `caption` `bullets[]` | 有图/有表；图占一侧，注释按 tokens 的注释字号 |
 | `end` | 结尾 | `title` `bullets[]` `closing` | 小结 3 条 + 一句话收束 |
 
 （初始版式规则：第 1 页 → `cover`，其余 → `bullets`，最后一页 → `end`；带"约 X 分钟"的环节名可一键转 `section`。）
 
-### 8.5 排版规范（写死成默认值，保证"一打开就像样"）
+### 8.5 排版规范（数值见 `docs/22` §3；本文**不复制数字**）
 
-- 画布 **1280×720**；**安全边距 64px**，内容区 1152×592；
-- 字号阶梯：**封面主标 40 / 页标题 32 / 正文 22 / 注释 15**；行距 1.35；段间距 = 字号的 0.6；
-- **一页只用一个主色做强调**（主色只出现在细线、序号、关键词）；其余走灰阶；
-- 一律**左对齐 + 统一基线**（封面可选居中）；右下角**页码 x/N**；
-- 三条内容规则：**每页 ≤6 条 / 每条 ≤22 字 / 一页只讲一件事**（超出给黄色提示，**绝不截断加省略号**）。
-
-> 这套数值是"够用版"；**更讲究的版式规范（12 栏网格、字号阶梯到 76pt、主色占比 <10% 等）与质量闸门见 `docs/22`**，两条会合并成一份 tokens。
+- **数值唯一权威**：`content/ppt_templates/_builtin/<主题>.json`（画布 / 安全边距 / 字号阶梯 / 配色占比 / 几何 / 字体 / 密度）。字段说明、三套主题取值表、px↔pt↔EMU 换算见 `docs/22` §3；
+- 语义规则（不随数值变）：画布固定 16:9 设计坐标、面板内**等比缩放**；**一页只用一个主色做强调**，其余走灰阶；一律**左对齐 + 统一基线**（封面可选居中）；右下角**页码 `x/N`** 画在安全边距内；版式只用细线与留白做结构，**不套重卡片**；
+- 三条内容规则：**每页模块数有上限 / 每模块字数有上限 / 一页只讲一件事**（上限值在 tokens 的 `density`；超出给提示，**绝不截断加省略号**）；
+- ⚠️ 旧版这里写过的「安全边距 64px」「字号 40 / 32 / 22 / 15pt」**已作废**：正文 22pt ≈ 29px、注释 15pt ≈ 20px 都超出规范区间（正文 18–24px、注释 12–15px），一律以 tokens 为准；正文与注释的字号也**不再用 pt 表述**（画布 px 是唯一口径）。
 
 ### 8.6 目标 / 非目标
 
@@ -233,10 +230,11 @@ git clone https://gh-proxy.com/https://github.com/hugohe3/ppt-master.git "%DEST%
 ```
 content/ppt_templates/
 ├─ index.json                 # 模板清单（id / name / 来源 / 页数 / 版式集 / 是否内置）
-├─ _builtin/                  # 内置 3 套（纯 JSON，不需要原稿）
-│   ├─ academic-blue.json     #   学术蓝
-│   ├─ clean-gray.json        #   简洁灰
-│   └─ warm-class.json        #   课件暖
+├─ _builtin/                  # 内置 3 套（纯 JSON，不需要原稿；数值与出处见 docs/22 §3）
+│   ├─ tech-editorial.json    #   学术蓝（白底 + 蓝强调；上游 futuristic-tech-editorial）
+│   ├─ illustration.json      #   插画暖（米白 + 雾蓝/脏橘；上游 modern-illustration-editorial）
+│   ├─ hand-drawn.json        #   手绘墨（纸白 + 墨黑/靛；上游 japanese-hand-drawn-editorial）
+│   └─ luxury-cream.json      #   备用第 4 套（米白棕金；上游 minimalist-luxury-branding）
 └─ <id>/                      # 用户导入的模板
     ├─ template.pptx          #   原稿（只读，永不改写）
     ├─ theme.json             #   抽出来的：配色 / 字体（latin+ea）/ 字号层级 / 母版与版式清单
@@ -320,7 +318,7 @@ content/ppt_templates/
     {"name":"小结","layout":"end","minutes":"3","bullets":["三条结论"]}
   ],
   "slides_edited": true,               // 手动改过 → 重出教案时提示，不静默覆盖
-  "ppt_template_id": "academic-blue"
+  "ppt_template_id": "tech-editorial"
 }
 ```
 
@@ -438,7 +436,7 @@ cd tools/uicheck && npm i jsdom && node panel_check.js                    # 23 �
 | 2 | slides 一等数据 + 导出带 steps | `static/index.html`、`web_server.py`（`meta.doc` 写入） |
 | 3 | 模板库（内置 3 + 导入） | `content/ppt_templates/`、`src/edu_agent/ppt_templates.py`（新） |
 | 4 | 填充器 | `src/edu_agent/ppt_fill.py`（新，复用 `pptx_native`/python-pptx） |
-| 5 | 版式 tokens + 指标闸门 | `content/ppt_templates/_builtin/*.json`、`tools/slide_audit.js`（见 `docs/22`） |
+| 5 | 版式 tokens + 指标闸门 | `content/ppt_templates/_builtin/*.json`、`tools/slide_audit.mjs`（Edge 无头，见 `docs/22` §6–§7） |
 | 6 | 入口挪位 | `static/index.html`：「文档」页签底部"高级：PPT 优化"折叠区 |
 | 7 | 测试 | `tests/test_slide_edit.py`（新）、`tests/test_ppt_tokens.py`（新）、扩 `panel_check.js` / `ppt_acceptance.py` |
 
@@ -451,8 +449,8 @@ cd tools/uicheck && npm i jsdom && node panel_check.js                    # 23 �
 | 3 | 产物目录：`data/ppt_out/` | ✅ **已定**（已实现） |
 | 4 | PPT 优化入口挪到「文档」页签底部（可折叠"高级"） | ⏳ 待做（§11） |
 | 5 | 版式 6 个 · 主题做成可导入模板 · 会话内容替换模板文字 | ⏳ 待做（§8~§10） |
-| 6 | 内置 3 套配色（学术蓝 `#1F4E79` / 简洁灰 `#374151` / 课件暖 `#C2410C`）——是否换成学校主色？ | ❓ 待你给色值 |
-| 7 | 每页要点上限（≤6 条 / 每条 ≤22 字）是否调整？ | ❓ 待你定 |
+| 6 | 内置 3 套配色（学术蓝 `#1F4E79` / 简洁灰 `#374151` / 课件暖 `#C2410C`）——是否换成学校主色？ | ✅ **已定**（`docs/22` §1 D3：不自己编色，直接取上游 style-system 的 3 套现成数值 → `tech-editorial` / `illustration` / `hand-drawn`；学校主色改为"以后按同一结构加第 N 套"） |
+| 7 | 每页要点上限（≤6 条 / 每条 ≤22 字）是否调整？ | ✅ **已定**（`docs/22` §3.3：**≤5 模块 / 每模块 ≤22 汉字**——条数按上游"3–5 模块"收紧，字数保留既有值，落在上游 16–32 汉字区间内） |
 | 8 | 页数不匹配默认动作（少→删页、多→复制内容页） | ❓ 待你点头 |
 | 9 | 导入的 `.pptx` 模板原稿不进仓库（gitignore） | ❓ 待你点头 |
 | 10 | 二期（导入 `.pptx` 模板 / 真重排）现在上还是先验一期 | ❓ 建议先验一期 |
