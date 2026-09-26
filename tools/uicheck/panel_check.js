@@ -57,6 +57,7 @@ function makeDom(opts) {
   const renderCalls = [];
   const exports = [];
   const saves = [];
+  const fills = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => { if (!/Could not load script/.test(e.message || '')) errors.push(e.message); });
   vc.on('error', (...a) => errors.push(a.join(' ')));
@@ -126,6 +127,21 @@ function makeDom(opts) {
             layouts: [], stats: { pages: n } }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (p === '/api/slide/templates') return new Response(JSON.stringify({
+          ok: true, enabled: true,
+          builtin: THEMES.themes.map((t) => ({ id: t.id, name: t.name, kind: 'json' })),
+          imported: o.noTpl ? [] : [{ id: '学校模板', name: '学校模板', kind: 'pptx', pages: 11 }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        if (p === '/api/slide/fill') {
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          fills.push(b);
+          return new Response(JSON.stringify({
+            ok: true, filename: '教案_3.3 幂函数_学校模板.pptx', outDir: 'D:\\out',
+            download_url: '/api/wps/download?path=x', detail: '✅ 内容零丢失；✅ 容量自查',
+            warnings: ['会话比模板少 8 页内容 → 默认删掉模板多余的内容页'],
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/save') {
           let b = {};
           try { b = JSON.parse(op.body); } catch (e) {}
@@ -139,7 +155,7 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills };
 }
 
 async function openDocPanel(doc) {
@@ -267,6 +283,38 @@ async function openDocPanel(doc) {
     check('服务端的"建议拆页"提示显示出来了',
       /建议拆页/.test(txt(doc.querySelector('#spBody .dp-warn'))), txt(doc.querySelector('#spBody .dp-warn')));
     check('提示是提示、内容没被截断', /其余请另起一页|只排了前 5 个/.test(txt(doc.querySelector('#spBody .dp-warn'))));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== 模板：导入 / 选择 / 用模板填一遍（M4b） ==');
+  {
+    const { w, doc, errors, fills } = makeDom();
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1200);
+    const tpl = doc.getElementById('dpTpl');
+    check('模板下拉存在且列出导入的模板', !!tpl && tpl.options.length === 2,
+      tpl ? Array.from(tpl.options).map((o) => o.textContent).join('/') : '(none)');
+    check('有导入入口', !!doc.getElementById('dpTplImport') && !!doc.querySelector('#dpTplFile'));
+    check('没选模板时「用模板填一遍」是灰的', doc.getElementById('dpTplFill').disabled === true);
+    tpl.value = '学校模板';
+    tpl.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(800);
+    check('选了模板后填充按钮可用', doc.getElementById('dpTplFill').disabled === false);
+    doc.getElementById('dpTplFill').click();
+    for (let i = 0; i < 12 && !fills.length; i++) await sleep(250);
+    const body = fills[0] || {};
+    check('填充请求带上模板 id 与会话内容',
+      body.template_id === '学校模板' && Array.isArray(body.slides) && body.slides.length > 0,
+      body.template_id + ' / ' + (body.slides || []).length + ' 页');
+    await sleep(400);
+    check('结果条给出文件名与下载链接',
+      /教案_3\.3 幂函数_学校模板\.pptx/.test(txt(doc.getElementById('docPanelRes'))) &&
+      !!doc.querySelector('#docPanelRes a[href*="/api/wps/download"]'),
+      txt(doc.getElementById('docPanelRes')).slice(0, 60));
+    check('填充提示（如"删掉多余页"）显示在结果条',
+      /删掉模板多余的内容页/.test(txt(doc.getElementById('docPanelRes'))));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }

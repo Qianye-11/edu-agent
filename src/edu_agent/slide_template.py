@@ -1,0 +1,408 @@
+"""演示模板库（docs/19 §9）：**模板决定风格，内容由会话给**。
+
+两件事：
+1. **内置模板** = `content/ppt_templates/_builtin/*.json`（纯数值，见 `docs/22` §3）；
+2. **导入模板** = 老师/学校给的一份 `.pptx` → 抽出**配色 / 字体 / 字号层级 / 文本槽**，
+   存成 `<id>/theme.json` + `<id>/slots.json` + 原稿 `template.pptx`（**只读，永不改写**）。
+
+落盘红线：只写 `content/ppt_templates/` 底下（原稿、清单、软删），**别处一个字不写**（有单测锁）。
+
+抽取失败的退化（docs/19 §9.2）：**只借它的配色/字体**，页面仍用我们的 6 个版式，并把原因写进 `degraded`。
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import time
+import zipfile
+from pathlib import Path
+
+from . import ppt_tokens as tk
+
+#: 导入模板里"页数/角色"这些靠名字猜：命中这些词就算封面/结尾/章节
+_ROLE_HINTS = {
+    "cover": ("封面", "cover", "title slide", "首页"),
+    "end": ("结尾", "谢谢", "thank", "ending", "the end", "小结页"),
+    "section": ("章节", "目录", "section", "agenda", "过渡"),
+}
+#: 目录名里不能出现的字符（**中文字照留**：老师起的名字要能在面板上看懂、也不会互相撞车）
+_SLUG_RE = re.compile(r'[<>:"/\\|?*\s]+')
+
+
+# ---------------------------------------------------------------- 路径与清单
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def root() -> Path:
+    """模板库根目录（`content/ppt_templates/`；环境变量语义见 `ppt_tokens.templates_root`）。"""
+    return tk.templates_root()
+
+
+def builtin_dir() -> Path:
+    return root() / "_builtin"
+
+
+def trash_dir() -> Path:
+    return root() / "_trash"
+
+
+def index_path() -> Path:
+    return root() / "index.json"
+
+
+def _slug(text: str, fallback: str = "template") -> str:
+    """模板 id = 目录名：保留中文（可读），只去掉文件系统不认的字符与空格。"""
+    s = _SLUG_RE.sub("-", str(text or "").strip()).strip("-.")
+    return (s or fallback)[:40]
+
+
+def list_templates() -> list[dict]:
+    """全部可用模板：内置（json）+ 导入（目录里有 theme.json）。"""
+    out: list[dict] = []
+    for tid in tk.available():                       # 内置：读数值文件
+        t = tk.load(tid)
+        out.append({"id": tid, "name": t.get("name") or tid, "kind": "json",
+                    "source": t.get("source") or "", "pages": 0, "layouts": [],
+                    "palette": t["palette"], "fonts": t["fonts"], "ok": True, "degraded": []})
+    for d in sorted(p for p in root().glob("*") if p.is_dir() and not p.name.startswith("_")):
+        theme_file = d / "theme.json"
+        if not theme_file.is_file():
+            continue
+        try:
+            theme = json.loads(theme_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        slots = _read_json(d / "slots.json") or {}
+        out.append({"id": d.name, "name": theme.get("name") or d.name, "kind": "pptx",
+                    "source": theme.get("source") or "", "pages": len(slots.get("slides") or []),
+                    "layouts": sorted({s.get("layout") or "" for s in (slots.get("slides") or [])} - {""}),
+                    "palette": (theme.get("tokens") or {}).get("palette") or {},
+                    "fonts": (theme.get("tokens") or {}).get("fonts") or {},
+                    "ok": bool(theme.get("tokens")), "degraded": theme.get("degraded") or []})
+    return out
+
+
+def get(template_id: str) -> dict | None:
+    for t in list_templates():
+        if t["id"] == template_id:
+            return t
+    return None
+
+
+def _read_json(p: Path) -> dict:
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_index() -> Path:
+    """刷新 `index.json`（清单是派生的，随时可由目录重建）。"""
+    data = {"templates": list_templates(), "updated": time.strftime("%Y-%m-%d %H:%M:%S")}
+    path = index_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+# ---------------------------------------------------------------- 从 .pptx 抽东西
+
+def _theme_xml(path: Path) -> str:
+    """读主题 XML；坏包/加密包一律当成"没读到"（宁可退化，不要炸）。"""
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = z.namelist()
+            for name in ("ppt/theme/theme1.xml", *[n for n in names if n.startswith("ppt/theme/")]):
+                if name in names:
+                    return z.read(name).decode("utf-8", "replace")
+    except (zipfile.BadZipFile, OSError):
+        return ""
+    return ""
+
+
+def _scheme(xml: str) -> dict:
+    """主题配色：`<a:clrScheme>` 里的 dk1/lt1/dk2/lt2/accent1…（srgbClr 或 sysClr.lastClr）。"""
+    out: dict[str, str] = {}
+    block = re.search(r"<a:clrScheme.*?</a:clrScheme>", xml or "", re.S)
+    if not block:
+        return out
+    for m in re.finditer(r'<a:(\w+)>\s*<a:(srgbClr val="([0-9A-Fa-f]{6})"|sysClr[^>]*lastClr="([0-9A-Fa-f]{6})")',
+                         block.group(0)):
+        key, _, srgb, sys = m.group(1), m.group(2), m.group(3), m.group(4)
+        out[key] = "#" + (srgb or sys).upper()
+    return out
+
+
+def _font_scheme(xml: str) -> dict:
+    """主题字体：majorFont/minorFont 的 latin 与 ea（东亚）字体名。"""
+    out = {"major_latin": "", "major_ea": "", "minor_latin": "", "minor_ea": ""}
+    for which in ("majorFont", "minorFont"):
+        block = re.search(rf"<a:{which}>.*?</a:{which}>", xml or "", re.S)
+        if not block:
+            continue
+        lat = re.search(r'<a:latin typeface="([^"]*)"', block.group(0))
+        ea = re.search(r'<a:ea typeface="([^"]*)"', block.group(0))
+        out[f"{'major' if which == 'majorFont' else 'minor'}_latin"] = lat.group(1) if lat else ""
+        out[f"{'major' if which == 'majorFont' else 'minor'}_ea"] = ea.group(1) if ea else ""
+    return out
+
+
+def _sizes_px(path: Path) -> list[float]:
+    """从幻灯片里收集字号（pt → 画布 px，1px = 0.75pt），降序去重；坏包返回空。"""
+    sizes: set[float] = set()
+    try:
+        with zipfile.ZipFile(path) as z:
+            slides = [n for n in z.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)]
+            for name in slides[:40]:                       # 只看前 40 页，够用且快
+                xml = z.read(name).decode("utf-8", "replace")
+                for m in re.finditer(r'sz="(\d{3,4})"', xml):
+                    pt = int(m.group(1)) / 100
+                    if 6 <= pt <= 96:
+                        sizes.add(round(pt / tk.PT_PER_PX, 1))
+    except (zipfile.BadZipFile, OSError):
+        return []
+    return sorted(sizes, reverse=True)
+
+
+def _base_tokens() -> dict:
+    """抽不出来时的基底：用内置里最"中性"的那套（学术蓝）。"""
+    return tk.load("tech-editorial")
+
+
+def tokens_from_pptx(pptx: Path, *, name: str = "") -> tuple[dict, list[str]]:
+    """一份 .pptx → 我们那套 tokens（配色/字体/字号取自模板，画布与版式仍是我们的）。
+
+    返回 `(tokens, degraded)`；`degraded` 里逐条写清"哪一项没抽到、退化成了什么"。
+    """
+    degraded: list[str] = []
+    base = _base_tokens()
+    xml = _theme_xml(pptx)
+    scheme = _scheme(xml)
+    fonts = _font_scheme(xml)
+
+    bg = scheme.get("lt1") or base["canvas"]["bg"]
+    text = scheme.get("dk1") or base["palette"]["text"]
+    accent = scheme.get("accent1") or base["palette"]["accent"]
+    if not scheme:
+        degraded.append("没读到主题配色（theme1.xml 里没有 clrScheme）→ 配色沿用内置学术蓝")
+
+    palette = {
+        "text": text,
+        "accent": accent,
+        "accent2": scheme.get("accent2") or accent,
+        "sub": tk.blend(text, bg, 0.62),               # 与内置主题同一条派生规则
+        "line": tk.blend(text, bg, 0.14),
+        "soft": tk.blend(accent, bg, 0.12),
+        "accent_max_ratio": base["palette"].get("accent_max_ratio", 0.10),
+    }
+
+    latin = (fonts.get("major_latin") or fonts.get("minor_latin") or "").strip() or "Arial"
+    ea = (fonts.get("major_ea") or fonts.get("minor_ea") or "").strip() or "微软雅黑"
+    if not tk.font_installed(latin):
+        degraded.append(f"模板西文字体《{latin}》本机没装 → 用 Arial")
+        latin = "Arial"
+    if not tk.font_installed(ea):
+        degraded.append(f"模板中文字体《{ea}》本机没装 → 用 微软雅黑")
+        ea = "微软雅黑"
+    if not fonts.get("major_latin") and not fonts.get("minor_latin"):
+        degraded.append("没读到主题字体 → 西文 Arial / 中文 微软雅黑")
+
+    # 字号：从模板里取（降序），缺的档次用基底补；再夹进内置区间，保证阶梯合法
+    sizes = _sizes_px(pptx)
+    picks = {"cover": sizes[0] if sizes else 0, "title": sizes[1] if len(sizes) > 1 else 0,
+             "body": sizes[3] if len(sizes) > 3 else (sizes[2] if len(sizes) > 2 else 0),
+             "caption": sizes[5] if len(sizes) > 5 else (sizes[4] if len(sizes) > 4 else 0)}
+    if not sizes:
+        degraded.append("没读到字号 → 字号沿用内置学术蓝")
+    type_out = dict(base["type"])
+    for key, want in picks.items():
+        lo, hi = base["ranges"][key]
+        val = float(want or base["type"][key])
+        clamped = max(float(lo), min(float(hi), val))
+        if want and abs(clamped - val) > 0.01:
+            degraded.append(f"{key} 字号 {val:g}px 超出规范区间 [{lo},{hi}] → 夹到 {clamped:g}px")
+        type_out[key] = clamped
+    type_out["cover"] = max(type_out["cover"], type_out["title"] + 4)   # 封面得比页标题大
+    type_out["cover"] = min(float(base["ranges"]["cover"][1]), type_out["cover"])
+
+    tokens = dict(base)
+    tokens.update({
+        "id": name or pptx.parent.name or "imported",
+        "name": name or pptx.parent.name or "导入模板",
+        "source": f"{pptx.name}（导入的演示模板）",
+        "canvas": dict(base["canvas"], bg=bg),
+        "palette": palette,
+        "type": type_out,
+        "fonts": {"latin": latin, "ea": ea, "stack": [latin, ea, "sans-serif"]},
+        "derived": {"sub": {"from": "text", "over": "canvas.bg", "alpha": 0.62}},
+        "notes": [f"配色取自模板主题：text={text} accent={accent} bg={bg}",
+                  "画布/版式仍用本项目的 1280×720 与 6 个版式（docs/19 §9.2）"],
+    })
+    tokens.pop("marker", None)
+    problems = tk.validate(tokens)
+    if problems:                                       # 再有毛病就整体退化回基底（只留配色字体）
+        degraded.append("模板数值有不合规处 → 只保留配色/字体，其余用内置兜底：" + "；".join(problems[:2]))
+        tokens = dict(base, palette=palette,
+                      fonts={"latin": latin, "ea": ea, "stack": [latin, ea, "sans-serif"]})
+        tokens["id"], tokens["name"], tokens["source"] = name or "imported", name or "导入模板", f"{pptx.name}（导入）"
+    return tokens, degraded
+
+
+def _slot_capacity(shape, size_px: float) -> int:
+    """一个文本框大概能装多少字：行数 × 每行字数（用我们自己的字宽估算）。"""
+    from . import ppt_svg
+
+    geo = _geo_px(shape)
+    if not size_px:
+        size_px = tk.px_to_pt(24) / tk.PT_PER_PX
+    char_w = ppt_svg.char_w("字", size_px) or size_px
+    per_line = max(1, int(geo["w"] // max(1.0, char_w)))
+    lines = max(1, int(geo["h"] // max(1.0, size_px * 1.35)))
+    return int(per_line * lines)
+
+
+def _geo_px(shape) -> dict:
+    """形状几何（EMU → 画布 px；13.333in 宽 = 1280px）。"""
+    from pptx.util import Emu
+
+    def px(v) -> float:
+        return round(float(Emu(int(v or 0)).inches) * 96, 1)
+
+    return {"x": px(shape.left), "y": px(shape.top), "w": px(shape.width), "h": px(shape.height)}
+
+
+def _role_of(shape, index: int, layout_name: str) -> str:
+    """猜角色：优先看占位符类型，其次看版式名与顺序。"""
+    try:
+        ph = shape.placeholder_format
+        if ph is not None and ph.idx == 0:
+            return "title"
+        if ph is not None and ph.type is not None:
+            return "body"
+    except (AttributeError, ValueError):
+        pass
+    low = (layout_name or "").lower()
+    for role, hints in _ROLE_HINTS.items():
+        if any(h in low for h in hints):
+            return role
+    return "title" if index == 0 else "body"
+
+
+def slots_from_pptx(pptx: Path) -> dict:
+    """抽文本槽：每页的 `[{role, capacity, geo, text}]` + 版式名。
+
+    读不出来就返回 `{"slides": [], "error": ...}` —— 调用方据此退化成"只用配色"。
+    """
+    try:
+        from pptx import Presentation
+        from pptx.util import Pt
+    except Exception as exc:  # noqa: BLE001 python-pptx 不可用
+        return {"slides": [], "error": f"python-pptx 不可用：{exc}"}
+
+    out: list[dict] = []
+    try:
+        prs = Presentation(str(pptx))
+        for i, slide in enumerate(prs.slides):
+            layout_name = slide.slide_layout.name or ""
+            slots = []
+            for shp in slide.shapes:
+                if not getattr(shp, "has_text_frame", False):
+                    continue
+                text = (shp.text_frame.text or "").strip()
+                size_px = 0.0
+                for para in shp.text_frame.paragraphs:
+                    for run in para.runs:
+                        if run.font.size:
+                            size_px = float(Pt(run.font.size.pt).pt) / tk.PT_PER_PX
+                            break
+                    if size_px:
+                        break
+                slots.append({"role": _role_of(shp, len(slots), layout_name),
+                              "capacity": _slot_capacity(shp, size_px),
+                              "size_px": round(size_px, 1), "geo": _geo_px(shp),
+                              "sample": text[:40]})
+            out.append({"index": i, "layout": layout_name, "slots": slots})
+    except Exception as exc:  # noqa: BLE001 坏包/加密包
+        return {"slides": [], "error": f"读 .pptx 失败：{type(exc).__name__}: {exc}"}
+    return {"slides": out, "pages": len(out)}
+
+
+# ---------------------------------------------------------------- 导入 / 软删
+
+def import_pptx(src: Path, *, name: str = "", template_id: str = "") -> dict:
+    """把一份 `.pptx` 收进模板库（原稿只读，抽取失败也要能退化使用）。"""
+    src = Path(src)
+    if not src.is_file():
+        return {"ok": False, "error": f"文件不存在：{src}"}
+    tid = _slug(template_id or name or src.stem)
+    dest = root() / tid
+    if dest.exists():
+        tid = f"{tid}-{time.strftime('%H%M%S')}"
+        dest = root() / tid
+    dest.mkdir(parents=True, exist_ok=True)
+
+    original = dest / "template.pptx"
+    shutil.copyfile(src, original)                     # 收一份副本；原文件一个字节都不动
+    tokens, degraded = tokens_from_pptx(original, name=name or src.stem)
+    slots = slots_from_pptx(original)
+    if slots.get("error"):
+        degraded.append(f"文本槽没抽出来（{slots['error']}）→ 只借这份模板的配色/字体，页面用我们的 6 个版式")
+
+    (dest / "theme.json").write_text(json.dumps(
+        {"id": tid, "name": name or src.stem, "source": src.name, "kind": "pptx",
+         "tokens": tokens, "degraded": degraded,
+         "imported": time.strftime("%Y-%m-%d %H:%M:%S")},
+        ensure_ascii=False, indent=2), encoding="utf-8")
+    (dest / "slots.json").write_text(json.dumps(slots, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_index()
+    return {"ok": True, "id": tid, "name": name or src.stem, "dir": str(dest),
+            "pages": slots.get("pages") or 0, "slots_ok": not slots.get("error"),
+            "degraded": degraded, "theme": tokens}
+
+
+def delete_template(template_id: str, *, soft: bool = True) -> dict:
+    """删模板：默认**软删**到 `_trash/`（老师的东西不直接抹掉）。"""
+    tid = _slug(template_id)
+    dest = root() / tid
+    if not dest.is_dir():
+        return {"ok": False, "error": f"没有这个导入模板：{tid}（内置模板不能删）"}
+    target = trash_dir() / f"{tid}-{time.strftime('%Y%m%d-%H%M%S')}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(dest), str(target))
+    write_index()
+    return {"ok": True, "id": tid, "moved_to": str(target), "soft": soft}
+
+
+# ---------------------------------------------------------------- 给渲染用
+
+def theme_for(template_id: str) -> dict | None:
+    """把模板转成渲染用的 tokens（导入模板读 `theme.json`，内置直接读 json）。"""
+    tid = str(template_id or "").strip()
+    if not tid:
+        return None
+    if tid in tk.available():
+        return tk.load(tid)
+    theme = _read_json(root() / _slug(tid) / "theme.json")
+    tokens = theme.get("tokens")
+    if not isinstance(tokens, dict):
+        return None
+    problems = tk.validate(tokens)
+    if problems:                                       # 兜底：只借配色字体，其余用基底
+        base = _base_tokens()
+        tokens = dict(base, palette=tokens.get("palette") or base["palette"],
+                      fonts=tokens.get("fonts") or base["fonts"])
+        tokens["id"], tokens["name"] = tid, theme.get("name") or tid
+    return tokens
+
+
+if __name__ == "__main__":        # 冒烟：python -m edu_agent.slide_template
+    import sys
+
+    sys.stdout.reconfigure(encoding="utf-8")
+    for t in list_templates():
+        print(f"{t['kind']:5s} {t['id']:20s} {t['name']:12s} 页 {t['pages']} 退化 {len(t['degraded'])}")

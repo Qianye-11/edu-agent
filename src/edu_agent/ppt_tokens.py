@@ -71,14 +71,22 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def builtin_dir() -> Path:
-    """内置主题目录；可用环境变量 EDU_PPT_TEMPLATES 覆盖（测试用）。"""
+def templates_root() -> Path:
+    """模板库根目录：`content/ppt_templates/`（可用环境变量 `EDU_PPT_TEMPLATES` 覆盖，测试用）。
+
+    注意：这个环境变量指的是**模板库根**，内置主题在它下面的 `_builtin/`（与 `docs/19` §9.1 一致）。
+    """
     import os
 
     env = os.environ.get("EDU_PPT_TEMPLATES", "").strip()
     if env:
         return Path(env).expanduser()
-    return repo_root() / "content" / "ppt_templates" / "_builtin"
+    return repo_root() / "content" / "ppt_templates"
+
+
+def builtin_dir() -> Path:
+    """内置主题目录（`<模板库根>/_builtin`）。"""
+    return templates_root() / "_builtin"
 
 
 def available() -> list[str]:

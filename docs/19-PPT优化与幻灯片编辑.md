@@ -244,12 +244,18 @@ content/ppt_templates/
 模板描述（内置与导入统一形状）：
 `{id, name, kind: "json"|"pptx", theme: {palette, fonts, sizes}, layouts: [...], slides: [{index, layout, slots: [{role, capacity, geo}]}]}`
 
-### 9.2 导入一份 `.pptx` 当模板（二期）
+### 9.2 导入一份 `.pptx` 当模板 —— ✅ 已落地（2026-09-25）
 
-- 抽取用 **ppt-master 的 `pptx_template_import.py`**（已验证存在）：保留 Master/Layout 继承链与文本槽；
-  配色/字体/字号由 `beautify_identity.py` / `pptx_intake.py` 给出；
-- 抽完写 `theme.json` + `slots.json` + 存 `template.pptx`（原稿只读），**不写模板库以外的地方**；
-- 抽取失败 → 退化为"只用它的主题（配色/字体/字号）"，页面仍用我们的 6 个版式，并在面板说明。
+- **抽取**（`src/edu_agent/slide_template.py`，不依赖 ppt-master，直接读包）：
+  - **配色**：`ppt/theme/theme1.xml` 的 `clrScheme`（dk1/lt1/accent1/accent2）→ 我们的 `palette`；
+    次文/细线/浅底由"主色与底色按固定比例混合"算成**显式色**（与内置主题同一条规则，有单测核对）；
+  - **字体**：`fontScheme` 的 majorFont/minorFont（latin + ea）；**本机没装就换成本机有的**并记原因；
+  - **字号层级**：从 `ppt/slides/*.xml` 的 `sz` 收集，降序映射到封面/页标题/正文/注释，**夹进规范区间**（越界记原因）；
+  - **文本槽**：`python-pptx` 逐页读文本框 → `{role, capacity, geo}`（容量 = 每行字数 × 行数，用我们的字宽估算）。
+- **落盘**：`content/ppt_templates/<id>/`（`template.pptx` 原稿**只读** + `theme.json` + `slots.json`）+ 刷新 `index.json`；
+  **只写模板库**（有单测锁）。删除走后端的 **软删**（移到 `_trash/`，内置模板不可删；面板暂未放按钮）。
+- **抽取失败 → 退化成"只用它的主题"**：页面仍用我们的 6 个版式渲染，原因逐条写进 `degraded` 并显示在面板。
+- 说明：环境变量 `EDU_PPT_TEMPLATES` 的语义是**模板库根目录**，内置主题在它下面的 `_builtin/`。
 
 ### 9.3 与「教案模板」（.docx）的关系
 
@@ -281,9 +287,15 @@ content/ppt_templates/
 
 ### 10.3 填完必须过两道校验
 
-1. **内容零丢失**：`beautify_inventory.py --verify`（逐页逐串，缺一个即失败）；
-2. **容量自查**：每个槽的"每行字数 × 行数" vs 填入文字，超出的页**列出来**（黄色提示，不阻断）——
-   因为 ppt-master 的出框检测只在 SVG 域，pptx 侧用模板容量数据自查。
+> **已落地（2026-09-25，`src/edu_agent/slide_fill.py`）**：两道校验都在 `POST /api/slide/fill` 的返回里逐条给出。
+
+1. **内容零丢失**（**阻断**）：我们**打算写进去的每一串文字**，都要在产物 pptx 里找得到，缺一个即失败。
+   注意：这里没用 `beautify_inventory.py --verify` —— 那条命令比的是"优化前后同一份稿"，
+   而填充的输入是**会话数据**（不是 pptx），所以用等价的自查（逐串包含比对，有单测）。
+2. **容量自查**（**提示，不阻断**）：每个槽的"每行字数 × 行数"vs 填入文字，超出的页**列出来**。
+   - 模板量不出容量（缺几何/字号）时**跳过**并记进 `degraded`，不假装算过；
+   - 实践提示：我们自己的"单块 ≤400 字"上限通常**小于**模板正文槽容量（常见 ~500 字），
+     所以容量提示一般由**多块合计**触发 —— 这也说明"先拆页"比"塞满一页"更常是正解。
 
 ---
 
@@ -357,9 +369,9 @@ content/ppt_templates/
 ```bash
 # 后端离线单测 / 全量 / UI 检查 / 真机验收
 .venv/Scripts/python.exe -m unittest tests.test_ppt_polish -v
-.venv/Scripts/python.exe -m unittest tests.test_slide_deck tests.test_slide_audit tests.test_slide_edit   # 幻灯片：渲染 / 审计 / 编辑
-.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"     # 410 例 OK（v1.16.0 R4）
-cd tools/uicheck && npm i jsdom && node panel_check.js                    # 65 项检查
+.venv/Scripts/python.exe -m unittest tests.test_slide_deck tests.test_slide_audit tests.test_slide_edit tests.test_slide_template tests.test_slide_fill   # 幻灯片：渲染 / 审计 / 编辑 / 模板 / 填充
+.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"     # 435 例 OK（v1.16.0 R5）
+cd tools/uicheck && npm i jsdom && node panel_check.js                    # 73 项检查
 .venv/Scripts/python.exe tools/slide_audit.py --gate                      # 版式审计（模型内，0 error 才算过）
 .venv/Scripts/python.exe tools/slide_audit.py --selftest                  # 闸门自证：4 个负样本必须被抓到
 .venv/Scripts/python.exe tools/ppt_acceptance.py --with-wps               # 28 项：体检→优化→校验→包深检→WPS 真打开→不碰 plans→版式审计→新版式导出→WPS 再打开

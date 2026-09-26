@@ -1000,6 +1000,7 @@ def api_session_doc_preview(body: DocPreviewReq):
 #   渲染与导出共用同一份 SVG（导出见 M3 的 kind="pptx-deck"），所以"预览 = 导出"成立。
 class SlideRenderReq(BaseModel):
     theme_id: str = ""               # 空 = 用默认主题
+    template_id: str = ""            # 导入的演示模板（借它的配色/字体；给了就压过 theme_id）
     slides: list[dict] | None = None  # 会话里那份幻灯片数据（可为空 → 由 markdown 派生）
     title: str = ""
     markdown: str = ""               # 没给 slides 时的兜底来源
@@ -1011,6 +1012,15 @@ class SlideSaveReq(BaseModel):
     slides: list[dict] | None = None
     title: str = ""
     markdown: str = ""              # 存的时候记下"当时对着哪份教案正文改的"
+
+
+class SlideFillReq(BaseModel):
+    template_id: str = ""
+    session_id: str = ""
+    slides: list[dict] | None = None
+    title: str = ""
+    outDir: str = ""
+    confirm: bool = False           # 落盘类操作，先过权限闸门
 
 
 def _md_sig(md: str) -> str:
@@ -1051,6 +1061,61 @@ def api_slide_themes():
             "default": slide_deck.default_theme_id(), "themes": items}
 
 
+@app.get("/api/slide/templates")
+def api_slide_templates():
+    """演示模板清单：内置（数值）+ 导入的 `.pptx`（**只借配色/字体/槽位**）。"""
+    from edu_agent import slide_template
+
+    try:
+        items = slide_template.list_templates()
+    except Exception as exc:  # noqa: BLE001 模板库坏了不该把面板打死
+        return {"ok": False, "error": f"读模板库失败：{exc}", "templates": []}
+    return {"ok": True, "enabled": capabilities.session_preview_ready(),
+            "builtin": [t for t in items if t["kind"] == "json"],
+            "imported": [t for t in items if t["kind"] == "pptx"]}
+
+
+@app.post("/api/slide/template/import")
+async def api_slide_template_import(file: UploadFile = File(...), name: str = Query("")):
+    """导入一份 `.pptx` 当演示模板（原稿收进模板库、**只读**；抽不出槽位就退化成只借配色）。"""
+    from edu_agent import slide_template
+
+    fname = (file.filename or "template.pptx").lower()
+    if not fname.endswith((".pptx", ".pptm", ".potx")):
+        return JSONResponse({"ok": False, "error": "只支持 .pptx（含 .pptm/.potx）"}, status_code=400)
+    tmp = Path(tempfile.mkdtemp(prefix="tplup_")) / (file.filename or "template.pptx")
+    try:
+        tmp.write_bytes(await file.read())
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"读上传文件失败：{exc}"}
+    out = slide_template.import_pptx(tmp, name=name or Path(file.filename or "").stem)
+    shutil.rmtree(tmp.parent, ignore_errors=True)
+    return out
+
+
+@app.post("/api/slide/fill")
+def api_slide_fill(body: SlideFillReq):
+    """把会话内容填进模板（产物在 `data/ppt_out/`；模板原稿只读）。"""
+    from edu_agent import permissions
+    from edu_agent import slide_fill
+
+    blocked = permissions.guard("export_pptx", bool(body.confirm))
+    if blocked:
+        return blocked
+    tid = str(body.template_id or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "先选一个导入的演示模板"}, status_code=400)
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    if not slides:
+        sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+        slides = (_store.get_session_doc(sid).get("slides") or [])
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可填的内容（先有教案正文或幻灯片）"}, status_code=400)
+    out = slide_fill.fill_pptx(tid, slides, title=str(body.title or ""),
+                              out_dir=(body.outDir or "").strip() or None)
+    return out
+
+
 @app.post("/api/slide/render")
 def api_slide_render(body: SlideRenderReq):
     """会话数据 → 每页 SVG。**不落盘、不联网、不依赖 WPS**。"""
@@ -1080,7 +1145,12 @@ def api_slide_render(body: SlideRenderReq):
             except Exception:  # noqa: BLE001 纯预览，解析失败就当没有页
                 slides = []
     try:
-        out = slide_deck.build_deck(body.theme_id, slides, title=title)
+        tokens = None
+        if str(body.template_id or "").strip():        # 导入模板：借它的配色/字体渲染
+            from edu_agent import slide_template
+
+            tokens = slide_template.theme_for(body.template_id)
+        out = slide_deck.build_deck(body.theme_id, slides, title=title, tokens=tokens)
     except (FileNotFoundError, ValueError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     out["enabled"] = True

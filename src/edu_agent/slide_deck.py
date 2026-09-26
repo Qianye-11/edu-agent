@@ -184,12 +184,14 @@ def to_slots(slide: dict, index: int, total: int, doc_title: str = "") -> tuple[
 
 # ---------------------------------------------------------------- 整册
 
-def build_deck(theme_id: str, slides: list[dict] | None, title: str = "") -> dict:
+def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
+               tokens: dict | None = None) -> dict:
     """渲染整册：返回 `{ok, theme_id, pages:[svg...], layouts, warnings, stats}`。
 
     **不落盘、不联网、不依赖 WPS**；`pages` 就是面板要显示、导出要转换的那份 SVG。
+    `tokens` 给了就直接用（导入模板走这条：借它的配色/字体，版式仍用我们的 6 个）。
     """
-    t = theme(theme_id)
+    t = tokens if tokens else theme(theme_id)
     items = [s for s in (slides or []) if isinstance(s, dict)]
     if not items:
         return {"ok": True, "theme_id": t["id"], "pages": [], "layouts": [],
