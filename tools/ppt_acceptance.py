@@ -9,10 +9,13 @@
      文字多重集是否与源稿一致 / 字体是否真的换成目标字体（含 `<a:ea>`）/ `p:timing` 是否清干净
   5. **（可选）WPS 真打开** `--with-wps`：走 wps-office MCP 让 WPS 真的加载优化稿
   6. **没碰 content/plans** 前后目录清单一致
+  7. **幻灯片版式审计**（docs/22 §7.1/§7.1b，模型内）：三套主题的示例 deck 都要 0 error，
+     并且负样本能被抓住（证明闸门不是摆设）
 
 用法（先「启动」，即 5174 与 WPS 可用）：
     .venv\\Scripts\\python.exe tools\\ppt_acceptance.py
     .venv\\Scripts\\python.exe tools\\ppt_acceptance.py --file "D:\\我的答辩稿.pptx" --with-wps
+    .venv\\Scripts\\python.exe tools\\ppt_acceptance.py --skip-slides    # 只验 PPT 优化那条线
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT / "src"))
 
 from edu_agent import ppt_polish  # noqa: E402
+from edu_agent import slide_audit  # noqa: E402
 
 DEFAULT_SAMPLE = _ROOT / "content" / "plans" / "完整课时模板（默认）.pptx"
 RESULTS: list[tuple[str, bool, str]] = []
@@ -96,11 +100,41 @@ def deep_package_check(src: Path, dst: Path, *, latin: str, ea: str) -> None:
     check("动画节点已清（无 p:timing）", "<p:timing" not in xml)
 
 
+def slides_audit() -> None:
+    """幻灯片版式审计：好页 0 error + 负样本必须被抓到（docs/23 M2）。"""
+    print("\n[7] 幻灯片版式审计（模型内，docs/22 §7.1/§7.1b）")
+    base = slide_audit.baseline()
+    for tid, b in base.items():
+        check(f"{tid} 示例 deck 无不合格项", b["errors"] == 0,
+              f"error {b['errors']} / warn {b['warnings']} · 纵向占比 {b['active_ratio_min']:.0%}"
+              f" · 底部空白 {b['bottom_gap_max']:.0f}px · 主色 {b['accent_ratio_max']:.1%}")
+    good = slide_deck_build()
+    pages, layouts = good["pages"], good["layouts"]
+    cases = [
+        ("越界（封面标题过长）", [pages[0].replace("3.3 幂函数", "3.3 幂函数与它的十七个常见变形以及全部图象性质汇总")] + pages[1:], layouts, "overflow"),
+        ("版式不在白名单", pages, ["cover", "x", layouts[2]], "whitelist"),
+        ("字号跑到阶梯外", [pages[0], pages[1].replace('font-size="24.0"', 'font-size="13.0"'), pages[2]], layouts, "font-scale"),
+        ("内容挤到边距外", [pages[0].replace('x="72.0"', 'x="20.0"')] + pages[1:], layouts, "margin"),
+    ]
+    for name, mutated, lays, want in cases:
+        rep = slide_audit.audit_pages("tech-editorial", mutated, lays)
+        codes = {f["code"] for f in rep["errors"]}
+        check(f"负样本被抓到：{name}", want in codes, f"期望 {want} · 实际 {sorted(codes)}")
+
+
+def slide_deck_build() -> dict:
+    """渲染示例 deck（审计与负样本共用）。"""
+    from edu_agent import slide_deck
+
+    return slide_deck.build_deck("tech-editorial", slide_deck.SAMPLE_DECK, title="3.3 幂函数")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", default=str(DEFAULT_SAMPLE), help="要验收的 .pptx（默认用仓库样例）")
     ap.add_argument("--with-wps", action="store_true", help="额外让 WPS 真打开一次（需要 WPS 可用）")
     ap.add_argument("--keep", action="store_true", help="保留任务目录（默认保留，便于人工看产物）")
+    ap.add_argument("--skip-slides", action="store_true", help="跳过幻灯片版式审计（只验 PPT 优化）")
     ap.add_argument("--ea", default="微软雅黑")
     ap.add_argument("--latin", default="Calibri")
     args = ap.parse_args()
@@ -165,6 +199,9 @@ def main() -> int:
     after = {p.name for p in plans.glob("*")} if plans.is_dir() else set()
     check("目录清单前后一致", before == after, f"{len(before)} 项")
 
+    if not args.skip_slides:
+        slides_audit()
+
     print(f"\n产物：{out}")
     print(f"任务目录：{job['dir']}")
     ok = sum(1 for _, o, _ in RESULTS if o)
@@ -173,4 +210,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")       # 控制台默认 GBK，打印 ✅/❌ 会当场炸
     raise SystemExit(main())

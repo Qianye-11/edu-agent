@@ -50,13 +50,18 @@ def blend(fg: str, bg: str, alpha: float) -> str:
     return "#%02X%02X%02X" % mix
 
 
-def _rgb(color: str) -> tuple[int, int, int]:
-    c = color.strip().lstrip("#")
+def rgb(color: str) -> tuple[int, int, int]:
+    """`#RRGGBB` / `#RGB` → (r, g, b)。公开接口（审计要比颜色，别再调私有 `_rgb`）。"""
+    c = str(color or "").strip().lstrip("#")
     if len(c) == 3:
         c = "".join(ch * 2 for ch in c)
     if len(c) != 6:
         raise ValueError(f"颜色格式不对：{color}")
     return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+
+
+def _rgb(color: str) -> tuple[int, int, int]:
+    return rgb(color)
 
 
 # ---------------------------------------------------------------- 读写 tokens

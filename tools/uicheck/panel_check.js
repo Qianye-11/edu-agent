@@ -80,6 +80,10 @@ function makeDom(opts) {
       }
       if (!window.requestIdleCallback) window.requestIdleCallback = (fn) => setTimeout(fn, 0);
       if (!window.scrollTo) window.scrollTo = () => {};
+      if (o.innerWidth) {
+        Object.defineProperty(window, 'innerWidth', { value: o.innerWidth, configurable: true });
+        Object.defineProperty(window, 'outerWidth', { value: o.innerWidth, configurable: true });
+      }
       if (window.Element && !window.Element.prototype.scrollIntoView) {
         window.Element.prototype.scrollIntoView = () => {};
       }
@@ -155,6 +159,22 @@ async function openDocPanel(doc) {
     check('换主题会重新要一份 SVG', doc.querySelector('#spBody .dp-canvas svg') !== null &&
       /手绘墨/.test(txt(doc.querySelector('.dp-slstat'))), txt(doc.querySelector('.dp-slstat')));
     check('提示小字仍在', /右侧为内存预览效果/.test(txt(doc.querySelector('.dp-note'))));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== 幻灯片：窄屏（模拟 320px 视口） ==');
+  {
+    const { w, doc, errors } = makeDom({ innerWidth: 320 });
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    const pw = doc.documentElement.style.getPropertyValue('--docp-w');
+    check('面板宽度被夹到下限 360px', pw === '360px', pw || '(empty)');
+    const wrap = doc.querySelector('#spBody .dp-slidewrap');
+    check('窄屏下缩放系数仍为正数', !!wrap && parseFloat(wrap.dataset.scale) > 0,
+      wrap ? wrap.dataset.scale : '(no wrap)');
+    check('窄屏下预览台仍在（没被隐藏）', !!doc.querySelector('#spBody .dp-canvas'));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }

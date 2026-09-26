@@ -19,6 +19,21 @@ from . import ppt_tokens as tk
 #: 版式 id（与 docs/22 §5 一致；显式 `layout` 只认这些，其余按位置推断）
 LAYOUTS = ppt_svg.LAYOUTS
 
+#: 演示用的示例教案（样张工具与审计工具共用一份，避免两处各写一套）
+SAMPLE_DECK: list[dict] = [
+    {"layout": "cover", "name": "3.3 幂函数", "cover_title": "3.3 幂函数",
+     "subtitle": "数学 · 高一 · 新授课", "label": "人教A版 · 必修第一册",
+     "meta": "1 课时 · 情境导入 → 概念建构 → 图象探究 → 小结"},
+    {"layout": "bullets", "name": "幂函数的概念", "minutes": "12", "label": "环节 2 · 12 分钟",
+     "blocks": [{"label": "定义", "text": "形如 y=x^α 的函数，α 为常数"},
+                {"label": "关键", "text": "底数是自变量，指数是常数"},
+                {"label": "定义域", "text": "随 α 的取值变化，先看指数再定"},
+                {"label": "五个常见", "text": "y=x、y=x²、y=x³、y=√x、y=x⁻¹"}]},
+    {"layout": "media", "name": "图象与性质", "minutes": "15", "label": "环节 3 · 15 分钟",
+     "caption": "在同一坐标系里画出 y=x²，观察它的单调性与奇偶性。",
+     "bullets": ["关于 y 轴对称，是偶函数", "在 [0,+∞) 上单调递增"]},
+]
+
 
 # ---------------------------------------------------------------- 主题
 
