@@ -34,6 +34,12 @@ static/*.bak-*
 mcp_servers/wps-office-mcp/
 skills/
 
+# ============ 演示模板库（content/ppt_templates/）============
+# 仓库只留内置 3 套**数值**（_builtin/*.json）；导入的学校/老师 .pptx 原稿是用户资产，不入库
+# （见 docs/19 §9.1：原稿只读、软删进 _trash/）。index.json 是派生清单，也不入库。
+content/ppt_templates/*
+!content/ppt_templates/_builtin/
+
 # wiki 有自己的独立本地 git 仓库（教材派生内容不入 public 远端）
 content/wiki/
 # UI 检查脚本的依赖（按需 npm i jsdom，不入库）
