@@ -196,7 +196,7 @@ def build_deck(theme_id: str, slides: list[dict] | None, title: str = "") -> dic
                 "warnings": [], "stats": {"pages": 0, "chars": 0}}
 
     total = len(items)
-    warnings: list[str] = []
+    warnings: list[str] = list(length_warnings(items))
     pages: list[str] = []
     layouts: list[str] = []
     chars = 0
@@ -220,6 +220,8 @@ CANVAS_W = 1280
 CANVAS_H = 720
 #: 缩放系数上下限（太小看不清、太大浪费屏幕）
 SCALE_MIN, SCALE_MAX = 0.15, 2.0
+#: 每块建议字数（超出只提示，见 `length_warnings`）
+CHARS_PER_BLOCK = 22
 
 
 def fit_scale(container_w: float) -> float:
@@ -244,6 +246,61 @@ def fit_height(container_w: float) -> int:
     两边不一致就会差 1px —— 审计算出来的高度必须与面板实际设的一致。
     """
     return int(math.floor(CANVAS_H * fit_scale(container_w) + 0.5))
+
+
+def clean_slides(slides: list[dict] | None) -> list[dict]:
+    """把面板传来的编辑结果**收干净**再存/再渲染（保守：不认识的就丢，绝不悄悄改字）。
+
+    只保留认识的键：`layout/name/title/minutes/label/bullets/blocks/caption/closing/
+    subtitle/meta/index/left/right`；字符串去首尾空白；`layout` 只认登记过的 6 个；
+    空条目丢掉；单块文字上限 400 字（防手滑粘贴一整篇）。
+    """
+    out: list[dict] = []
+    for raw in slides or []:
+        if not isinstance(raw, dict):
+            continue
+        s: dict = {}
+        for key in ("name", "title", "minutes", "label", "caption", "closing",
+                    "subtitle", "meta", "index", "cover_title"):
+            if key in raw:
+                s[key] = _text(raw[key])[:120]
+        layout = _text(raw.get("layout"))
+        if layout in LAYOUTS:
+            s["layout"] = layout
+        bullets = [_text(b)[:400] for b in (raw.get("bullets") or []) if _text(b)]
+        if bullets:
+            s["bullets"] = bullets
+        blocks = []
+        for b in (raw.get("blocks") or []):
+            if isinstance(b, dict):
+                text = _text(b.get("text") or b.get("name"))[:400]
+                if text:
+                    blocks.append({"label": _text(b.get("label"))[:24], "text": text})
+            elif _text(b):
+                blocks.append({"label": "", "text": _text(b)[:400]})
+        if blocks:
+            s["blocks"] = blocks
+        for side in ("left", "right"):
+            col = raw.get(side)
+            if isinstance(col, dict):
+                items = [_text(x)[:400] for x in (col.get("bullets") or []) if _text(x)]
+                if items or _text(col.get("heading")):
+                    s[side] = {"heading": _text(col.get("heading"))[:60], "bullets": items}
+        if s.get("name") or s.get("title") or s.get("bullets") or s.get("blocks") or s.get("left"):
+            out.append(s)                       # 全空的一页直接丢，别留下空白页
+    return out
+
+
+def length_warnings(slides: list[dict] | None) -> list[str]:
+    """逐块字数提示（T4.2）：超上限只提示，**不改写、不截断**（与 §3.3 一致）。"""
+    out: list[str] = []
+    for i, s in enumerate(slides or []):
+        blocks = _blocks(s) or [{"label": "", "text": b} for b in _bullets(s)]
+        for j, b in enumerate(blocks, 1):
+            if len(b["text"]) > CHARS_PER_BLOCK:
+                out.append(f"第 {i + 1} 页第 {j} 块 {len(b['text'])} 字 > {CHARS_PER_BLOCK} 字"
+                           f"（「{b['text'][:12]}…」）→ 建议精简或拆页")
+    return out
 
 
 # ---------------------------------------------------------------- 导出（docs/23 M3）

@@ -305,24 +305,36 @@ content/ppt_templates/
 
 ---
 
-## 12. 会话里的数据形状（`meta.doc` 新增，向后兼容）
+## 12. 会话里的数据形状（`session_docs` 表，向后兼容）
+
+> **M4a 已落地（2026-09-25）**：这一段原计划写进消息 `meta.doc`，实际落成了**会话级的独立表**
+> `session_docs(sid, doc, updated)`（`host/store.py`）——**加表不改表**，老库打开即自动补表、零迁移。
+> 形状如下（`doc` 字段里存的 JSON）：
 
 ```jsonc
 {
   "title": "3.3 幂函数",
-  "markdown": "…",                    // 教案正文（Word 导出仍以它为准）
-  "slides": [                          // ← 新增：一等数据，面板里编辑的就是它
-    {"name":"3.3 幂函数","layout":"cover","minutes":"","bullets":[]},
+  "slides": [                          // ← 一等数据，面板里编辑的就是它（渲染与导出都读这一份）
+    {"name":"3.3 幂函数","layout":"cover","minutes":""},
     {"name":"情境导入","layout":"section","minutes":"5","bullets":["投影五个实例"]},
-    {"name":"幂函数的概念","layout":"bullets","minutes":"12","bullets":["形如 y=x^α","α 为常数"]},
+    {"name":"幂函数的概念","layout":"bullets","minutes":"12",
+     "blocks":[{"label":"定义","text":"形如 y=x^α"},{"label":"关键","text":"α 为常数"}]},
     {"name":"小结","layout":"end","minutes":"3","bullets":["三条结论"]}
   ],
-  "slides_edited": true,               // 手动改过 → 重出教案时提示，不静默覆盖
-  "ppt_template_id": "tech-editorial"
+  "md_sig": "3f2a9c1b7d55",            // 存的时候"对着哪份教案正文改的"的指纹
+  "slides_edited": true                // 手动改过
 }
 ```
 
-**红线**：预览不落盘（编辑只改内存 + 会话 `meta.doc` + localStorage 镜像）；
+接口侧配套（`docs/22` §6.5 有细节）：
+
+- `POST /api/slide/save` 存这份数据（`slide_deck.clean_slides()` 先收干净：只留认识的键、版式白名单、空页丢弃、单块 400 字上限）；
+- `POST /api/session/doc-preview` 与 `POST /api/slide/render`、以及导出路径，**都优先用会话里改过的那份**；
+- **不静默覆盖**：正文后来被重出过（`md_sig` 对不上）⇒ 这次按**新正文**出幻灯片，回 `slides_stale: true`，
+  面板说明"你之前的修改还在会话里、只是没盖上来"——**老师的改动一个字都不删**；
+- 删会话时顺手清掉这份数据（`SessionStore.delete`）。
+
+**红线**：预览不落盘（编辑只改内存 + 会话 `session_docs` + localStorage 镜像）；
 `content/ppt_templates/` 是**用户资产**（原稿只读、软删进 `_trash/`，导入的原稿建议 gitignore，仓库只留内置 3 套）；
 导出仍走 `/api/wps/export`；填充器产物与优化产物都落 `data/ppt_out/`；`content/plans/` 与教案模板链路不动。
 
@@ -345,12 +357,15 @@ content/ppt_templates/
 ```bash
 # 后端离线单测 / 全量 / UI 检查 / 真机验收
 .venv/Scripts/python.exe -m unittest tests.test_ppt_polish -v
-.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"     # 388 例 OK（v1.16.0 R3）
-cd tools/uicheck && npm i jsdom && node panel_check.js                    # 47 项检查
+.venv/Scripts/python.exe -m unittest tests.test_slide_deck tests.test_slide_audit tests.test_slide_edit   # 幻灯片：渲染 / 审计 / 编辑
+.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"     # 410 例 OK（v1.16.0 R4）
+cd tools/uicheck && npm i jsdom && node panel_check.js                    # 65 项检查
 .venv/Scripts/python.exe tools/slide_audit.py --gate                      # 版式审计（模型内，0 error 才算过）
 .venv/Scripts/python.exe tools/slide_audit.py --selftest                  # 闸门自证：4 个负样本必须被抓到
 .venv/Scripts/python.exe tools/ppt_acceptance.py --with-wps               # 28 项：体检→优化→校验→包深检→WPS 真打开→不碰 plans→版式审计→新版式导出→WPS 再打开
 ```
+
+> 提示：全量单测与 `panel_check.js` **别同时跑**（都在抢 CPU/磁盘，实测 45 秒会拖到 13 分钟）。
 
 **2026-09-24 实跑记录（14/14 全过）**，源文件 = `content/plans/完整课时模板（默认）.pptx`（11 页 / 1310 字）：
 

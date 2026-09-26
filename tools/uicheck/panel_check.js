@@ -56,6 +56,7 @@ function makeDom(opts) {
   const errors = [];
   const renderCalls = [];
   const exports = [];
+  const saves = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => { if (!/Could not load script/.test(e.message || '')) errors.push(e.message); });
   vc.on('error', (...a) => errors.push(a.join(' ')));
@@ -120,14 +121,25 @@ function makeDom(opts) {
           try { n = (JSON.parse(op.body).slides || []).length || 3; } catch (e) {}
           renderCalls.push(n);
           return new Response(JSON.stringify({ ok: true, enabled: true, theme_id: THEMES.default,
-            pages: Array.from({ length: n }, (_, i) => svgPage(i)), warnings: [], layouts: [], stats: { pages: n } }),
+            pages: Array.from({ length: n }, (_, i) => svgPage(i)),
+            warnings: o.slideWarn ? ['第 2 页：模块 6 个 > 上限 5 → 建议拆页（本页只排了前 5 个，其余请另起一页）'] : [],
+            layouts: [], stats: { pages: n } }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (p === '/api/slide/save') {
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          saves.push(b);
+          return new Response(JSON.stringify({ ok: true, session_id: b.session_id || 'stub',
+            slides: b.slides || [], slides_edited: true, pages: (b.slides || []).length,
+            warnings: o.slideWarn ? ['第 2 页：模块 6 个 > 上限 5 → 建议拆页'] : [] }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
         return realFetch(new URL(String(u), BASE).toString(), op);
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves };
 }
 
 async function openDocPanel(doc) {
@@ -171,6 +183,90 @@ async function openDocPanel(doc) {
     check('换主题会重新要一份 SVG', doc.querySelector('#spBody .dp-canvas svg') !== null &&
       /手绘墨/.test(txt(doc.querySelector('.dp-slstat'))), txt(doc.querySelector('.dp-slstat')));
     check('提示小字仍在', /右侧为内存预览效果/.test(txt(doc.querySelector('.dp-note'))));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
+  {
+    const { w, doc, errors, saves, renderCalls } = makeDom();
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+
+    check('每页卡片都有编辑工具栏',
+      doc.querySelectorAll('#spBody .dp-cardbar').length === doc.querySelectorAll('#spBody .dp-slide').length,
+      doc.querySelectorAll('#spBody .dp-cardbar').length + ' 条');
+
+    /* ① 改标题（第 2 页） */
+    doc.querySelector('#spBody [data-edit="1"]').click(); await sleep(500);
+    const box = doc.querySelector('#spBody .dp-edit');
+    check('点「改」展开就地编辑器', !!box && box.dataset.editFor === '1');
+    const titleInp = box.querySelector('input[data-f="name"]');
+    check('编辑器里带出现有标题', !!titleInp && titleInp.value.length > 0, titleInp ? titleInp.value : '');
+    titleInp.value = '情境导入（改过的）';
+    titleInp.dispatchEvent(new w.Event('input', { bubbles: true }));
+    for (let i = 0; i < 14 && !saves.length; i++) await sleep(250);
+    const saved1 = saves[saves.length - 1] || {};
+    check('改字 700ms 后自动存回会话', saves.length > 0 && saved1.slides[1].name === '情境导入（改过的）',
+      saves.length + ' 次 · ' + (saved1.slides ? saved1.slides[1].name : ''));
+    check('卡片标题就地更新', /情境导入（改过的）/.test(txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4'))),
+      txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4')));
+    check('改完重新取了一份 SVG（预览跟着变）', renderCalls.length >= 2, renderCalls.join('/'));
+
+    /* ② 字数提示：超过 22 字要标出来 */
+    const ta = doc.querySelector('#spBody .dp-edit textarea[data-f="text"]');
+    ta.value = '这是一条特别长的要点'.repeat(4);
+    ta.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await sleep(200);
+    const cnt = doc.querySelector('#spBody .dp-blk .dp-cnt');
+    check('字数计数实时更新', new RegExp(String(ta.value.length) + ' 字').test(txt(cnt)), txt(cnt));
+    check('超 22 字标红提示', cnt.classList.contains('dp-over'));
+
+    /* ③ 加一块 / 删一块 */
+    const before = doc.querySelectorAll('#spBody .dp-edit .dp-blk').length;
+    doc.querySelector('#spBody [data-b-add]').click(); await sleep(400);
+    const afterAdd = doc.querySelectorAll('#spBody .dp-edit .dp-blk').length;
+    check('「+ 加一块」生效', afterAdd === before + 1, before + ' → ' + afterAdd);
+    doc.querySelector('#spBody .dp-edit [data-b-del]').click(); await sleep(400);
+    const afterDel = doc.querySelectorAll('#spBody .dp-edit .dp-blk').length;
+    check('「删这块」生效', afterDel === afterAdd - 1, afterAdd + ' → ' + afterDel);
+
+    /* ④ 换版式 */
+    const lay = doc.querySelector('#spBody [data-layout="1"]');
+    lay.value = 'two-col';
+    lay.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(700);
+    const saved2 = saves[saves.length - 1] || {};
+    check('换版式写进数据并回存', saved2.slides && saved2.slides[1].layout === 'two-col',
+      saved2.slides ? String(saved2.slides[1].layout) : '');
+
+    /* ⑤ 排序 / 加页 / 删页 */
+    const first = txt(doc.querySelector('#spBody .dp-slide[data-pg="0"] h4'));
+    doc.querySelector('#spBody [data-page-dn="0"]').click(); await sleep(600);
+    check('「↓」把第 1 页换到第 2 位',
+      txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4')) === first,
+      txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4')));
+    const n0 = doc.querySelectorAll('#spBody .dp-slide').length;
+    doc.getElementById('dpAddPage').click(); await sleep(600);
+    check('「+ 加一页」生效', doc.querySelectorAll('#spBody .dp-slide').length === n0 + 1,
+      n0 + ' → ' + doc.querySelectorAll('#spBody .dp-slide').length);
+    doc.querySelector('#spBody [data-page-del="0"]').click(); await sleep(600);
+    check('「删」掉一页', doc.querySelectorAll('#spBody .dp-slide').length === n0,
+      String(doc.querySelectorAll('#spBody .dp-slide').length));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== 幻灯片：拆页/字数提示显示在页签里 ==');
+  {
+    const { w, doc, errors } = makeDom({ slideWarn: true });
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1200);
+    check('服务端的"建议拆页"提示显示出来了',
+      /建议拆页/.test(txt(doc.querySelector('#spBody .dp-warn'))), txt(doc.querySelector('#spBody .dp-warn')));
+    check('提示是提示、内容没被截断', /其余请另起一页|只排了前 5 个/.test(txt(doc.querySelector('#spBody .dp-warn'))));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }

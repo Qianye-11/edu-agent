@@ -31,6 +31,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated   REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created);
+-- 会话里的「文档/幻灯片」编辑结果（v1.16.0 起）：**加表不改表**，
+-- 老库老行都不受影响；一个会话一份，形状见 slide_deck.clean_slides()。
+CREATE TABLE IF NOT EXISTS session_docs (
+  sid     TEXT PRIMARY KEY,
+  doc     TEXT NOT NULL DEFAULT '{}',
+  updated REAL NOT NULL
+);
 """
 
 _MSG_CAP = 40          # 与旧版 _save() 的 messages[-40:] 对齐
@@ -124,6 +131,7 @@ class SessionStore:
 
     def delete(self, sid: str) -> None:
         self._exec("DELETE FROM sessions WHERE id=?", (sid,))
+        self._exec("DELETE FROM session_docs WHERE sid=?", (sid,))   # 文档编辑结果跟着走
 
     def append(self, sid: str, role: str, content: str, meta: dict | None = None) -> None:
         """追加一条消息（超长截断到 _MSG_CAP 条，与旧版落盘行为一致）。
@@ -154,6 +162,37 @@ class SessionStore:
     def set_last_html(self, sid: str, name: str) -> None:
         self._exec("UPDATE sessions SET last_html=?, updated=? WHERE id=?",
                    (name, time.time(), sid))
+
+    # ---------- 会话里的文档 / 幻灯片（v1.16.0） ----------
+
+    def set_session_doc(self, sid: str, doc: dict) -> None:
+        """存这个会话的文档编辑结果（当前是 `{"slides": [...], "title": ...}`）。
+
+        单独一张表：不动 `sessions` 的列，老库不需要迁移，删会话时顺手清掉。
+        """
+        if not sid:
+            return
+        self._exec(
+            "INSERT INTO session_docs(sid, doc, updated) VALUES(?,?,?) "
+            "ON CONFLICT(sid) DO UPDATE SET doc=excluded.doc, updated=excluded.updated",
+            (sid, json.dumps(doc or {}, ensure_ascii=False), time.time()),
+        )
+
+    def get_session_doc(self, sid: str) -> dict:
+        """读回会话里的文档编辑结果；没有就返回 `{}`（前端据此判断是否改过）。"""
+        if not sid:
+            return {}
+        rows = self._query("SELECT doc FROM session_docs WHERE sid=?", (sid,))
+        if not rows:
+            return {}
+        try:
+            data = json.loads(rows[0]["doc"] or "{}")
+            return data if isinstance(data, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+
+    def clear_session_doc(self, sid: str) -> None:
+        self._exec("DELETE FROM session_docs WHERE sid=?", (sid,))
 
     # ---------- 旧 JSON 迁移 ----------
 

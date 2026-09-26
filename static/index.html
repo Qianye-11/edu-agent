@@ -499,6 +499,25 @@ svg{display:block}
     .dp-plain h4{margin:0 0 24px;font-size:44px}
     .dp-plain ul{margin:0 0 0 24px;padding:0}
     .dp-warn{margin:0 0 8px;font-size:11.5px;color:#8A5A00}
+    /* 每页卡片底部的小工具栏 + 就地编辑器（M4a：改字/增删/换版式/排序） */
+    .dp-cardbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;
+      padding-top:6px;border-top:.5px dashed var(--line)}
+    .dp-cardbar button{height:22px;padding:0 7px;font-size:11.5px;border:.5px solid var(--line-strong);
+      background:var(--bg);border-radius:6px;cursor:pointer;color:var(--ink-700)}
+    .dp-cardbar button:hover{border-color:var(--blue);color:var(--blue)}
+    .dp-cardbar select{height:22px;font-size:11.5px;border:.5px solid var(--line-strong);border-radius:6px;
+      background:var(--bg);color:var(--ink-700);cursor:pointer}
+    .dp-edit{margin-top:8px;padding:8px 9px;border:.5px solid var(--line-strong);border-radius:8px;background:var(--bg)}
+    .dp-edit label{display:block;font-size:11px;color:var(--ink-400);margin:6px 0 2px}
+    .dp-edit input[type=text],.dp-edit textarea{width:100%;box-sizing:border-box;font-size:12.5px;
+      border:.5px solid var(--line-strong);border-radius:6px;padding:4px 6px;background:var(--bg);color:var(--ink-800);
+      font-family:inherit}
+    .dp-edit textarea{min-height:38px;resize:vertical;line-height:1.5}
+    .dp-blk{border-top:.5px dashed var(--line);padding-top:6px;margin-top:6px}
+    .dp-blk .row{display:flex;gap:6px;align-items:center;margin-top:3px}
+    .dp-blk .row .dp-cnt{margin-left:auto;font-size:11px;color:var(--ink-400);white-space:nowrap}
+    .dp-blk .row .dp-cnt.dp-over{color:#B45309;font-weight:600}
+    .dp-edit .acts{display:flex;gap:6px;align-items:center;margin-top:8px}
     .dp-slide{cursor:pointer}
     .dp-slide.dp-cur{box-shadow:0 0 0 1.5px var(--blue)}
     .dp-pagebar{display:flex;gap:6px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--ink-500)}
@@ -3629,7 +3648,11 @@ svg{display:block}
      面板只做三件事：要一份 SVG（POST /api/slide/render）、等比缩放进 16:9 台子、翻页。
      为什么不再在前端拼 HTML：那样预览与导出就是两套渲染，"预览=导出"永远修不掉。 */
   var DOCP_PAGE = 0;
-  var DOCP_SL = { pages: [], sig: '', themeId: '', themes: [], warn: [], fail: false, busy: false };
+  var DOCP_SL = { pages: [], sig: '', themeId: '', themes: [], warn: [], fail: false, busy: false,
+                  editing: -1, seq: 0, saveTimer: null };
+  var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
+                      ['two-col', '两栏'], ['media', '图文'], ['end', '结尾']];
+  var CHARS_PER_BLOCK = 22;                     /* 与 slide_deck.CHARS_PER_BLOCK 对齐（只提示不截断） */
 
   function docpThemeKey(){ return 'edu_slide_theme_v1'; }
   function docpThemeGet(){
@@ -3703,7 +3726,122 @@ svg{display:block}
   function docpSlideStat(sl){
     return sl.length + ' 页' +
       (DOCP_SL.themeId ? (' · ' + escHtml(docpThemeName(DOCP_SL.themeId))) : '') +
+      (DOCP_SL.edited ? ' · 已改过' : '') +
       (DOCP_SL.fail ? ' · 用纯文本预览' : '');
+  }
+  /* ---- 编辑数据（只改内存里的 slides；渲染由服务端重出，见 docs/22 D13） ---- */
+  function docpSlideAt(i){ return ((DOCP && DOCP.slides) || [])[i] || null; }
+  function docpBlocksOf(s){                       /* 与 slide_deck._blocks 同口径：blocks 优先 */
+    if(s && s.blocks && s.blocks.length) return s.blocks;
+    return ((s && s.bullets) || []).map(function(b){ return { label: '', text: b }; });
+  }
+  function docpSetBlocks(s, blocks){
+    s.blocks = blocks.map(function(b){ return { label: b.label || '', text: b.text || '' }; });
+    delete s.bullets;                             /* 统一走 blocks，避免两处数据打架 */
+  }
+  /* 存回会话（防抖 700ms）；只有内容没再变才用服务端"洗干净"的结果覆盖本地 */
+  function docpSaveSlides(){
+    if(DOCP_SL.saveTimer) clearTimeout(DOCP_SL.saveTimer);
+    DOCP_SL.saveTimer = setTimeout(function(){
+      var seq = ++DOCP_SL.seq;
+      spJson('/api/slide/save', 'POST', { session_id: CUR || '', slides: (DOCP && DOCP.slides) || [],
+                                          title: (DOCP && DOCP.title) || '',
+                                          markdown: (DOCP && DOCP.markdown) || '' }).then(function(d){
+        if(!d || !d.ok) return;
+        if(seq === DOCP_SL.seq && d.slides){       /* 期间没再改 → 采纳服务端的清洗结果 */
+          DOCP.slides = d.slides;
+        }
+        DOCP_SL.edited = true;
+        DOCP_SL.warn = d.warnings || [];
+        DOCP_SL.sig = '';                          /* 逼下一页重出 SVG */
+        var bd = docpEl('docPanelBody');
+        if(bd) docpPagesEnsure(bd, DOCP.slides, function(){ docpPaintStage(bd); });
+      }).catch(function(){});
+    }, 700);
+  }
+  /* 结构变了（增删/排序/换版式）→ 整块重画；文字变了 → 只更卡片标题 + 重出 SVG，别抢焦点 */
+  function docpAfterEdit(structural){
+    var bd = docpEl('docPanelBody');
+    if(!bd) return;
+    if(structural){ docpRenderSlides(bd); }
+    else{
+      var card = bd.querySelector('.dp-slide[data-pg="' + DOCP_PAGE + '"] h4');
+      var s = docpSlideAt(DOCP_PAGE);
+      if(card && s) card.textContent = s.name || '';
+      DOCP_SL.sig = '';
+      docpPagesEnsure(bd, (DOCP && DOCP.slides) || [], function(){ docpPaintStage(bd); });
+    }
+    docpSaveSlides();
+  }
+  function docpAddPage(){
+    var sl = (DOCP && DOCP.slides) || [];
+    sl.push({ name: '新的一页', layout: 'bullets', bullets: [''] });
+    DOCP_SL.editing = sl.length - 1;
+    docpAfterEdit(true);
+  }
+  function docpDelPage(i){
+    var sl = (DOCP && DOCP.slides) || [];
+    if(sl.length <= 1){ showToast('至少留一页', false); return; }
+    sl.splice(i, 1);
+    DOCP_SL.editing = -1;
+    if(DOCP_PAGE > sl.length - 1) DOCP_PAGE = sl.length - 1;
+    docpAfterEdit(true);
+  }
+  function docpMovePage(i, delta){
+    var sl = (DOCP && DOCP.slides) || [];
+    var j = i + delta;
+    if(j < 0 || j >= sl.length) return;
+    var tmp = sl[i]; sl[i] = sl[j]; sl[j] = tmp;
+    DOCP_SL.editing = j;
+    DOCP_PAGE = j;
+    docpAfterEdit(true);
+  }
+  /* 每页卡片 + 就地编辑器 */
+  function docpCardHtml(s, i, total){
+    var bs = docpBlocksOf(s).slice(0, 6);
+    var opts = DOCP_LAYOUTS.map(function(lo){
+      var cur = (s.layout || (i === 0 ? 'cover' : (i === total - 1 ? 'end' : 'bullets')));
+      return '<option value="' + lo[0] + '"' + (lo[0] === cur ? ' selected' : '') + '>' + lo[1] + '</option>';
+    }).join('');
+    return '<div class="dp-slide' + (i === DOCP_PAGE ? ' dp-cur' : '') + '" data-pg="' + i + '">' +
+      '<div class="n">第 ' + (i + 1) + ' / ' + total + ' 页' +
+      (s.minutes ? ('　' + escHtml(String(s.minutes)) + ' 分钟') : '') + '</div>' +
+      '<h4>' + escHtml(s.name || '') + '</h4>' +
+      (bs.length ? ('<ul>' + bs.map(function(b){ return '<li>' + escHtml(b.text) + '</li>'; }).join('') + '</ul>') : '') +
+      '<div class="dp-cardbar">' +
+        '<button data-edit="' + i + '">' + (DOCP_SL.editing === i ? '收起' : '改') + '</button>' +
+        '<button data-page-up="' + i + '" title="上移">↑</button>' +
+        '<button data-page-dn="' + i + '" title="下移">↓</button>' +
+        '<select data-layout="' + i + '" title="换版式">' + opts + '</select>' +
+        '<button data-page-del="' + i + '" title="删掉这页">删</button>' +
+      '</div>' + (DOCP_SL.editing === i ? docpEditorHtml(s, i) : '') + '</div>';
+  }
+  function docpEditorHtml(s, i){
+    var bs = docpBlocksOf(s);
+    var rows = bs.map(function(b, j){
+      var over = (b.text || '').length > CHARS_PER_BLOCK;
+      return '<div class="dp-blk" data-b="' + j + '">' +
+        '<label>小块 ' + (j + 1) + '（可选小标签 + 内容）</label>' +
+        '<input type="text" data-f="label" value="' + escHtml(b.label || '') + '" placeholder="小标签，如「定义」">' +
+        '<textarea data-f="text" rows="2">' + escHtml(b.text || '') + '</textarea>' +
+        '<div class="row">' +
+          '<button data-b-up="' + j + '">↑</button><button data-b-dn="' + j + '">↓</button>' +
+          '<button data-b-del="' + j + '">删这块</button>' +
+          '<span class="dp-cnt' + (over ? ' dp-over' : '') + '">' + (b.text || '').length + ' 字</span>' +
+        '</div></div>';
+    }).join('');
+    return '<div class="dp-edit" data-edit-for="' + i + '">' +
+      '<label>这一页的标题</label>' +
+      '<input type="text" data-f="name" value="' + escHtml(s.name || '') + '">' +
+      '<label>时长（分钟，可空）</label>' +
+      '<input type="text" data-f="minutes" value="' + escHtml(String(s.minutes || '')) + '">' +
+      rows +
+      '<div class="acts"><button data-b-add="' + i + '">+ 加一块</button>' +
+      '<span class="dp-cnt">建议每块 ≤' + CHARS_PER_BLOCK + ' 字（超出只提示，不会截断）</span></div>' +
+      '</div>';
+  }
+  function docpWarnHtml(){
+    return (DOCP_SL.warn || []).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
   }
   function docpPaintStage(bd){
     var cv = bd.querySelector('#dpCanvas');
@@ -3713,6 +3851,8 @@ svg{display:block}
     cv.innerHTML = svg ? svg : (DOCP_SL.fail ? docpPlainHtml(sl[DOCP_PAGE]) : '');
     var st = bd.querySelector('.dp-slstat');
     if(st) st.innerHTML = docpSlideStat(sl);      /* 兜底状态也要如实显示（别让人以为还是 SVG） */
+    var wb = bd.querySelector('#dpWarnBox');
+    if(wb) wb.innerHTML = docpWarnHtml();         /* 渲染回来的提示（如"建议拆页"）要进 DOM */
     docpFitSlide(bd);
   }
   function docpSlidesHtml(sl){
@@ -3723,36 +3863,20 @@ svg{display:block}
     var warn = (DOCP_SL.warn || []).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
     return '<div class="dp-slhead">' + (opts ? ('<label>主题</label><select id="dpTheme">' + opts + '</select>') : '') +
       '<span class="dp-slstat">' + docpSlideStat(sl) + '</span></div>' +
-      warn +
+      '<div id="dpWarnBox">' + warn + '</div>' +
       '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-canvas" id="dpCanvas"></div></div>' +
       '<div class="dp-pagebar"><button data-pg="prev">上一页</button>' +
       '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页　点下面的卡片可直接跳页</span>' +
       '<button data-pg="next">下一页</button></div>' +
-      sl.map(function(s, i){
-        var bs = (s.bullets || []).slice(0, 6);
-        return '<div class="dp-slide' + (i === DOCP_PAGE ? ' dp-cur' : '') + '" data-pg="' + i + '">' +
-          '<div class="n">第 ' + (i + 1) + ' / ' + sl.length + ' 页' +
-          (s.minutes ? ('　' + escHtml(String(s.minutes)) + ' 分钟') : '') + '</div>' +
-          '<h4>' + escHtml(s.name || '') + '</h4>' +
-          (bs.length ? ('<ul>' + bs.map(function(x){ return '<li>' + escHtml(x) + '</li>'; }).join('') + '</ul>') : '') +
-          '</div>';
-      }).join('');
+      sl.map(function(s, i){ return docpCardHtml(s, i, sl.length); }).join('') +
+      '<div class="dp-pagebar"><button id="dpAddPage">+ 加一页</button>' +
+      '<span>改完自动存回会话；下载 ▾ 里的「新版式」就是这份</span></div>';
   }
-  function docpRenderSlides(bd){
-    var deck = docpBuildDeck(), sl = deck.slides || [];
-    if(!sl.length){
-      bd.innerHTML = pptPolishHtml() + '<div class="dp-empty">' +
-        (DOCP.kind === 'rich' ? '导入的 .docx 没有环节结构，下载 PPT 会按板块标题成页'
-                              : '没有解析出可成页的环节 / 板块') + '</div>';
-      pptPolishWire();
-      return;
-    }
-    if(DOCP_PAGE >= sl.length) DOCP_PAGE = sl.length - 1;
-    if(DOCP_PAGE < 0) DOCP_PAGE = 0;
-    DOCP_SL.themeId = docpThemeGet();
-    bd.innerHTML = pptPolishHtml() + docpSlidesHtml(sl);
+  /* 幻灯片页签的全部接线（每次重画都要重来一遍） */
+  function docpSlidesWire(bd, sl){
     Array.prototype.forEach.call(bd.querySelectorAll('[data-pg]'), function(el){
-      el.addEventListener('click', function(){
+      el.addEventListener('click', function(ev){
+        if(ev.target.closest && ev.target.closest('.dp-cardbar,.dp-edit')) return;  /* 工具栏不跳页 */
         var v = el.dataset.pg;
         if(v === 'prev') DOCP_PAGE--;
         else if(v === 'next') DOCP_PAGE++;
@@ -3768,6 +3892,120 @@ svg{display:block}
       DOCP_SL.sig = '';                  /* 换主题 → 重新要一份 SVG */
       docpRenderSlides(bd);
     });
+    var add = bd.querySelector('#dpAddPage');
+    if(add) add.addEventListener('click', docpAddPage);
+    bd.querySelectorAll('[data-edit]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var i = parseInt(b.dataset.edit, 10) || 0;
+        DOCP_SL.editing = (DOCP_SL.editing === i) ? -1 : i;
+        DOCP_PAGE = i;
+        docpRenderSlides(bd);
+      });
+    });
+    bd.querySelectorAll('[data-page-up]').forEach(function(b){
+      b.addEventListener('click', function(){ docpMovePage(parseInt(b.dataset.pageUp, 10) || 0, -1); });
+    });
+    bd.querySelectorAll('[data-page-dn]').forEach(function(b){
+      b.addEventListener('click', function(){ docpMovePage(parseInt(b.dataset.pageDn, 10) || 0, 1); });
+    });
+    bd.querySelectorAll('[data-page-del]').forEach(function(b){
+      b.addEventListener('click', function(){ docpDelPage(parseInt(b.dataset.pageDel, 10) || 0); });
+    });
+    bd.querySelectorAll('[data-layout]').forEach(function(s2){
+      s2.addEventListener('change', function(){
+        var i = parseInt(s2.dataset.layout, 10) || 0;
+        var s = docpSlideAt(i);
+        if(s){ s.layout = s2.value; docpAfterEdit(true); }
+      });
+    });
+    /* 就地编辑：文字改动 700ms 防抖存回；结构改动立刻重画 */
+    var box = bd.querySelector('.dp-edit');
+    if(box){
+      var page = parseInt(box.dataset.editFor, 10) || 0;
+      /* 注意：一律用 docpSlideAt(page) **现取**，不要闭包持有对象引用 ——
+         保存回来的清洗结果会整段替换 DOCP.slides，闭包里的旧对象会变成"孤儿"，
+         之后的修改就写进孤儿里、界面上看不到（踩过）。 */
+      box.querySelectorAll('input[data-f],textarea[data-f]').forEach(function(inp){
+        var f = inp.dataset.f;
+        var blk = inp.closest('.dp-blk');
+        inp.addEventListener('input', function(){
+          var s = docpSlideAt(page);
+          if(!s) return;
+          if(blk){                                        /* 块内字段 */
+            var j = parseInt(blk.dataset.b, 10) || 0;
+            var blocks = docpBlocksOf(s);
+            if(blocks[j]){
+              blocks[j][f === 'label' ? 'label' : 'text'] = inp.value;
+              docpSetBlocks(s, blocks);
+            }
+            if(f === 'text'){
+              var cnt = blk.querySelector('.dp-cnt');
+              if(cnt){
+                cnt.textContent = inp.value.length + ' 字';
+                cnt.classList.toggle('dp-over', inp.value.length > CHARS_PER_BLOCK);
+              }
+            }
+          }else{
+            s[f] = inp.value;
+          }
+          docpAfterEdit(false);
+        });
+      });
+      box.querySelectorAll('[data-b-add]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var s = docpSlideAt(page);
+          if(!s) return;
+          var blocks = docpBlocksOf(s);
+          blocks.push({ label: '', text: '' });
+          docpSetBlocks(s, blocks);
+          docpAfterEdit(true);
+        });
+      });
+      box.querySelectorAll('[data-b-del]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var s = docpSlideAt(page);
+          if(!s) return;
+          var j = parseInt(b.dataset.bDel, 10) || 0;
+          var blocks = docpBlocksOf(s);
+          blocks.splice(j, 1);
+          docpSetBlocks(s, blocks);
+          docpAfterEdit(true);
+        });
+      });
+      box.querySelectorAll('[data-b-up]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var s = docpSlideAt(page);
+          if(!s) return;
+          var j = parseInt(b.dataset.bUp, 10) || 0;
+          var blocks = docpBlocksOf(s);
+          if(j > 0){ var t = blocks[j - 1]; blocks[j - 1] = blocks[j]; blocks[j] = t; docpSetBlocks(s, blocks); docpAfterEdit(true); }
+        });
+      });
+      box.querySelectorAll('[data-b-dn]').forEach(function(b){
+        b.addEventListener('click', function(){
+          var s = docpSlideAt(page);
+          if(!s) return;
+          var j = parseInt(b.dataset.bDn, 10) || 0;
+          var blocks = docpBlocksOf(s);
+          if(j < blocks.length - 1){ var t = blocks[j + 1]; blocks[j + 1] = blocks[j]; blocks[j] = t; docpSetBlocks(s, blocks); docpAfterEdit(true); }
+        });
+      });
+    }
+  }
+  function docpRenderSlides(bd){
+    var deck = docpBuildDeck(), sl = deck.slides || [];
+    if(!sl.length){
+      bd.innerHTML = pptPolishHtml() + '<div class="dp-empty">' +
+        (DOCP.kind === 'rich' ? '导入的 .docx 没有环节结构，下载 PPT 会按板块标题成页'
+                              : '没有解析出可成页的环节 / 板块') + '</div>';
+      pptPolishWire();
+      return;
+    }
+    if(DOCP_PAGE >= sl.length) DOCP_PAGE = sl.length - 1;
+    if(DOCP_PAGE < 0) DOCP_PAGE = 0;
+    DOCP_SL.themeId = docpThemeGet();
+    bd.innerHTML = pptPolishHtml() + docpSlidesHtml(sl);
+    docpSlidesWire(bd, sl);
     pptPolishWire();
     docpPaintStage(bd);                  /* 先出兜底内容（有缓存就直接是 SVG），避免空台 */
     docpThemesEnsure(function(){
@@ -3996,6 +4234,11 @@ svg{display:block}
     spJson('/api/session/doc-preview', 'POST', { markdown: md, session_id: CUR || '' }).then(function(d){
       if(!d || !d.ok || !d.enabled || !DOCP) return;
       DOCP.slides = d.slides || [];
+      DOCP_SL.edited = !!d.slides_edited;      /* 会话里存过编辑结果 → 状态行标「已改过」 */
+      if(d.slides_stale){
+        DOCP_SL.warn = ['教案正文变过了，这次幻灯片按**新正文**重出；你之前的修改仍存在会话里（没被删）。']
+          .concat(DOCP_SL.warn || []);
+      }
       DOCP.blocks = d.blocks || [];
       DOCP.stats = d.stats || {};
       if(d.title) DOCP.title = d.title;

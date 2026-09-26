@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -952,6 +953,19 @@ def api_session_doc_preview(body: DocPreviewReq):
             slides = slides or []
         if not blocks:
             blocks = _plan_blocks(md)
+    # 老师在面板里改过幻灯片 → 以改过的那份为准；但**正文后来被重出过**就不闷头用旧的：
+    # 改用新正文，并把"你的修改还在会话里、只是没盖上来"这件事告诉前端（docs/19 §12 的不静默覆盖）。
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    saved_doc = _store.get_session_doc(sid)
+    slides_stale = False
+    if saved_doc.get("slides"):
+        saved_sig, cur_sig = saved_doc.get("md_sig") or "", (_md_sig(md) if md.strip() else "")
+        if saved_sig and cur_sig and saved_sig != cur_sig:
+            slides_stale = True
+        elif not (payload.get("slides") if isinstance(payload.get("slides"), list) else None):
+            slides = saved_doc["slides"]
+            title = title or str(saved_doc.get("title") or "")
+    slides_edited = bool(saved_doc.get("slides"))
     # 标题优先级：payload 标题 > 正文首个标题 > 占位
     # （历史会话兜底进来的正文原本带「**【Agent B · 教案 Agent】**」标签，
     #   已由 _strip_agent_tag 摘掉，否则这里只会取到标签、退化成「未命名文档」）
@@ -972,6 +986,8 @@ def api_session_doc_preview(body: DocPreviewReq):
         "markdown": md,                                    # 原样回传（Markdown Tab 的输入）
         "blocks": blocks,
         "slides": slides,
+        "slides_edited": slides_edited,                    # 手动改过？前端据此提示，不静默覆盖
+        "slides_stale": slides_stale,                      # 改过、但正文又变了（这次按新正文出）
         "stats": {"chars": len(md), "blocks": len(blocks),
                   "slides": len(slides), "minutes": minutes},
         "note": "内存预览：不落盘、不调用 WPS；需要落盘请走 /api/wps/export",
@@ -988,6 +1004,39 @@ class SlideRenderReq(BaseModel):
     title: str = ""
     markdown: str = ""               # 没给 slides 时的兜底来源
     session_id: str = ""
+
+
+class SlideSaveReq(BaseModel):
+    session_id: str = ""
+    slides: list[dict] | None = None
+    title: str = ""
+    markdown: str = ""              # 存的时候记下"当时对着哪份教案正文改的"
+
+
+def _md_sig(md: str) -> str:
+    """教案正文的指纹：用来判断"改幻灯片之后，正文有没有被重出过"。"""
+    return hashlib.sha1((md or "").encode("utf-8")).hexdigest()[:12]
+
+
+@app.post("/api/slide/save")
+def api_slide_save(body: SlideSaveReq):
+    """把面板里改过的幻灯片**存回会话**（`session_docs` 表；老库不需要迁移）。
+
+    存的只是一份数据（页 / 版式 / 文字），渲染仍由 `/api/slide/render` 现场出 SVG ——
+    所以"改完预览与导出同时变"是结构保证，不需要额外同步。
+    同时记下当时正文的指纹：正文后来被重出过的话，预览会改用新正文并把这件事告诉前端（见 doc-preview）。
+    """
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not sid:
+        return JSONResponse({"ok": False, "error": "没有会话可存（先新建/选择会话）"}, status_code=400)
+    slides = slide_deck.clean_slides(body.slides)
+    md = str(body.markdown or "")
+    doc = {"slides": slides, "title": str(body.title or "").strip(),
+           "md_sig": _md_sig(md) if md.strip() else "",   # 没给正文就不记指纹（也就无从"过期"）
+           "slides_edited": True}
+    _store.set_session_doc(sid, doc)
+    return {"ok": True, "session_id": sid, "slides": slides, "slides_edited": True,
+            "warnings": slide_deck.length_warnings(slides), "pages": len(slides)}
 
 
 @app.get("/api/slide/themes")
@@ -1011,6 +1060,14 @@ def api_slide_render(body: SlideRenderReq):
 
     slides = [s for s in (body.slides or []) if isinstance(s, dict)]
     title = str(body.title or "").strip()
+    if not slides:
+        sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+        saved = _store.get_session_doc(sid)            # 老师在面板里改过 → 以改过的为准
+        md_now = str(body.markdown or "")
+        saved_sig, cur_sig = saved.get("md_sig") or "", (_md_sig(md_now) if md_now.strip() else "")
+        if saved.get("slides") and not (saved_sig and cur_sig and saved_sig != cur_sig):
+            slides = saved["slides"]
+            title = title or str(saved.get("title") or "")
     if not slides:
         md = _strip_agent_tag(str(body.markdown or ""))
         if not md.strip():
@@ -1300,6 +1357,12 @@ def _export_pptx_deck(body: dict) -> dict:
     title = str(body.get("title") or "").strip()
     out_dir = (body.get("outDir") or "").strip() or None
     md = _strip_agent_tag(str(body.get("markdown") or ""))
+    if not slides:
+        sid = str(body.get("session_id") or "").strip() or (_store.current_id() or "")
+        saved = _store.get_session_doc(sid)          # 只给了会话 id 也要导出"改过的那份"
+        if saved.get("slides"):
+            slides = saved["slides"]
+            title = title or str(saved.get("title") or "")
 
     def _legacy(reason: str) -> dict:
         from edu_agent import wsl_docx
