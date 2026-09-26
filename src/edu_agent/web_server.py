@@ -40,6 +40,7 @@ from pydantic import BaseModel  # noqa: E402
 from edu_agent import logsetup, pdf_upload, plan_html, planner, routing  # noqa: E402
 from edu_agent import capabilities, wps_export  # noqa: E402  能力开关 + WPS 导出
 from edu_agent import ppt_polish  # noqa: E402  PPT 优化（体检 / 原地统一 / 内容校验）
+from edu_agent import slide_deck  # noqa: E402  幻灯片渲染收口（主题 + 槽位 → SVG）
 from edu_agent.config import load_settings  # noqa: E402
 from edu_agent.host.store import SessionStore  # noqa: E402
 from edu_agent.template_spec import (  # noqa: E402
@@ -975,6 +976,59 @@ def api_session_doc_preview(body: DocPreviewReq):
                   "slides": len(slides), "minutes": minutes},
         "note": "内存预览：不落盘、不调用 WPS；需要落盘请走 /api/wps/export",
     }
+
+
+# ---------- 幻灯片渲染收口（docs/22 D13 / docs/23 M1） ----------
+#   · /api/slide/themes：内置主题清单（面板的下拉用），不设门禁；
+#   · /api/slide/render：会话数据 → 每页 SVG，**纯内存**；面板只做等比缩放与翻页。
+#   渲染与导出共用同一份 SVG（导出见 M3 的 kind="pptx-deck"），所以"预览 = 导出"成立。
+class SlideRenderReq(BaseModel):
+    theme_id: str = ""               # 空 = 用默认主题
+    slides: list[dict] | None = None  # 会话里那份幻灯片数据（可为空 → 由 markdown 派生）
+    title: str = ""
+    markdown: str = ""               # 没给 slides 时的兜底来源
+    session_id: str = ""
+
+
+@app.get("/api/slide/themes")
+def api_slide_themes():
+    """内置主题清单 + 本机字体是否可用（面板提前提示，不用等到导出才发现）。"""
+    try:
+        items = slide_deck.themes()
+    except Exception as exc:  # noqa: BLE001 主题文件坏掉不该把面板打死
+        return {"ok": False, "enabled": capabilities.session_preview_ready(),
+                "error": f"读主题失败：{exc}", "default": "", "themes": []}
+    return {"ok": True, "enabled": capabilities.session_preview_ready(),
+            "default": slide_deck.default_theme_id(), "themes": items}
+
+
+@app.post("/api/slide/render")
+def api_slide_render(body: SlideRenderReq):
+    """会话数据 → 每页 SVG。**不落盘、不联网、不依赖 WPS**。"""
+    if not capabilities.session_preview_ready():
+        return {"ok": True, "enabled": False, "pages": [], "warnings": [], "layouts": [],
+                "theme_id": body.theme_id or "", "stats": {"pages": 0}}
+
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    title = str(body.title or "").strip()
+    if not slides:
+        md = _strip_agent_tag(str(body.markdown or ""))
+        if not md.strip():
+            md = _last_plan_markdown(str(body.session_id or "").strip() or (_store.current_id() or ""))
+        if md.strip():
+            try:
+                data = wps_export.slides_from_markdown(md)
+                slides = data.get("slides") or []
+                title = title or str(data.get("title") or "")
+            except Exception:  # noqa: BLE001 纯预览，解析失败就当没有页
+                slides = []
+    try:
+        out = slide_deck.build_deck(body.theme_id, slides, title=title)
+    except (FileNotFoundError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    out["enabled"] = True
+    out["note"] = "内存渲染：这份 SVG 就是导出要转换的那一份（同一份源）"
+    return out
 
 
 def _plan_blocks(md: str) -> list[dict]:

@@ -2,6 +2,22 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；版本号跟界面显示对齐。
 
+## [v1.16.0] - 未发布（按 `docs/23` 分轮交付）
+
+### 新增（R1 · 幻灯片渲染收口，2026-09-25）
+- **幻灯片"预览 = 导出"**：预览不再由前端拼 HTML，改由服务端渲染**同一份 SVG**
+  （`src/edu_agent/slide_deck.py` + 既有 `ppt_svg.py`）——
+  - 新接口 `GET /api/slide/themes`（3 套主题 + 字体可用性）、`POST /api/slide/render`（**纯内存**，不落盘、不联网、不依赖 WPS）；
+  - 面板预览台改成**固定 1280×720 + 均匀等比缩放**（`.dp-canvas` / `.dp-slidewrap`），面板拖宽拖窄不再变形；旧的深蓝 `.dp-stage` 整块退役；
+  - 主题下拉（学术蓝 / 插画暖 / 手绘墨）+ `localStorage` 记忆；服务端渲染不可用时**退化成纯文本预览**并在状态行注明，不白屏。
+- 三套内置主题的数值（`content/ppt_templates/_builtin/*.json`）+ 数值校验/单位换算（`ppt_tokens.py`）+ 槽位→SVG 六版式（`ppt_svg.py`）+ 样张工具（`tools/slide_samples.py`）+ 单测 24 例（`tests/test_slide_deck.py`）——数值与出处见 `docs/22` §3，样式来自公开 style-system（MIT / 仅引用数值）。
+
+### 变更
+- 预览台不再是"固定 px 塞可拖宽容器"：`slide_deck.fit_scale()` 是唯一缩放口径（单测锁 480/680/1000 → 0.375/0.53125/0.78125），面板里的同名 JS 是它的镜像。
+
+### 实测结论（写回 `docs/22` §7.3）
+- Edge `--headless=new --dump-dom`（页内自测后抓 DOM）**不可靠**：首次成功、之后稳定返回空 ⇒ 几何审计改为**模型内审计**（Python 按同一套画布坐标算），浏览器只用于样张截图与 WPS 真机验收。
+
 ## [v1.15.0] - 2026-09-23
 
 ### 新增

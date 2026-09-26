@@ -483,12 +483,22 @@ svg{display:block}
     .ppt-acts label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
     .ppt-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .ppt-tip{font-size:11.5px;color:var(--ink-400)}
-    /* 幻灯片：面板内的 16:9 预览台（不再开新窗口） */
-    .dp-stage{background:#0f172a;color:#fff;border-radius:10px;padding:16px 18px;margin-bottom:12px;
-      aspect-ratio:16/9;overflow:hidden;display:flex;flex-direction:column;gap:8px}
-    .dp-stage h4{font-size:17px;font-weight:700;margin:0}
-    .dp-stage ul{margin:0 0 0 20px;padding:0;font-size:12.5px;line-height:1.75}
-    .dp-stage .cap{font-size:11px;color:#93a4c3;margin-top:auto}
+    /* 幻灯片：面板内的 16:9 预览台（不再开新窗口）。
+       预览台内部是**固定的 1280×720 设计坐标**，由 JS 按面板宽度做等比缩放（--sl-scale）——
+       这样"面板里看到的"与"导出 pptx 的"是同一份坐标，不会随面板宽窄变形。 */
+    .dp-slhead{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:12.5px;color:var(--ink-500)}
+    .dp-slhead select{height:26px;padding:0 6px;font-size:12.5px;border:.5px solid var(--line-strong);
+      border-radius:6px;background:var(--bg);color:var(--ink-800);cursor:pointer}
+    .dp-slhead .dp-slstat{margin-left:auto;font-size:11.5px;color:var(--ink-400);white-space:nowrap}
+    .dp-slidewrap{position:relative;width:100%;overflow:hidden;border:.5px solid var(--line);
+      border-radius:8px;background:var(--bg-soft);margin-bottom:12px}
+    .dp-canvas{position:absolute;top:0;left:0;width:1280px;height:720px;transform-origin:top left}
+    .dp-canvas>svg{display:block;width:1280px;height:720px}
+    .dp-plain{width:1280px;height:720px;box-sizing:border-box;padding:72px;background:#fff;color:#1a1a1b;
+      font-size:24px;line-height:1.5}
+    .dp-plain h4{margin:0 0 24px;font-size:44px}
+    .dp-plain ul{margin:0 0 0 24px;padding:0}
+    .dp-warn{margin:0 0 8px;font-size:11.5px;color:#8A5A00}
     .dp-slide{cursor:pointer}
     .dp-slide.dp-cur{box-shadow:0 0 0 1.5px var(--blue)}
     .dp-pagebar{display:flex;gap:6px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--ink-500)}
@@ -3411,6 +3421,13 @@ svg{display:block}
     w = Math.max(360, Math.min(w || DOCP_W_DEFAULT, Math.max(360, max)));
     document.documentElement.style.setProperty('--docp-w', w + 'px');
     try{ localStorage.setItem(DOCP_W_KEY, String(w)); }catch(e){}
+    docpRefit();       /* 面板变宽变窄 → 预览台等比缩放要跟着重算 */
+  }
+  /* 面板宽度变化后重算缩放（只在幻灯片页签且面板开着时干活） */
+  function docpRefit(){
+    if(!DOCP_ON || DOCP_TAB !== 'slides') return;
+    var bd = docpEl('docPanelBody');
+    if(bd && bd.querySelector('#dpSlideWrap')) docpFitSlide(bd);
   }
   function docpTabSet(t){
     DOCP_TAB = t || 'doc';
@@ -3568,7 +3585,8 @@ svg{display:block}
     if(buf){ docpRenderDocDocx(bd, buf); return; }               /* 导入的 .docx → mammoth */
     docpRenderDocPayload(bd);                                    /* Agent payload → 同口径渲染 */
   }
-  /* 幻灯片 Tab：pptxgenjs 在前端内存里建页（不落盘），同一份 deck 模型渲染 HTML 分页 */
+  /* 幻灯片 Tab：面板只拿"页数据"（slides）去服务端换 SVG；
+     这里的 pptxgenjs 内存模型只用来兜底算页数/页名（**绝不 writeFile / 不落盘**）。 */
   function docpBuildDeck(){
     var deck = { title: (DOCP && DOCP.title) || '教案', slides: (DOCP && DOCP.slides) || [] };
     var G = window.PptxGenJS || window.pptxgenjs;
@@ -3595,29 +3613,106 @@ svg{display:block}
     }
     return deck;
   }
-  /* 幻灯片 Tab：pptxgenjs 在前端内存里建页（不落盘），16:9 预览台**就在面板里**
-     （原来的「在新窗口看」已去掉 —— 预览窗口统一收进侧边面板）。 */
+  /* 幻灯片 Tab：**渲染收口在服务端**（docs/22 D13）——
+     面板只做三件事：要一份 SVG（POST /api/slide/render）、等比缩放进 16:9 台子、翻页。
+     为什么不再在前端拼 HTML：那样预览与导出就是两套渲染，"预览=导出"永远修不掉。 */
   var DOCP_PAGE = 0;
-  function docpStageHtml(sl){
-    var s = sl[DOCP_PAGE] || {};
-    var bs = (s.bullets || []).slice(0, 6);
-    return '<div class="dp-stage"><h4>' + escHtml(s.name || '') + '</h4>' +
-      (bs.length ? '<ul>' + bs.map(function(x){ return '<li>' + escHtml(x) + '</li>'; }).join('') + '</ul>' : '') +
-      '<div class="cap">第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页' +
-      (s.minutes ? ('　' + escHtml(String(s.minutes)) + ' 分钟') : '') + '　16:9 预览（面板内）</div></div>';
+  var DOCP_SL = { pages: [], sig: '', themeId: '', themes: [], warn: [], fail: false, busy: false };
+
+  function docpThemeKey(){ return 'edu_slide_theme_v1'; }
+  function docpThemeGet(){
+    try{ return localStorage.getItem(docpThemeKey()) || ''; }catch(e){ return ''; }
   }
-  function docpRenderSlides(bd){
-    var deck = docpBuildDeck(), sl = deck.slides || [];
-    if(!sl.length){
-      bd.innerHTML = pptPolishHtml() + '<div class="dp-empty">' +
-        (DOCP.kind === 'rich' ? '导入的 .docx 没有环节结构，下载 PPT 会按板块标题成页'
-                              : '没有解析出可成页的环节 / 板块') + '</div>';
-      pptPolishWire();
-      return;
+  function docpThemeSet(v){
+    try{ localStorage.setItem(docpThemeKey(), v); }catch(e){}
+    DOCP_SL.themeId = v;
+  }
+  function docpThemeName(id){
+    for(var i = 0; i < DOCP_SL.themes.length; i++){
+      if(DOCP_SL.themes[i].id === id) return DOCP_SL.themes[i].name || id;
     }
-    if(DOCP_PAGE >= sl.length) DOCP_PAGE = sl.length - 1;
-    if(DOCP_PAGE < 0) DOCP_PAGE = 0;
-    bd.innerHTML = pptPolishHtml() + docpStageHtml(sl) +
+    return id || '';
+  }
+  /* 主题清单：进幻灯片页签时拉一次（失败就把下拉藏起来，预览照常走默认主题） */
+  function docpThemesEnsure(cb){
+    if(DOCP_SL.themes.length){ if(cb) cb(); return; }
+    spJson('/api/slide/themes', 'GET', null).then(function(d){
+      if(d && d.ok && (d.themes || []).length){
+        DOCP_SL.themes = d.themes;
+        if(!docpThemeGet()) docpThemeSet(d.default || d.themes[0].id);
+      }
+      if(cb) cb();
+    }).catch(function(){ if(cb) cb(); });
+  }
+  /* 页数据指纹：面板数据或主题变了才重新找服务端要 SVG */
+  function docpSlidesSig(sl){
+    return (docpThemeGet() || '-') + '|' + sl.length + '|' + sl.map(function(s){
+      return [s.name || '', s.layout || '', s.minutes || '', (s.bullets || []).length, (s.blocks || []).length].join('~');
+    }).join('||');
+  }
+  function docpPagesEnsure(bd, sl, cb){
+    var sig = docpSlidesSig(sl);
+    if(DOCP_SL.sig === sig && DOCP_SL.pages.length){ if(cb) cb(); return; }
+    if(DOCP_SL.busy) return;
+    DOCP_SL.busy = true;
+    spJson('/api/slide/render', 'POST', { theme_id: docpThemeGet(), slides: sl,
+                                          title: (DOCP && DOCP.title) || '', session_id: CUR || '' })
+      .then(function(d){
+        DOCP_SL.busy = false;
+        if(d && d.ok && d.enabled !== false && (d.pages || []).length){
+          DOCP_SL.pages = d.pages; DOCP_SL.warn = d.warnings || []; DOCP_SL.fail = false;
+          DOCP_SL.sig = sig;
+        }else{
+          DOCP_SL.pages = []; DOCP_SL.fail = true;      /* 拿不到 SVG → 退化成纯文本预览，别白屏 */
+        }
+        if(cb) cb();
+      })
+      .catch(function(){ DOCP_SL.busy = false; DOCP_SL.pages = []; DOCP_SL.fail = true; if(cb) cb(); });
+  }
+  /* 纯文本兜底（服务端渲染不可用时用；没有 SVG 也要能看内容） */
+  function docpPlainHtml(s){
+    s = s || {};
+    var bs = (s.bullets || []).slice(0, 6);
+    return '<div class="dp-plain"><h4>' + escHtml(s.name || '') + '</h4>' +
+      (bs.length ? '<ul>' + bs.map(function(x){ return '<li>' + escHtml(x) + '</li>'; }).join('') + '</ul>' : '') +
+      '</div>';
+  }
+  /* 等比缩放：内部固定 1280×720，按台子宽度算 scale；高度跟着 scale 走，不裁不拉 */
+  function docpFitSlide(bd){
+    var wrap = bd.querySelector('#dpSlideWrap');
+    if(!wrap) return;
+    var w = wrap.clientWidth || 480;
+    var sc = Math.max(0.15, Math.min(2, w / 1280));
+    wrap.style.height = Math.round(720 * sc) + 'px';
+    var cv = bd.querySelector('#dpCanvas');
+    if(cv) cv.style.transform = 'scale(' + sc + ')';
+    wrap.dataset.scale = sc.toFixed(4);
+  }
+  function docpSlideStat(sl){
+    return sl.length + ' 页' +
+      (DOCP_SL.themeId ? (' · ' + escHtml(docpThemeName(DOCP_SL.themeId))) : '') +
+      (DOCP_SL.fail ? ' · 用纯文本预览' : '');
+  }
+  function docpPaintStage(bd){
+    var cv = bd.querySelector('#dpCanvas');
+    if(!cv) return;
+    var sl = (DOCP && DOCP.slides) || [];
+    var svg = DOCP_SL.pages[DOCP_PAGE];
+    cv.innerHTML = svg ? svg : (DOCP_SL.fail ? docpPlainHtml(sl[DOCP_PAGE]) : '');
+    var st = bd.querySelector('.dp-slstat');
+    if(st) st.innerHTML = docpSlideStat(sl);      /* 兜底状态也要如实显示（别让人以为还是 SVG） */
+    docpFitSlide(bd);
+  }
+  function docpSlidesHtml(sl){
+    var opts = DOCP_SL.themes.map(function(t){
+      return '<option value="' + escHtml(t.id) + '"' + (t.id === docpThemeGet() ? ' selected' : '') + '>' +
+        escHtml(t.name) + '</option>';
+    }).join('');
+    var warn = (DOCP_SL.warn || []).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
+    return '<div class="dp-slhead">' + (opts ? ('<label>主题</label><select id="dpTheme">' + opts + '</select>') : '') +
+      '<span class="dp-slstat">' + docpSlideStat(sl) + '</span></div>' +
+      warn +
+      '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-canvas" id="dpCanvas"></div></div>' +
       '<div class="dp-pagebar"><button data-pg="prev">上一页</button>' +
       '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页　点下面的卡片可直接跳页</span>' +
       '<button data-pg="next">下一页</button></div>' +
@@ -3630,6 +3725,20 @@ svg{display:block}
           (bs.length ? ('<ul>' + bs.map(function(x){ return '<li>' + escHtml(x) + '</li>'; }).join('') + '</ul>') : '') +
           '</div>';
       }).join('');
+  }
+  function docpRenderSlides(bd){
+    var deck = docpBuildDeck(), sl = deck.slides || [];
+    if(!sl.length){
+      bd.innerHTML = pptPolishHtml() + '<div class="dp-empty">' +
+        (DOCP.kind === 'rich' ? '导入的 .docx 没有环节结构，下载 PPT 会按板块标题成页'
+                              : '没有解析出可成页的环节 / 板块') + '</div>';
+      pptPolishWire();
+      return;
+    }
+    if(DOCP_PAGE >= sl.length) DOCP_PAGE = sl.length - 1;
+    if(DOCP_PAGE < 0) DOCP_PAGE = 0;
+    DOCP_SL.themeId = docpThemeGet();
+    bd.innerHTML = pptPolishHtml() + docpSlidesHtml(sl);
     Array.prototype.forEach.call(bd.querySelectorAll('[data-pg]'), function(el){
       el.addEventListener('click', function(){
         var v = el.dataset.pg;
@@ -3641,7 +3750,19 @@ svg{display:block}
         docpRenderSlides(bd);
       });
     });
+    var sel = bd.querySelector('#dpTheme');
+    if(sel) sel.addEventListener('change', function(){
+      docpThemeSet(sel.value);
+      DOCP_SL.sig = '';                  /* 换主题 → 重新要一份 SVG */
+      docpRenderSlides(bd);
+    });
     pptPolishWire();
+    docpPaintStage(bd);                  /* 先出兜底内容（有缓存就直接是 SVG），避免空台 */
+    docpThemesEnsure(function(){
+      DOCP_SL.themeId = docpThemeGet();
+      if(!bd.querySelector('#dpTheme')) docpRenderSlides(bd);   /* 主题刚拉回来 → 补一次下拉 */
+      docpPagesEnsure(bd, sl, function(){ docpPaintStage(bd); });
+    });
   }
   /* ==== PPT 优化（「边框里的 PPT 优化」一期；后端子 agent.ppt_polish / 接口 /api/ppt/*）====
      放在「幻灯片」页签顶部：导入 .pptx → 体检报告 → 勾动作 → 一键优化 → 下载（导出后逐页校验内容没被改）。

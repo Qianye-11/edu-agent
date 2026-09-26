@@ -40,9 +40,21 @@ const POLISH = {
   verify: { ok: true, detail: '[VERIFY] passed' },
 };
 
+/* 桩数据：幻灯片渲染收口（docs/22 D13）。真渲染由服务端出 SVG，这里只验接线与缩放。 */
+const THEMES = {
+  ok: true, enabled: true, default: 'tech-editorial',
+  themes: [{ id: 'tech-editorial', name: '学术蓝', fonts_ok: true, canvas: { w: 1280, h: 720, bg: '#FFFFFF' } },
+           { id: 'illustration', name: '插画暖', fonts_ok: true, canvas: { w: 1280, h: 720, bg: '#F7F3EE' } },
+           { id: 'hand-drawn', name: '手绘墨', fonts_ok: true, canvas: { w: 1280, h: 720, bg: '#F8F6F2' } }],
+};
+const svgPage = (i) => '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">' +
+  '<rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>' +
+  '<text x="72" y="108" font-size="44" fill="#2B2B2B">第' + (i + 1) + '页</text></svg>';
+
 function makeDom(opts) {
   const o = opts || {};
   const errors = [];
+  const renderCalls = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => { if (!/Could not load script/.test(e.message || '')) errors.push(e.message); });
   vc.on('error', (...a) => errors.push(a.join(' ')));
@@ -85,11 +97,21 @@ function makeDom(opts) {
         }
         if (p === '/api/ppt/intake') return new Response(JSON.stringify(REPORT), { status: 200, headers: { 'Content-Type': 'application/json' } });
         if (p === '/api/ppt/polish') return new Response(JSON.stringify(POLISH), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        if (p === '/api/slide/themes') return new Response(JSON.stringify(THEMES), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        if (p === '/api/slide/render') {
+          if (o.slideFail) return new Response(JSON.stringify({ ok: false, error: 'stub down' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+          let n = 3;
+          try { n = (JSON.parse(op.body).slides || []).length || 3; } catch (e) {}
+          renderCalls.push(n);
+          return new Response(JSON.stringify({ ok: true, enabled: true, theme_id: THEMES.default,
+            pages: Array.from({ length: n }, (_, i) => svgPage(i)), warnings: [], layouts: [], stats: { pages: n } }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         return realFetch(new URL(String(u), BASE).toString(), op);
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls };
 }
 
 async function openDocPanel(doc) {
@@ -100,7 +122,7 @@ async function openDocPanel(doc) {
 (async () => {
   console.log('== 面板结构 / 入口 ==');
   {
-    const { w, doc } = makeDom();
+    const { w, doc, errors } = makeDom();
     await sleep(2500);
     const shell = Array.from(doc.querySelector('.shell').children).map((c) => c.id || c.tagName);
     check('右侧只有一块面板（.shell 子元素）', shell.join(',') === 'ASIDE,MAIN,sidePanel', shell.join(' | '));
@@ -111,9 +133,42 @@ async function openDocPanel(doc) {
     const ed = doc.querySelector('#spBody .dp-word[contenteditable="true"]');
     check('文档页签可直接编辑', !!ed);
     check('编辑工具栏显示', doc.getElementById('docPanelFmt').style.display === 'flex');
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(600);
-    check('幻灯片页签有面板内 16:9 预览台', !!doc.querySelector('#spBody .dp-stage'));
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(900);
+    check('幻灯片页签有 16:9 预览台（.dp-canvas）', !!doc.querySelector('#spBody .dp-canvas'));
+    check('旧的深蓝预览台已退役', !doc.querySelector('#spBody .dp-stage'));
+    check('预览台里是服务端给的 SVG（不是前端拼的 h4+ul）',
+      !!doc.querySelector('#spBody .dp-canvas svg'), (doc.querySelector('#spBody .dp-canvas') || {}).innerHTML?.slice(0, 40));
+    const wrap = doc.querySelector('#spBody .dp-slidewrap');
+    check('等比缩放按 1280 宽度算（jsdom 量不到宽度 → 兜底 480px ⇒ 0.375）',
+      !!wrap && wrap.dataset.scale === '0.3750', wrap ? wrap.dataset.scale : '(no wrap)');
+    check('预览台高度跟着缩放走（720×0.375=270px）',
+      !!wrap && wrap.style.height === '270px', wrap ? wrap.style.height : '(no wrap)');
+    const cv = doc.querySelector('#spBody .dp-canvas');
+    check('内部固定 1280×720、只用均匀缩放',
+      !!cv && /scale\(0\.375\)/.test(cv.style.transform || ''), cv ? cv.style.transform : '(no canvas)');
+    const sel = doc.getElementById('dpTheme');
+    check('主题下拉有 3 套（来自 /api/slide/themes）', !!sel && sel.options.length === 3,
+      sel ? Array.from(sel.options).map((o) => o.textContent).join('/') : '(no select)');
+    sel.value = 'hand-drawn';
+    sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(700);
+    check('换主题会重新要一份 SVG', doc.querySelector('#spBody .dp-canvas svg') !== null &&
+      /手绘墨/.test(txt(doc.querySelector('.dp-slstat'))), txt(doc.querySelector('.dp-slstat')));
     check('提示小字仍在', /右侧为内存预览效果/.test(txt(doc.querySelector('.dp-note'))));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== 幻灯片：服务端渲染不可用时退化成纯文本（不白屏） ==');
+  {
+    const { w, doc, errors } = makeDom({ slideFail: true });
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1200);
+    check('渲染失败仍显示内容（纯文本兜底）', !!doc.querySelector('#spBody .dp-plain'));
+    check('状态里说明用的是纯文本预览', /纯文本预览/.test(txt(doc.querySelector('.dp-slstat'))),
+      txt(doc.querySelector('.dp-slstat')));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
 
