@@ -137,7 +137,8 @@ class FillTest(_FillCase):
         deck = [DECK[0], {"name": "长内容", "bullets": bullets}]
         self.assertGreater(sum(len(b) for b in bullets), cap)
         p = sf.plan(self.tid, deck, "3.3 幂函数")
-        self.assertTrue(any("容量" in w for w in p["warnings"]), p["warnings"])
+        self.assertTrue(any("超出模板框" in w for w in p["warnings"]), p["warnings"])
+        self.assertTrue(any("拆页" in w or "缩短标题" in w for w in p["warnings"]), p["warnings"])
         out = sf.fill_pptx(self.tid, deck, "3.3 幂函数", out_dir=self.out)
         from pptx import Presentation
 
@@ -160,6 +161,132 @@ class RenderWithTemplateTest(_FillCase):
         out = slide_deck.build_deck("", slide_deck.SAMPLE_DECK, title="3.3 幂函数", tokens=tokens)
         self.assertEqual(len(out["pages"]), len(slide_deck.SAMPLE_DECK))
         self.assertIn(tokens["canvas"]["bg"], out["pages"][0])
+
+
+class MultiRunRegressionTest(_FillCase):
+    """回归：**一段里有多个 run** 的模板（老师从 PowerPoint 里粘来的标题常见）。
+
+    2026-09-25 线上报错：`AttributeError: '_Run' object has no attribute '_element'`
+    —— python-pptx 的元素访问器不一样（`_Run._r` / `_Paragraph._p` / 形状 `._element`），
+    而仓库样例的段落只有一个 run，所以当时的单测没覆盖到这条路径。
+    """
+
+    def _multi_run_template(self) -> Path:
+        """一个"真模板会有的样子"：标题占位符里是一段多 run 文字 + 第二行；
+        另有一个**非占位**文本框（模板自己的装饰文字，用来验证我们不会去动它）。"""
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+
+        src = Path(self.tmp.name) / "multi-run.pptx"
+        prs = Presentation()
+        slide = prs.slides.add_slide(prs.slide_layouts[5])          # Title Only：有标题占位符
+        tf = slide.shapes.title.text_frame
+        r1 = tf.paragraphs[0].add_run()
+        r1.text = "点击此处添加标题"
+        r1.font.size = Pt(32)
+        r1.font.bold = True
+        r2 = tf.paragraphs[0].add_run()                             # ← 第二个 run：触发删多余 run 的分支
+        r2.text = "（模板原名）"
+        para2 = tf.add_paragraph()
+        para2.add_run().text = "（占位第二行）"                      # ← 第二段：触发删多余段落的分支
+        box = slide.shapes.add_textbox(Inches(1), Inches(5), Inches(4), Inches(0.6))
+        box.text_frame.text = "模板自己的装饰文字"
+        prs.save(str(src))
+        return src
+
+    def test_multi_run_paragraph_is_handled(self):
+        """回归 2026-09-25：`AttributeError: '_Run' object has no attribute '_element'`
+        （python-pptx 的 `_Run` 是 `._r`；仓库样例的段落只有一个 run，所以当时没覆盖到）。"""
+        tid = st.import_pptx(self._multi_run_template(), name="多run模板")["id"]
+        deck = [{"layout": "cover", "name": "3.3 幂函数", "cover_title": "3.3 幂函数"}]
+        out = sf.fill_pptx(tid, deck, "3.3 幂函数", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        from pptx import Presentation
+
+        prs = Presentation(out["file"])
+        blob = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes
+                         if getattr(sh, "has_text_frame", False))
+        self.assertIn("3.3 幂函数", blob)
+        self.assertNotIn("（模板原名）", blob, "多余 run 的文字要被换掉")
+        self.assertNotIn("（占位第二行）", blob, "多余段落的文字要被换掉")
+
+    def test_run_formatting_of_first_run_kept(self):
+        """替换文字时保留第一个 run 的格式（字号/加粗），否则标题会变小。"""
+        tid = st.import_pptx(self._multi_run_template(), name="多run模板")["id"]
+        deck = [{"layout": "cover", "name": "封面标题", "cover_title": "封面标题"}]
+        out = sf.fill_pptx(tid, deck, "封面标题", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        from pptx import Presentation
+
+        prs = Presentation(out["file"])
+        sizes = [run.font.size.pt for s in prs.slides for sh in s.shapes
+                 if getattr(sh, "has_text_frame", False)
+                 for p in sh.text_frame.paragraphs for run in p.runs
+                 if run.text.strip() and run.font.size]
+        self.assertIn(32.0, sizes, "第一个 run 的 32pt 应该留着")
+
+    def test_untouched_box_keeps_template_text(self):
+        """我们这页没有对应角色的内容时，**不动**模板那个框（装饰文字/页脚不该被清空）。"""
+        tid = st.import_pptx(self._multi_run_template(), name="多run模板")["id"]
+        out = sf.fill_pptx(tid, [{"layout": "cover", "name": "只有标题", "cover_title": "只有标题"}],
+                           "只有标题", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        from pptx import Presentation
+
+        prs = Presentation(out["file"])
+        blob = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes
+                         if getattr(sh, "has_text_frame", False))
+        self.assertIn("模板自己的装饰文字", blob)
+
+
+class EndpointFillTest(_FillCase):
+    """走接口（面板点按钮的真实路径）：`POST /api/slide/fill`。"""
+
+    def setUp(self):
+        super().setUp()
+        import tempfile as _tf
+
+        self._old_data = os.environ.get("EDU_DATA_DIR")
+        os.environ["EDU_DATA_DIR"] = _tf.mkdtemp(prefix="edu_fill_data_")
+        from edu_agent import web_server as ws
+        from edu_agent import capabilities as cap
+
+        self.ws, self.cap = ws, cap
+        cap._CACHE.clear()
+        self.addCleanup(self._restore_data)
+
+    def _restore_data(self):
+        if self._old_data is None:
+            os.environ.pop("EDU_DATA_DIR", None)
+        else:
+            os.environ["EDU_DATA_DIR"] = self._old_data
+        self.cap._CACHE.clear()
+
+    def test_endpoint_fills_and_reports_checks(self):
+        from pptx import Presentation
+        from pptx.util import Inches
+
+        src = Path(self.tmp.name) / "tpl.pptx"
+        prs = Presentation()
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        slide.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1)).text_frame.text = "标题占位"
+        prs.save(str(src))
+        tid = st.import_pptx(src, name="接口模板")["id"]
+
+        r = self.ws.api_slide_fill(self.ws.SlideFillReq(
+            template_id=tid, slides=DECK, title="3.3 幂函数",
+            outDir=str(self.out), confirm=True))
+        self.assertTrue(r.get("ok"), r.get("error"))
+        self.assertTrue(Path(r["file"]).is_file())
+        names = {c["name"]: c["ok"] for c in r["checks"]}
+        self.assertTrue(names["内容零丢失"])
+        self.assertIn("download_url", r)
+
+    def test_endpoint_needs_template_and_content(self):
+        r = self.ws.api_slide_fill(self.ws.SlideFillReq(template_id="", slides=DECK, confirm=True))
+        self.assertEqual(getattr(r, "status_code", 200), 400)
+        r2 = self.ws.api_slide_fill(self.ws.SlideFillReq(template_id=self.tid, slides=[], confirm=True))
+        self.assertEqual(getattr(r2, "status_code", 200), 400)
 
 
 if __name__ == "__main__":

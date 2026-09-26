@@ -120,6 +120,8 @@ def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -
     for slot in slots:
         role = slot.get("role") or "body"
         cap = int(slot.get("capacity") or 0)
+        if 0 < cap < st.MIN_FILLABLE_CAPACITY and role not in ("title", "cover"):
+            continue                       # 太小的框是标签/装饰，不往里写正文（也不报"容量不足"）
         text = ""
         if role == "title" and not title_done:
             text, title_done = (title or sub or meta), True
@@ -136,8 +138,9 @@ def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -
             text = "\n".join(body_texts)
             body_texts = []
         if cap > 0 and len(text) > cap:
-            out["warnings"].append(
-                f"第 {tpl_page.get('index', 0) + 1} 页槽位容量 {cap} 字 < 填入 {len(text)} 字 → 建议拆页或精简")
+            where = f"第 {tpl_page.get('index', 0) + 1} 页" + ("标题" if role in ("title", "cover") else "正文")
+            how = "建议缩短标题" if role in ("title", "cover") else "建议拆页或精简"
+            out["warnings"].append(f"{where}超出模板框（容量 {cap} 字 < 填入 {len(text)} 字）→ {how}")
         elif cap <= 0 and text and not out.get("_cap_unknown"):
             out["_cap_unknown"] = True
             out["degraded"].append("模板有槽位量不出容量（缺几何或字号）→ 容量自查对这类槽跳过")
@@ -219,10 +222,27 @@ def _apply(prs, the_plan: dict, want: list[str]) -> None:
             break
         slide = slides[i]
         text_shapes = [s for s in slide.shapes if getattr(s, "has_text_frame", False)]
-        for j, fill in enumerate(page["fills"]):
-            if j >= len(text_shapes):
+        layout_name = slide.slide_layout.name or ""
+        used: set[int] = set()
+        for fill in page["fills"]:
+            # **按角色**挑形状（不是按顺序）：模板里页脚/页码排在前面的情况很常见，
+            # 顺序写就会把标题写进页脚（踩过）。同角色里挑第一个没用过的，找不到再退回顺序。
+            role = fill.get("role") or "body"
+            if not str(fill.get("text") or "").strip():
+                continue                       # 我们这页没有这个角色的内容 → **不动模板那个框**
+            pick = None
+            for k, shp in enumerate(text_shapes):
+                if k in used:
+                    continue
+                if st._role_of(shp, k, layout_name) == role:      # noqa: SLF001
+                    pick = k
+                    break
+            if pick is None:
+                pick = next((k for k in range(len(text_shapes)) if k not in used), None)
+            if pick is None:                                     # 槽不够：不硬塞，交给计划里的提示
                 break
-            _write_text(text_shapes[j], fill["text"], want)
+            used.add(pick)
+            _write_text(text_shapes[pick], fill["text"], want)
 
     # 页数比会话多 → 删掉多余（默认策略，§10.2）
     deleted = int(the_plan.get("policy", {}).get("deleted") or 0)
@@ -249,12 +269,16 @@ def _write_text(shape, text: str, want: list[str]) -> None:
 
 
 def _set_para_text(para, text: str) -> None:
-    """段落文字：第一个 run 留着（保字体字号），其余删掉。"""
+    """段落文字：第一个 run 留着（保字体字号），其余删掉。
+
+    注意 python-pptx 的元素访问器各不一样（踩过）：`_Run` 是 `._r`，`_Paragraph` 是 `._p`，
+    形状是 `._element` —— 写错就是 `AttributeError: '_Run' object has no attribute '_element'`。
+    """
     runs = list(para.runs)
     if runs:
         runs[0].text = text
         for r in runs[1:]:
-            r._element.getparent().remove(r._element)              # noqa: SLF001
+            r._r.getparent().remove(r._r)          # noqa: SLF001
     else:
         para.text = text
 

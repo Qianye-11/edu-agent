@@ -253,27 +253,53 @@ def tokens_from_pptx(pptx: Path, *, name: str = "") -> tuple[dict, list[str]]:
     return tokens, degraded
 
 
-def _slot_capacity(shape, size_px: float) -> int:
-    """一个文本框大概能装多少字：行数 × 每行字数（用我们自己的字宽估算）。"""
+#: 小于这个容量（字）的槽位当成"标签/装饰"，不往里写正文（见 slide_fill 的说明）
+MIN_FILLABLE_CAPACITY = 4
+
+
+def _slot_capacity(shape, size_px: float, geo: dict | None = None) -> int:
+    """一个文本框大概能装多少字：行数 × 每行字数（用我们自己的字宽估算）。
+
+    **量不出来就返回 0**（"未知"），不要返回 1 —— 否则每个槽都会被判成"超容量"，
+    提示就变成了噪音（踩过：有形状的宽高继承自版式，自己的 xfrm 是空的）。
+    """
     from . import ppt_svg
 
-    geo = _geo_px(shape)
-    if not size_px:
-        size_px = tk.px_to_pt(24) / tk.PT_PER_PX
+    geo = geo if geo is not None else _geo_px(shape)
+    w, h = float(geo.get("w") or 0), float(geo.get("h") or 0)
+    if w < 8 or h < 8:
+        return 0
+    size_px = float(size_px or 24.0)
     char_w = ppt_svg.char_w("字", size_px) or size_px
-    per_line = max(1, int(geo["w"] // max(1.0, char_w)))
-    lines = max(1, int(geo["h"] // max(1.0, size_px * 1.35)))
+    per_line = max(1, int(w // max(1.0, char_w)))
+    lines = max(1, int(h // max(1.0, size_px * 1.35)))
     return int(per_line * lines)
 
 
 def _geo_px(shape) -> dict:
-    """形状几何（EMU → 画布 px；13.333in 宽 = 1280px）。"""
+    """形状几何（EMU → 画布 px；13.333in 宽 = 1280px）。
+
+    自己没带几何（宽高继承自版式的占位符）时，**回退到版式里同 idx 的占位符**；
+    再取不到就返回 0（上层按"容量未知"处理，不乱报警）。
+    """
     from pptx.util import Emu
 
     def px(v) -> float:
         return round(float(Emu(int(v or 0)).inches) * 96, 1)
 
-    return {"x": px(shape.left), "y": px(shape.top), "w": px(shape.width), "h": px(shape.height)}
+    geo = {"x": px(shape.left), "y": px(shape.top), "w": px(shape.width), "h": px(shape.height)}
+    if geo["w"] >= 8 and geo["h"] >= 8:
+        return geo
+    try:                                            # 回退：版式里的占位符几何
+        idx = shape.placeholder_format.idx
+        for ph in shape.part.slide.slide_layout.placeholders:
+            if ph.placeholder_format.idx == idx:
+                inherited = {"x": px(ph.left), "y": px(ph.top), "w": px(ph.width), "h": px(ph.height)}
+                if inherited["w"] >= 8 and inherited["h"] >= 8:
+                    return inherited
+    except (AttributeError, ValueError, KeyError):
+        pass
+    return geo
 
 
 def _role_of(shape, index: int, layout_name: str) -> str:
