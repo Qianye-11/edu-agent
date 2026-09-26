@@ -1,0 +1,34 @@
+{
+  "id": "illustration",
+  "name": "插画暖",
+  "source": "modern-illustration-editorial-ppt-skill/references/style-system.md",
+  "canvas": { "w": 1280, "h": 720, "margin": 72, "content_w": [1020, 1120], "cols": 12, "gutter": 24, "bg": "#F7F3EE" },
+  "palette": {
+    "text": "#2F2F2F",
+    "accent": "#A7C7E7",
+    "accent2": "#E8A87C",
+    "sub": "#7B7978",
+    "line": "#DED8D1",
+    "soft": "#EAF4FC",
+    "accent_max_ratio": 0.10
+  },
+  "derived": { "sub": { "from": "text", "over": "canvas.bg", "alpha": 0.62 } },
+  "marker": "accent2",
+  "type": {
+    "cover": 68, "title": 44, "label": 12, "body": 24, "caption": 15,
+    "lh_title": 1.12, "lh_body": 1.4, "para_gap_ratio": 0.6, "letter_spacing": 0
+  },
+  "ranges": {
+    "cover": [54, 72], "title": [36, 48], "label": [11, 13], "body": [18, 24], "caption": [12, 15]
+  },
+  "weights": { "cover": 700, "title": 700, "label": 600, "body": 400 },
+  "fonts": { "latin": "Arial", "ea": "微软雅黑", "stack": ["Arial", "微软雅黑", "sans-serif"] },
+  "geometry": { "line_w": [1, 2], "radius": [2, 4], "shadow": false, "glow": false, "gradient": false, "texture": false },
+  "density": { "blocks_max": 5, "chars_per_block_max": 22 },
+  "notes": [
+    "画布/边距/内容宽/字号区间/行高/配色（#F7F3EE · #A7C7E7 · #E8A87C · #2F2F2F · #DED8D1 · #EAF4FC）照抄上游 style-system.md。",
+    "上游未给次文色：sub 由主文色 #2F2F2F 与底色 #F7F3EE 按 0.62 混合得到（不是新配色），字段 derived 记录了这个来源并由单测核对。",
+    "上游未给栏宽/网格：沿用 12 栏 + 24px gutter，与其它主题同构。",
+    "marker=accent2：上游把蓝与橙并列为强调色，但浅蓝 #A7C7E7 做细小记号/标签读不清（实测），所以记号用脏橘、曲线用浅蓝。"
+  ]
+}
