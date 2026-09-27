@@ -28,6 +28,23 @@
 
 ---
 
+## 0.1 本次修订（按⑤「将这两个 skill 融入后续的计划内」）
+
+老师追问"`ppt-master` 与 `guizang-ppt-skill` 这两个 skill 跟项目 PPT 什么关系"，并要求
+**把它们融进后续计划**。核对盘上实物与代码调用点后，本版新增 **§11「两份 skill 融进后续轮次」**：
+
+* **ppt-master（MIT，钉 `481e057e`）** —— 已经在用的那一个（导出、体检、填充预览）。
+  这轮**再挖出四件现成的**：`preset_shape_svg.py`（→ R21 形状）、`image_treat.py`（→ R22 图片）、
+  `pptx_delivery_check.py` + `batch_validate.py`（→ R23/R24 交付体检），
+  以及两个待定项的真家伙：`pptx_animations.py` / `pptx_transitions.py`（动画与切换）、
+  `semantic_table.py`（表格）。**所以"动画/表格"不再是"从零注入 XML"的量级。**
+* **guizang-ppt-skill（AGPL-3.0，只读参考）** —— 一行代码都不进来。这轮明确它**在后继轮次里继续只出两块**：
+  ① 自由层/插入对象的**默认外观规则**（瑞士风：直角、纯色、禁渐变禁阴影禁圆角、单一高饱和锚点色）；
+  ② 间距与语义色的**数值阶梯**（8/12/16/24/32/40/48/64/80/96/160 等）→ 给"插入对象默认间距"与
+  自由层审计当参考值。**HTML 翻页 deck 运行时明确不引**（它是 HTML，我们要原生可编辑 pptx，见 §11 末）。
+
+---
+
 ## 0. 本版改了什么（相对上一版，逐条）
 
 上一版把"自由摆放、任意字号颜色、插图、导出 PDF"划成 B 类后置、把动画等划成"不做"。
@@ -143,7 +160,7 @@
 | **D9** | **放映**用浏览器全屏 + `F5`/`Shift+F5`/`←→`/`Esc`；不做"演讲实录"。 | 官方快捷键清单有据；录制在 §3.3。 |
 | **D10** | **操作栈**：拖动/插入/删除/改属性/排序/多选批量都要进撤销栈（本地 30 步，带页号与对象 id）。 | 不贴近 WPS 的撤销会让人不敢动。 |
 | **D11** | **导出 PNG/JPEG/PDF 全做**：每页 SVG → 无头浏览器截成 PNG → 逐张嵌进 PDF；JPEG 直接给。 | 老师要"发给学生看"。中文字体走系统字体，**导出前提示字体是否就绪**。 |
-| **D12** | **动画、母版、表格、图表、隐藏页 = 暂不做**，替代做法见 §3.3；不影响本轮交付。 | 各有明确代价，做完主线再翻案。 |
+| **D12** | **动画、母版、表格、图表、隐藏页 = 暂不做**，替代做法见 §3.3；不影响本轮交付。<br>⚠️ 2026-09-27 补：ppt-master 里**现成就有** `pptx_animations.py`（完整 PowerPoint 转场画廊 + OOXML 读写）、`pptx_transitions.py`、`semantic_table.py` —— 真要做的成本比原估的低，见 §11。 | 各有明确代价，做完主线再翻案。 |
 
 ---
 
@@ -160,10 +177,10 @@
 | **R18** | 快捷键 + 剪贴板 + 查找替换（A11、A13） | `Ctrl+S/A/C/X/V/D/E/L/R/B/I/U/F/H/±/0`、`F5`、`Shift+F9`；跨页查找替换 | 面板检查：逐条快捷键；复制粘贴对象；查找命中与跳页 |
 | **R19** | 缩略图窗格进阶（A12） | 左栏**拖动排序**、`Ctrl+点` 多选、批量删/复制、右键菜单 | 面板检查：拖动后顺序、多选、批量操作；截图拖动中的插入指示 |
 | **R20** | 操作栈统一（D10） | 上面所有操作都能 `Ctrl+Z` 撤回 | 面板检查：拖动/插入/删除/属性/批量各撤一次 |
-| **R21** | 插入文本框与形状（B1、B3） | 「插入」里加文本框、矩形/圆/箭头；选中后可改字改色改大小 | 单测：自由层结构 + 导出带自由层；面板检查：插入/编辑/删除/层级 |
-| **R22** | 插入图片（B2） | 插图（本地上传），可缩放、可拖；导出 pptx 里带图 | 单测：图片落 `data/uploads/`（**不碰 content/plans**）+ 导出内嵌；面板检查：上传/缩放/删除；真机：WPS 打开看到图 |
-| **R23** | 导出 PNG / JPEG / PDF（D11） | 「下载▾」多三项；PDF 就是这份幻灯片的 PDF | 单测/工具：页数一致、尺寸 1280×720、中文不豆腐块；人眼：打开 PDF 看 |
-| **R24** | 收口：快捷键总表、空态、文档、全量验收 | 一整轮一致性打磨 | 全量：单测 / 面板检查 / 体检 / 审计 / 真机 WPS / 截图 |
+| **R21** | 插入文本框与形状（B1、B3）〔**接 ppt-master `preset_shape_svg.py` 的形状目录**；默认外观引 guizang 瑞士风硬规则，见 §11〕 | 「插入」里加文本框、矩形/圆/箭头；选中后可改字改色改大小 | 单测：自由层结构 + 导出带自由层；面板检查：插入/编辑/删除/层级 |
+| **R22** | 插入图片（B2）〔**接 ppt-master `image_treat.py` 做缩放/裁剪**；**不接**它的联网搜图/生成图，见 §11〕 | 插图（本地上传），可缩放、可拖；导出 pptx 里带图 | 单测：图片落 `data/uploads/`（**不碰 content/plans**）+ 导出内嵌；面板检查：上传/缩放/删除；真机：WPS 打开看到图 |
+| **R23** | 导出 PNG / JPEG / PDF（D11）〔**加一道 ppt-master `pptx_delivery_check.py` 只读交付体检**〕 | 「下载▾」多三项；PDF 就是这份幻灯片的 PDF | 单测/工具：页数一致、尺寸 1280×720、中文不豆腐块；人眼：打开 PDF 看 |
+| **R24** | 收口：快捷键总表、空态、文档、全量验收〔**交付体检 + `batch_validate.py` 进闸门**〕 | 一整轮一致性打磨 | 全量：单测 / 面板检查 / 体检 / 审计 / 真机 WPS / 截图 |
 
 **每轮结束都要绿的**（回归闸门）：
 
@@ -289,10 +306,14 @@ node tools/uicheck/panel_check.js
 
 **只剩两件需要老师点头**（默认都按"暂不做"，不影响 R13–R24 交付）：
 
-1. **动画与切换效果**：默认不做（导出后在 WPS 里加）。要做的话要注入动画 XML，并按文件来源区分
-   "清动画"的内核 —— 大约多一轮。
-2. **表格与图表**：默认不做（用"两栏/多块"版式排，或导出后在 WPS 里插）。要做的话要在 SVG 单源里
-   新增版式族（合并单元格/边框/数据来源），大约多两轮。
+1. **动画与切换效果**：默认不做（导出后在 WPS 里加）。
+   ⚠️ 2026-09-27 补（§11）：**ppt-master 里现成就有** `pptx_animations.py`（完整 PowerPoint 转场画廊
+   morph/fade/push/wipe…+ 对象动画注册表 + OOXML 读写）、`pptx_transitions.py`（放映计时/kiosk）、
+   `animation_config.py`（动画与 Morph sidecar）—— **不用从零注入 XML**，难的是"哪些来源该保留、
+   哪些继续清"（我们既有"清动画"内核），大约一轮。
+2. **表格与图表**：默认不做（用"两栏/多块"版式排，或导出后在 WPS 里插）。
+   ⚠️ 2026-09-27 补（§11）：ppt-master 有 `semantic_table.py`（`semantic-table.v2` 语义表）与
+   `chart_recall.py`（图表召回）⇒ 真要做，**先做表格**（语义表 → 原生表格，一轮），图表随后（再一轮）。
 
 ---
 
@@ -444,3 +465,60 @@ R13 剩余项与 R15 一起做（右栏与快捷键分组时顺路）。→ **�
 `static/index.html`，默认编码是 GBK —— 中文全被写坏（`教案工作台` → `鏁欐宸ヤ綔鍙?`），
 `panel_check` 当场报出一串乱码断言。已 `git checkout` 恢复、用编辑工具重做本轮改动。
 **教训：改源码一律用编辑工具，不用 shell 重写文件。**
+
+---
+
+## 11. 两份 skill 融进后续轮次（按 ⑤ 修订）
+
+前置事实（**核对过盘上实物与代码调用点**，不是凭印象）：
+
+| skill | 许可 | 在哪 | 与项目的关系 |
+|---|---|---|---|
+| [ppt-master](https://github.com/hugohe3/ppt-master) | **MIT** | `.deps/ppt-master`，钉 commit **`481e057e`** | **真在跑**：`svg_to_pptx.py`（下载▾「PPT 新版式」）、`svg_quality_checker.py`、`pptx_intake.py`+`beautify_inventory.py`（PPT 优化/零丢失）、`pptx_to_svg.py`（填充预览）。**只外部调用脚本，不改它的文件**（它有 `require_skill_integrity()`） |
+| [guizang-ppt-skill](https://github.com/op7418/guizang-ppt-skill) | **AGPL-3.0** | 参考副本 `data/tmp/refs/`（`data/` 不入库 → 仓库里没有它的文件） | **一行代码都没进来**。只借两块：两套视觉系统的**数值与硬规则**（→ 审计可测定义 `docs/22` §7.1b）、校验脚本的**思路**（→ 我们按阈值自己重写 `slide_audit.py`） |
+
+### 11.1 逐轮怎么接
+
+| 轮次 | 接哪一份 | 具体怎么接 | 许可 / 规矩 |
+|---|---|---|---|
+| **R18** 快捷键·剪贴板·查找替换 | **都不接** | 快捷键以 **WPS 官方清单**为准（§1 已引）；查找替换只动我们自己的 `slides` 数据；剪贴板用槽位/自由层 JSON 序列化（`Ctrl+B/I` R15 已通） | — |
+| **R19** 缩略图拖动·多选 | **都不接** | 左栏已是真 SVG 缩略图，拖动排序/多选是纯前端 | — |
+| **R20** 操作栈统一 | **都不接** | 撤销栈是我们自己的（页号 + 对象 id + 前后值） | — |
+| **R21** 插入文本框与形状 | **ppt-master**（形状目录）+ **guizang**（默认外观） | ① `preset_shape_svg.py {list,describe,render,render-batch}`：列出预设形状并生成**与 DrawingML 预设一一对应的 SVG 片段**（`Print one compact canonical DrawingML preset SVG group`，它不写文件、不排版）→ 自由层的形状直接用它渲染，**这是"预览=导出"不破的关键**；② 进阶：`shape_boolean_svg.py render`（把闭合形状/文字轮廓做布尔运算，输出 SVG 根坐标系的 path 片段，源文件不改） | ppt-master：外部调用；guizang：只引规则（**不复制**它的模板/脚本） |
+| **R22** 插入图片 | **ppt-master**（图片处理）+ **guizang**（尺寸规范） | ① `image_treat.py --output … [--fit WxH] [--brightness/--contrast/--grayscale/--duotone/--blur]`：**非破坏性 PNG 派生**（调色 + `--fit` 适配尺寸，写到项目的 `images/`）—— 大图先按 `--fit 1600x…` 缩一版再内联/嵌入；② 导出内嵌沿用 §6.3 的规矩（`data/uploads/`，**不碰 `content/plans`**）；③ **明确不接** `image_search.py` / `image_gen.py`（联网搜图/生成图）—— 与"预览不联网"红线冲突，本轮只做**本地上传**；④ guizang 的**封面/配图尺寸**数值可作导出尺寸参考 | 同上 |
+| **R23** 导出 PNG/JPEG/PDF | **ppt-master**（交付体检） | 仍按 D11：每页 SVG → Edge 无头 `--screenshot`（1280×720）→ Pillow 拼 PDF；**新增** `pptx_delivery_check.py <pptx>`（只读、JSON，`Inspect a finished PPTX for delivery risks without modifying it.`）作为**产物**体检写进结果条；**不接** `visual_review.py`（它要求跑它自己的 live-preview 服务） | 外部调用；只读 |
+| **R24** 收口·全量验收 | **ppt-master**（体检 + 批量校验） | 全量闸门里加两件：每个交付**产物**跑 `pptx_delivery_check.py`；每个导出**任务目录**（`data/tmp/ppt_jobs/<job>/`）跑 `batch_validate.py`（`Validate one or more PPT Master project directories.`）；guizang 的阈值继续由 `slide_audit.py` 承担 | 外部调用 |
+| **待定①** 动画与切换 | **ppt-master**（现成） | `pptx_animations.py`：**完整 PowerPoint 转场画廊**（morph/fade/push/wipe/split/reveal/cut/random_bars/shape/uncover/cover/flash + exciting 组）+ 对象动画注册表 + OOXML 读写；`pptx_transitions.py`：放映计时 / kiosk 循环；`animation_config.py`：动画与 Morph sidecar 的生成与校验 | MIT ⇒ 可用；难点不是"写 XML"，而是**与我们既有的"清动画"内核共存**（哪些来源该清、哪些该留）。老师点头即可排一轮 |
+| **待定②** 表格与图表 | **ppt-master**（有基础） | `semantic_table.py`（`semantic-table.v2` 的压缩/展开 = 表格语义表示）+ `chart_recall.py`（图表召回接口）⇒ 要做的话**先做表格**（语义表 → 原生表格），图表随后 | 同上 |
+| **未来（不在 R13–R24）** | **ppt-master** | 旁白/配音：`notes_to_audio.py` + `narration_sync.py`（备注 R16 已做，只差音频）；"导入旧稿→套我们的版式"：`pptx_to_svg.py --roundtrip` + `register_template.py` / `apply_template.py` / `mirror_template_materialize.py` / `template_text_slots.py` | 老师说要做再排 |
+
+### 11.2 接入规矩（免得下一个人踩）
+
+**ppt-master（MIT，只用不抄）**
+
+1. **只外部调用**：`sys.executable <scripts>/xxx.py …`；**不改它的任何文件** —— 它启动时 `require_skill_integrity()` 校验完整性，改了直接拒跑；
+2. **钉版本**：本仓库按 `481e057e` 验证；升级要先跑全量闸门（导出 + 审计 + 真机 WPS）；
+3. **判定看报告不看退出码**：产物 status 是 `passed-with-warnings` 时 CLI 退出码**仍是 1**；
+4. **工作区约定**：`<project>/svg_output/*.svg` + `<project>/validation/*.report.json`；
+5. **路径要 `resolve()`**：子进程 cwd 是任务目录，相对路径会落到 `任务目录/data/tmp/...`；
+6. 未安装/未就绪时**如实上报**（`ppt_polish.status()`），不静默降级。
+
+**guizang-ppt-skill（AGPL-3.0，只引数值与规则）**
+
+1. **不许**把它的模板 / 脚本 / HTML **复制进本仓库**（AGPL 含网络交互条款）；
+2. 只引用**数值、阈值、规则**，并在文档里标出处（本仓库做法见 `docs/22` §2A/§7.1b/§11）；
+3. 要复用它的校验脚本，**先做许可评估**，或**按它的阈值自己重写一份**（我们已这么做：`slide_audit.py`）；
+4. **HTML 翻页 deck 运行时明确不引**：它是 HTML（自带 motion 运行时、"按 `B` 关动画"的静态模式），
+   而我们的交付物必须是**原生可编辑 pptx**（老师要在 WPS 里改、要发给学生）。引进来就是第二套渲染源，
+   直接违反 D1/D13（SVG 单源、预览=导出）。它自己的定位也写着"❌ 培训课件（信息密度不够）"。
+
+### 11.3 这一修订改了什么（对照上一版）
+
+| 项 | 上一版 | 这一版 |
+|---|---|---|
+| R21 形状 | 自研矩形/圆/箭头 → SVG | **用 ppt-master 的预设形状目录**（与 DrawingML 一一对应） |
+| R22 图片 | 本地上传 + 内联 | 上传 + **`image_treat.py` 派生**；明写**不接**联网搜图/生成图 |
+| R23/R24 验收 | 我们自己的三件套闸门 | 追加 **`pptx_delivery_check.py`（逐产物）+ `batch_validate.py`（批量）** |
+| 动画/切换（待定①） | "要注入动画 XML，大约多一轮" | **MIT 现成模块**（转场画廊 + 计时 + sidecar）⇒ 成本降为"接模块 + 与清动画内核共存" |
+| 表格/图表（待定②） | "要在 SVG 单源里新增版式族，约两轮" | 有 `semantic_table.py`（语义表）+ `chart_recall.py` ⇒ **先做表格**更现实 |
+| guizang 的用处 | 只提"数值与校验思路" | 明确它**继续只出两块**：自由层默认外观规则 + 间距/语义色阶梯；并写明**不引 HTML 运行时**的理由 |

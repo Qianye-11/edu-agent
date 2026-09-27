@@ -83,6 +83,33 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 计划（v1.18.0 · 两份 skill 融进后续轮次，2026-09-27）
+
+> 老师追问「`ppt-master` 与 `guizang-ppt-skill` 这两个 skill 与我项目的 PPT 什么关系」，
+> 并要求**把它们融进后续计划**（本轮**只改计划**）。核对盘上实物与代码调用点后，
+> `docs/26` 新增 **§11**（另加 §0.1 修订说明、R21–R24 行内标注、D12 与 §9 待定项的成本重估）。
+
+- **事实**：`ppt-master`（MIT，钉 `481e057e`，装在 `.deps/ppt-master`）**已经在跑** ——
+  `svg_to_pptx.py`（下载▾「PPT 新版式」）、`svg_quality_checker.py`、`pptx_intake.py`+`beautify_inventory.py`
+  （PPT 优化 / 内容零丢失）、`pptx_to_svg.py`（填充预览）；只**外部调用脚本、不改它的文件**。
+  `guizang-ppt-skill`（**AGPL-3.0**，参考副本在 `data/tmp/refs/`，`data/` 不入库）**一行代码都没进来**，
+  只借了两套视觉系统的**数值与硬规则**（→ 审计可测定义）与校验脚本的**思路**（→ 按阈值自己重写 `slide_audit.py`）。
+- **融入后续轮次**：R21 形状用它的 `preset_shape_svg.py`（预设形状 ↔ DrawingML 一一对应、
+  `render/render-batch` 直出 SVG 片段，"预览=导出"不破的关键）+ `shape_boolean_svg.py render`（布尔运算，可选）；
+  R22 图片用 `image_treat.py`（非破坏性 PNG 派生：调色 + `--fit WxH` 适配尺寸），
+  并**明确不接** `image_search.py`/`image_gen.py`（联网搜图/生成图，与"预览不联网"红线冲突）；
+  R23/R24 把 `pptx_delivery_check.py`（逐个产物的只读交付体检）与 `batch_validate.py`
+  （逐个导出任务目录的批量校验）加进闸门；
+  guizang 继续只出两块：自由层**默认外观规则**（瑞士风：直角/纯色/禁渐变禁阴影禁圆角/单一锚点色）
+  与**间距/语义色阶梯**（8/12/16/24/32/40/48/64/80/96/160）。
+- **两个待定项成本重估**：动画/切换 **不用从零注入 XML**（`pptx_animations.py` 有完整 PowerPoint 转场画廊 +
+  对象动画注册表 + OOXML 读写，`pptx_transitions.py` 管放映计时，`animation_config.py` 出 Morph sidecar），
+  难的是"哪些来源保留、哪些继续清"（我们既有清动画内核），约一轮；表格/图表有 `semantic_table.py`
+  （`semantic-table.v2`）+ `chart_recall.py` ⇒ **先做表格**更现实。
+- **许可红线写进计划**：ppt-master 只外部调用、不改文件（`require_skill_integrity()`）、钉版本、判定看报告不看退出码；
+  guizang **不许复制**其模板/脚本/HTML 进仓库，要复用校验脚本先做许可评估或按阈值重写；
+  **不引它的 HTML 翻页 deck 运行时**（我们要原生可编辑 pptx，引进来就是第二套渲染源，违反 D1/D13）。
+
 ### 新增（R17 · 放映，2026-09-27）
 
 > 计划书 `docs/26` §5 R17：`F5` 全屏从头、`Shift+F5` 从当前页、方向键翻页、`Esc` 退出。记录见 `docs/26` §10。
