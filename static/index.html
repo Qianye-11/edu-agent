@@ -3670,6 +3670,54 @@ svg{display:block}
     return id || '';
   }
   /* ---- 演示模板（docs/19 §9）：内置主题之外，还能导入学校/自己的 .pptx ---- */
+  /* ---- 槽位对齐（R6）：老师说一次"哪个框是什么"，同结构页自动跟随 ---- */
+  var DOCP_ROLES = [['title', '标题'], ['body', '正文'], ['decoration', '装饰']];
+  function docpAlignOpen(){
+    var tid = docpTplGet();
+    if(!tid){ showToast('先在「模板」里选一个导入的模板', false); return; }
+    showToast('正在读模板结构…');
+    spJson('/api/slide/template/align?template_id=' + encodeURIComponent(tid), 'GET', null).then(function(d){
+      if(!d || !d.ok){ showToast('读结构失败：' + ((d && d.error) || ''), false); return; }
+      var rows = (d.structures || []).slice(0, 4).map(function(g){
+        var opts = g.slots.map(function(s){
+          var sel = DOCP_ROLES.map(function(r){
+            return '<option value="' + r[0] + '"' + (r[0] === s.role ? ' selected' : '') + '>' + r[1] + '</option>';
+          }).join('');
+          return '<div class="row"><span style="font-size:11.5px;color:var(--ink-500);min-width:120px">框 ' +
+            s.shape_index + '：' + escHtml((s.sample || '（空框）').slice(0, 10)) + '</span>' +
+            '<select data-sig="' + escHtml(g.signature) + '" data-idx="' + s.shape_index + '">' + sel + '</select></div>';
+        }).join('');
+        return '<div class="dp-blk"><label>这一种结构有 ' + g.pages + ' 页（以第 ' + (g.example_index + 1) + ' 页为例）</label>' + opts + '</div>';
+      }).join('');
+      DOCP_SL.alignHtml = '<div class="dp-edit" id="dpAlignBox"><label>哪个框是标题 / 正文 / 装饰（装饰我们一字不动）</label>' +
+        (rows || '<div class="dp-warn">这份模板没有可对齐的文本框</div>') +
+        '<div class="acts"><button data-align-save="1">保存对齐</button>' +
+        '<button data-align-close="1">收起</button>' +
+        '<span class="dp-cnt">同结构的页会一起生效（最多列 4 种结构）</span></div></div>';
+      docpRenderSlides(docpEl('docPanelBody'));
+    }).catch(function(e){ showToast('读结构失败：' + e, false); });
+  }
+  function docpAlignSave(box){
+    var tid = docpTplGet();
+    var bySig = {};
+    Array.prototype.forEach.call(box.querySelectorAll('select[data-sig]'), function(sel){
+      (bySig[sel.dataset.sig] = bySig[sel.dataset.sig] || {})[sel.dataset.idx] = sel.value;
+    });
+    var sigs = Object.keys(bySig);
+    if(!sigs.length) return;
+    var done = 0;
+    sigs.forEach(function(sig){
+      spJson('/api/slide/template/align', 'POST', { template_id: tid, signature: sig, roles: bySig[sig] })
+        .then(function(){
+          if(++done === sigs.length){
+            DOCP_SL.alignHtml = '';
+            DOCP_SL.sig = '';                        /* 角色变了 → 重新取一次（填充计划会用新角色） */
+            docpRenderSlides(docpEl('docPanelBody'));
+            showToast('对齐已保存：' + sigs.length + ' 种结构', true);
+          }
+        }).catch(function(){});
+    });
+  }
   function docpTplKey(){ return 'edu_slide_tpl_v1'; }
   function docpTplGet(){
     try{ return localStorage.getItem(docpTplKey()) || ''; }catch(e){ return ''; }
@@ -3942,8 +3990,10 @@ svg{display:block}
       '<select id="dpTpl" title="演示模板（导入的 .pptx）">' + tplOpts + '</select>' +
       '<button class="dp-mini" id="dpTplImport" title="导入 .pptx 当演示模板">模板+</button>' +
       '<button class="dp-mini" id="dpTplFill"' + (docpTplGet() ? '' : ' disabled') + '>填充</button>' +
+      '<button class="dp-mini" id="dpAlign"' + (docpTplGet() ? '' : ' disabled') + ' title="标一次：哪个框是标题/正文/装饰（同结构页自动跟随）">对齐</button>' +
       '<span class="dp-slstat">' + docpSlideStat(sl) + '</span></div>' +
-      '<input type="file" id="dpTplFile" accept=".pptx,.pptm,.potx" style="display:none"></div>' +
+      '<input type="file" id="dpTplFile" accept=".pptx,.pptm,.potx" style="display:none">' +
+      (DOCP_SL.alignHtml || '') + '</div>' +
       '<div id="dpWarnBox">' + warn + '</div>' +
       (DOCP_SL.fillPreview
         ? '<div class="dp-slhead"><span class="dp-warn" style="margin:0">当前预览 = 按模板《' +
@@ -4000,6 +4050,15 @@ svg{display:block}
     }
     var tplFill = bd.querySelector('#dpTplFill');
     if(tplFill) tplFill.addEventListener('click', docpTplFill);
+    var alignBtn = bd.querySelector('#dpAlign');
+    if(alignBtn) alignBtn.addEventListener('click', function(){ docpAlignOpen(); });
+    var alignBox = bd.querySelector('#dpAlignBox');
+    if(alignBox){
+      alignBox.querySelector('[data-align-save]').addEventListener('click', function(){ docpAlignSave(alignBox); });
+      alignBox.querySelector('[data-align-close]').addEventListener('click', function(){
+        DOCP_SL.alignHtml = ''; docpRenderSlides(bd);
+      });
+    }
     var pvBack = bd.querySelector('#dpPreviewBack');
     if(pvBack) pvBack.addEventListener('click', function(){
       DOCP_SL.fillPreview = false;

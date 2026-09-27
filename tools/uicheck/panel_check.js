@@ -132,6 +132,13 @@ function makeDom(opts) {
           builtin: THEMES.themes.map((t) => ({ id: t.id, name: t.name, kind: 'json' })),
           imported: o.noTpl ? [] : [{ id: '学校模板', name: '学校模板', kind: 'pptx', pages: 11 }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        if (p === '/api/slide/template/align') {
+          return new Response(JSON.stringify({ ok: true, template_id: '学校模板',
+            structures: [{ signature: 'sig1', pages: 3, example_index: 2, slots: [
+              { shape_index: 0, role: 'title', sample: '示例标题', capacity: 16 },
+              { shape_index: 1, role: 'body', sample: '示例正文', capacity: 40 }] }],
+            align: { version: 1, pages: {} } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/fill') {
           let b = {};
           try { b = JSON.parse(op.body); } catch (e) {}
@@ -418,7 +425,35 @@ async function openDocPanel(doc) {
     w.close();
   }
 
-  console.log('== 会话侧：无「下一步」卡片 + 每条回答有【生成文档】 ==');
+  console.log('== 槽位对齐：点一次「对齐」列出结构，可改角色并保存 ==');
+  {
+    const { w, doc, errors } = makeDom();
+    await sleep(2500);
+    await openDocPanel(doc);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    const tpl2 = doc.getElementById('dpTpl');
+    tpl2.value = '学校模板';
+    tpl2.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(700);
+    check('选了模板后「对齐」可用', doc.getElementById('dpAlign').disabled === false);
+    doc.getElementById('dpAlign').click();
+    for (let i = 0; i < 12 && !doc.getElementById('dpAlignBox'); i++) await sleep(250);
+    const box = doc.getElementById('dpAlignBox');
+    check('对齐面板出现', !!box);
+    const sels = box ? box.querySelectorAll('select[data-sig]') : [];
+    check('列出每个文本框的角色选择（标题/正文/装饰）',
+      sels.length > 0 && sels[0].options.length === 3, sels.length + ' 个选择框');
+    if (sels.length) {
+      sels[0].value = 'decoration';
+      box.querySelector('[data-align-save]').click();
+      await sleep(900);
+      check('保存后收起', !doc.getElementById('dpAlignBox'));
+    } else {
+      check('保存后收起', false, '没有可选框');
+    }
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }  console.log('== 会话侧：无「下一步」卡片 + 每条回答有【生成文档】 ==');
   {
     const { w, doc, errors } = makeDom();
     await sleep(3000);

@@ -165,3 +165,45 @@ class DeleteTest(_LibCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class AlignTest(_LibCase):
+    """槽位对齐（R6 之后）：老师在一个结构上标一次，**所有同结构页都跟着对**。"""
+
+    def _two_layout_template(self) -> Path:
+        from pptx import Presentation
+        from pptx.util import Inches
+
+        src = Path(self.tmp.name) / "align-tpl.pptx"
+        prs = Presentation()
+        for _ in range(2):                       # 两页**同结构**（内容页）
+            s = prs.slides.add_slide(prs.slide_layouts[5])
+            s.shapes.title.text_frame.text = "示例标题文字"
+            s.shapes.add_textbox(Inches(1), Inches(3), Inches(4), Inches(2)).text_frame.text = "示例正文内容文字"
+        prs.save(str(src))
+        return src
+
+    def test_signature_groups_same_structure(self):
+        tid = st.import_pptx(self._two_layout_template(), name="对齐模板")["id"]
+        o = st.align_overview(tid)
+        self.assertTrue(o["ok"], o.get("error"))
+        self.assertEqual(len(o["structures"]), 1, "两页同结构 → 一个结构")
+        self.assertEqual(o["structures"][0]["pages"], 2)
+
+    def test_align_override_applies_to_all_same_structure_pages(self):
+        tid = st.import_pptx(self._two_layout_template(), name="对齐模板")["id"]
+        sig = st.align_overview(tid)["structures"][0]["signature"]
+        slots = st.slots_from_pptx(st.root() / tid / "template.pptx")["slides"]
+        body_idx = [s["shape_index"] for s in slots[0]["slots"] if s["role"] == "body"][0]
+        st.save_align(tid, sig, {str(body_idx): "decoration"})          # 老师把"正文"标成装饰
+        after = st.slots_from_pptx(st.root() / tid / "template.pptx")["slides"]
+        for page in after:
+            with self.subTest(page=page["index"]):
+                got = [s["role"] for s in page["slots"] if s["shape_index"] == body_idx][0]
+                self.assertEqual(got, "decoration", "同结构页都要跟着改")
+        self.assertTrue(st.load_align(tid)["pages"][sig])
+
+    def test_bad_role_is_ignored(self):
+        tid = st.import_pptx(self._two_layout_template(), name="对齐模板")["id"]
+        sig = st.align_overview(tid)["structures"][0]["signature"]
+        st.save_align(tid, sig, {"0": "乱写的角色"})
+        self.assertEqual(st.load_align(tid)["pages"][sig], {})

@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -220,6 +221,71 @@ def _bg_from_pptx(pptx: Path) -> tuple[str, str]:
     except Exception:  # noqa: BLE001 取不到就算了，别影响导入
         pass
     return "", ""
+
+
+def structure_signature(slots: list[dict]) -> str:
+    """一页的"结构签名"：形状位置 + 圆整后的几何。**同结构的页共用一份对齐结果**。
+
+    为什么按签名而不是按页码：设计稿的内容页往往长得一模一样（只是文字不同），
+    老师只需要在**一页**上点一次，其它同结构页就都跟着对了。
+    """
+    key = json.dumps([[s.get("shape_index"), round(float((s.get("geo") or {}).get("w") or 0)),
+                       round(float((s.get("geo") or {}).get("h") or 0))] for s in slots],
+                     ensure_ascii=False)
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+
+
+def align_path(template_id: str) -> Path:
+    return root() / _slug(template_id) / "align.json"
+
+
+def load_align(template_id: str) -> dict:
+    return _read_json(align_path(template_id)) or {"version": 1, "pages": {}}
+
+
+def save_align(template_id: str, signature: str, roles: dict) -> dict:
+    """存一页结构的角色对齐：`{shape_index: title|body|decoration}`（只认这三种）。"""
+    data = load_align(template_id)
+    pages = data.setdefault("pages", {})
+    clean = {str(k): v for k, v in (roles or {}).items() if v in ("title", "body", "decoration")}
+    pages[str(signature)] = clean
+    p = align_path(template_id)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return data
+
+
+def align_overview(template_id: str) -> dict:
+    """给面板"对齐"界面用：每种结构给一个代表页 + 该页每个文本框的当前角色。"""
+    tpl_dir = root() / _slug(template_id)
+    pptx = tpl_dir / "template.pptx"
+    if not pptx.is_file():
+        return {"ok": False, "error": f"这个模板没有原稿：{pptx}"}
+    data = slots_from_pptx(pptx)
+    seen: dict[str, dict] = {}
+    for page in data.get("slides") or []:
+        sig = page.get("signature") or ""
+        row = seen.setdefault(sig, {"signature": sig, "pages": 0, "example_index": page.get("index"),
+                                    "slots": []})
+        row["pages"] += 1
+        if not row["slots"]:
+            row["slots"] = [{"shape_index": s.get("shape_index"), "role": s.get("role"),
+                             "sample": s.get("sample"), "capacity": s.get("capacity")}
+                            for s in (page.get("slots") or [])]
+    return {"ok": True, "template_id": template_id,
+            "structures": sorted(seen.values(), key=lambda r: -(r["pages"])),
+            "align": load_align(template_id)}
+
+
+def _apply_align(slots: list[dict], align: dict) -> str:
+    """按结构签名套用老师标好的角色；返回签名。"""
+    sig = structure_signature(slots)
+    mapping = ((align or {}).get("pages") or {}).get(sig) or {}
+    for s in slots:
+        want = mapping.get(str(s.get("shape_index")))
+        if want in ("title", "body", "decoration"):
+            s["role"] = want
+    return sig
 
 
 def tokens_from_pptx(pptx: Path, *, name: str = "") -> tuple[dict, list[str]]:
@@ -452,7 +518,9 @@ def slots_from_pptx(pptx: Path) -> dict:
                 slots.append({"role": role, "shape_index": r["shape_index"],
                               "capacity": r["capacity"], "size_px": r["size_px"], "geo": r["geo"],
                               "sample": r["text"][:40], "placeholder": r["placeholder"]})
-            out.append({"index": i, "layout": layout_name, "slots": slots})
+            align = load_align(pptx.parent.name)          # 老师在面板里标过的角色优先
+            sig = _apply_align(slots, align)
+            out.append({"index": i, "layout": layout_name, "slots": slots, "signature": sig})
     except Exception as exc:  # noqa: BLE001 坏包/加密包
         return {"slides": [], "error": f"读 .pptx 失败：{type(exc).__name__}: {exc}"}
     return {"slides": out, "pages": len(out)}

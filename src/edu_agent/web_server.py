@@ -1115,6 +1115,36 @@ def api_slide_themes():
             "default": slide_deck.default_theme_id(), "themes": items}
 
 
+@app.get("/api/slide/template/align")
+def api_slide_template_align(template_id: str = Query("")):
+    """槽位对齐的**读端**：每种结构给一个代表页 + 每个文本框的当前角色（老师据此改）。"""
+    from edu_agent import slide_template
+
+    tid = str(template_id or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "缺少 template_id"}, status_code=400)
+    return slide_template.align_overview(tid)
+
+
+class AlignReq(BaseModel):
+    template_id: str = ""
+    signature: str = ""
+    roles: dict = {}                      # {shape_index: title|body|decoration}
+
+
+@app.post("/api/slide/template/align")
+def api_slide_template_align_save(body: AlignReq):
+    """槽位对齐的**写端**：老师标一次，所有同结构页都按它填。"""
+    from edu_agent import slide_template
+
+    tid = str(body.template_id or "").strip()
+    if not tid or not str(body.signature or "").strip():
+        return JSONResponse({"ok": False, "error": "缺少 template_id 或 signature"}, status_code=400)
+    data = slide_template.save_align(tid, body.signature, body.roles or {})
+    return {"ok": True, "template_id": tid, "signature": body.signature,
+            "roles": (data.get("pages") or {}).get(body.signature) or {}}
+
+
 @app.get("/api/slide/templates")
 def api_slide_templates():
     """演示模板清单：内置（数值）+ 导入的 `.pptx`（**只借配色/字体/槽位**）。"""
