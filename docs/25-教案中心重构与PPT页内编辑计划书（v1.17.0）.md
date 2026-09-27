@@ -380,7 +380,7 @@ node tools/uicheck/panel_check.js
 | 轮 | 内容 | 交付 | 状态 |
 |---|---|---|---|
 | **R8** | 渲染目标改嫁（含 **Markdown 作为并列页签**）+ 四条入口重接 + 数据统一 + 旧 localStorage 迁移（D10，留备份） | 教案中心能干活（文档/MD/幻灯片都在里面），面板仍在（双跑对拍） | ✅ **已完成 2026-09-27**（交付记录见 §4.3） |
-| **R9** | 面板回退 4 钮 + 清理重复定义 + localStorage 清单 + UI 检查脚本改造 + 文案/开关（**学生按钮已随 R8 做完**）+ 建议顺带：只读调试钩子、演示模板删除入口 | 侧边面板恢复原样 | 待开工 |
+| **R9** | 面板回退 4 钮 + 清理重复定义 + localStorage 清单 + UI 检查脚本改造 + 文案/开关 + **学生按钮改「下载 Word」**（D9，已随 R8 做）+ 只读调试钩子 + 演示模板删除入口 | 侧边面板恢复原样 | ✅ **已完成 2026-09-27**（交付记录见 §8.2） |
 | **R10** | 服务端 `boxes`/`data-slot`（`annotate` 开关）+ 新单测 | 接口可供编辑器 | 待开工 |
 | **R11** | 页内编辑交互（叠加层/撤销/缩略图/页操作）+ **填充页编辑（`shape_index` + `mapping`）** + `apply_mapping` 修精确指槽 + 面板检查 | 能像 WPS 那样改字（含模板页） | 待开工 |
 | **R12** | 删卡片、属性右栏、填充页点槽、MD 源码/预览切换收口、全量验收、文档/CHANGELOG | 交付 | 待开工 |
@@ -407,14 +407,33 @@ node tools/uicheck/panel_check.js
    用 `str.replace` 注入截图脚本会把代码插进那个字符串 → 主脚本语法错误 → **整个应用不启动**。
    要注入就插**最后一个** `</body>`。
 
-**已知限制（没做完的，如实记）**
+**已知限制（R9 已解决，留档）**
 
-- **工作区的自动截图还没打通**：应用逻辑全在 IIFE 里，`switchView` 不是全局函数，无头截图没法"先切到工作台再拍"；
-  而 `#view-design` 在 DOM 里排在 chat 之后，两者同时 `display:block` 时截到的是聊天页。
-  → 建议 R9 顺手加一个**只读调试钩子**（`window.__edu = {switchView, wzTabSet, dzRender}`，不参与业务逻辑），
-  以后每次改造都能自动出图；在那之前，工作区长什么样**以老师自己点开看为准**。
-- **演示模板没有删除入口**：API 只有导入/对齐，没有删除（这轮清库是直接调库函数做的）。
-  老师导错一份 .pptx 就只能一直留着 → 建议 R9/R12 补 `POST /api/slide/template/delete` + 模板行上一个「删」。
+- ~~工作区的自动截图还没打通~~ → **R9 解决**：加了只读调试钩子 `window.__edu`（`switchView/wzTabSet/dzRender` +
+  两个只读 getter，不参与业务），配 `tools/wz_shot.py --seed` 一键截四个页签。
+  脚本里记了三个坑：注入必须插**最后一个** `</body>`；observer 回调必须先判断"是否已是目标态"，
+  否则自己触发自己 → 死循环 → 截图进程超时；临时页文件名要带随机串（无头 Edge 按 URL 走磁盘缓存）。
+- ~~演示模板没有删除入口~~ → **R9 解决**：`POST /api/slide/template/delete`（软删进 `_trash`，内置三套不许删）+
+  模板行上一个「删」（**两下确认**：第一下变「确认删除」；不用 `window.confirm`，jsdom 里它恒返回 false，
+  测试就永远验不到"删成功"）。
+
+### 8.2 R9 交付记录（2026-09-27）
+
+| 落点 | 内容 |
+|---|---|
+| `static/index.html`（HTML/CSS） | 侧边面板恢复原样：删 `#docPanelGrip`（拖宽手柄）、常驻 `#docPanelFile`、「文档」圆钮与角标 `#spDocTag`；副标题回到「运行状态 · 引用 · 知识源 · 会话」；删掉 `.sidepanel.sp-doc` 整组样式（含响应式里的两条覆盖）与 `.qb-tag` |
+| `static/index.html`（JS） | 删 `spRenderDoc / spDocGoto / docpSyncQuad / docpWidth / docpApplyWidth / DOCP_W_KEY / DOCP_W_DEFAULT / spQuadAutoCollapse`，`spRender` 不再有 doc 分支，`docpInit` 只剩"窗口变化时重算预览台"，圆钮默认**展开**（不再为文档让位）；`docPanel*` 这 11 个 id **全量改名** `wzDoc*`（50 处，文档已经不住在面板里，id 里再带"面板"会误导下一个人） |
+| 新能力 | ① `POST /api/slide/template/delete`（软删，`_trash`）+ 幻灯片页签模板行的「删」（两下确认）；② 只读调试钩子 `window.__edu` |
+| `tools/wz_shot.py`（新） | 教案工作台截图：`--seed` 塞一份老编排数据 → 截 `plan/doc/md/slides` 四个页签，人眼验收用 |
+| `tools/uicheck/panel_check.js` | ① 新增 4 条"面板恢复原样"断言（恰好 4 钮 / 无手柄 / 无常驻 input / 无 `sp-doc` / 副标题四项 / 面板里没有文档正文）；② 新增 4 条删除按钮断言（可用 → 第一下只"确认" → 第二下才发请求且带 id → 删完选择被清空）；③ 窄屏那条改成"不再有拖宽变量"；④ **6 段用例改用桩会话**（`withDoc`）——以前它们依赖服务器上"当前会话"里恰好有教案，换一次会话就集体报红（假失败） |
+| `tests/test_slide_template.py` | 新增 3 例：软删进 `_trash`、内置不许删、空 id 要 400（注意：`EDU_DATA_DIR` 要用**单独的**临时目录，指向用例自己的 tmp 会让 sqlite 文件占用导致 rmtree 报错） |
+
+**R9 又抓到一个真 bug（截图抓的）**：`switchView('design')` 里调的是 `dzRender()`，而 `dzRender()` 末尾无条件
+重画左栏 → 任何一次"切回工作台"都会把「文档 / 幻灯片」页签的左栏冲成"环节目录"。
+现在 `switchView('design')` 走 `wzTabSet(WZ_TAB)`（重画**当前页签**），`dzRender()` 只在 `WZ_TAB==='plan'` 时动左栏。
+
+**验收**：单测 **462** 全绿 · 面板检查 **103/103**（R8 是 92）· 体检 49/49 · 审计 error 0 ·
+`tools/wz_shot.py --seed` 四个页签截图人眼过（教案页签 5 个环节 + 左栏目录；幻灯片页签左栏 5 页 + 舞台 + 字数提示）。
 
 **第 0 步（开工前，10 分钟）：文档指向**
 `docs/14`、`docs/15`、`docs/16` 顶部各加一段「**本文所述的"文档预览在侧边面板"已于 v1.17.0 并入教案中心，

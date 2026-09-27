@@ -51,6 +51,28 @@ const svgPage = (i) => '<svg xmlns="http://www.w3.org/2000/svg" width="1280" hei
   '<rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>' +
   '<text x="72" y="108" font-size="44" fill="#2B2B2B">第' + (i + 1) + '页</text></svg>';
 
+/* 桩数据：一份"会话里的教案"（历史里带 meta.doc → 应用会自动把它当当前文档）。
+   为什么要有它：以前这些用例**依赖服务器上"当前会话"里恰好有教案**，
+   换一次会话（比如跑一趟 fill_e2e 新建了会话）整套用例就集体报红 —— 明明代码没问题（踩过）。 */
+const DOC_MD = '# 3.3 幂函数\n\n人教A版 · 必修第一册 · 高一\n\n' +
+  '### 导入（约 5 分钟）\n- 投影五个实例\n- 追问：这些函数有什么共同点\n\n' +
+  '### 新知讲授（约 15 分钟）\n- 形如 y=x^α 的函数\n- α 为常数\n\n' +
+  '### 例题精讲（约 10 分钟）\n- 比较幂值大小\n\n' +
+  '### 随堂练习（约 10 分钟）\n- 课本练习\n\n' +
+  '### 小结（约 5 分钟）\n- 三条结论\n';
+const DOC_SLIDES = [
+  { name: '导入', minutes: 5, blocks: [{ label: '', text: '投影五个实例' }, { label: '', text: '追问：这些函数有什么共同点' }] },
+  { name: '新知讲授', minutes: 15, blocks: [{ label: '', text: '形如 y=x^α 的函数' }, { label: '', text: 'α 为常数' }] },
+  { name: '例题精讲', minutes: 10, blocks: [{ label: '', text: '比较幂值大小' }] },
+  { name: '随堂练习', minutes: 10, blocks: [{ label: '', text: '课本练习' }] },
+  { name: '小结', minutes: 5, blocks: [{ label: '', text: '三条结论' }] },
+];
+const DOC_STUB = {
+  ok: true, enabled: true, kind: 'md', title: '3.3 幂函数', markdown: DOC_MD,
+  slides: DOC_SLIDES, blocks: [{ title: '导入', level: 2, chars: 6 }],
+  stats: { chars: DOC_MD.length, slides: DOC_SLIDES.length, blocks: 5 },
+};
+
 function makeDom(opts) {
   const o = opts || {};
   const errors = [];
@@ -58,6 +80,7 @@ function makeDom(opts) {
   const exports = [];
   const saves = [];
   const fills = [];
+  const deletes = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => { if (!/Could not load script/.test(e.message || '')) errors.push(e.message); });
   vc.on('error', (...a) => errors.push(a.join(' ')));
@@ -160,9 +183,26 @@ function makeDom(opts) {
             warnings: ['会话比模板少 8 页内容 → 默认删掉模板多余的内容页'],
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (p === '/api/session/get' && o.withDoc) {
+          return new Response(JSON.stringify({
+            ok: true, id: 'stub', title: DOC_STUB.title, last_html: '',
+            messages: [
+              { role: 'user', content: '帮我备一节 3.3 幂函数的课' },
+              { role: 'assistant', content: DOC_MD, meta: { mode: 'B', doc: DOC_STUB } },
+            ],
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/session/get' && (o.legacyDesign || o.emptyHistory)) {
           /* 迁移用例要一个"干净会话"：不然历史里那份文档会先把 DOCP 占上，迁移就不该发生 */
           return new Response(JSON.stringify({ ok: true, id: 'stub', title: '', messages: [], last_html: '' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (p === '/api/slide/template/delete') {
+          /* 一定要桩住：不然面板检查会把老师模板库里真有的模板删掉（软删进 _trash 也够吓人） */
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          deletes.push(b);
+          return new Response(JSON.stringify({ ok: true, moved_to: 'content/ppt_templates/_trash/学校模板-stub' }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
         if (p === '/api/slide/save') {
@@ -178,37 +218,47 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes };
 }
 
 async function openDocPanel(doc) {
-  const btn = doc.querySelector('#spQuad .qbtn[data-v="doc"]');
-  if (btn) btn.click();
-  await sleep(900);
-  /* 没有文档时入口会落到「教案」页签（合理）——下面这些用例都假定已有文档，
-     所以这里补一次「直接切文档页签」，避免整段用例因为落点不同而误报。 */
+  /* R9：侧边面板不再有「文档」圆钮 —— 文档住在「教案中心 → 教案工作台」。
+     这里像老师那样走：点左侧导航进教案中心，再点「文档」页签。 */
+  const nav = doc.querySelector('.snav[data-view="design"]');
+  if (nav) nav.click();
+  await sleep(700);
   const t = doc.querySelector('#wzTabs .wz-tab[data-wz="doc"]');
-  if (t && !doc.querySelector('#wzDocPane .dp-word')) { t.click(); await sleep(900); }
+  if (t) { t.click(); await sleep(900); }
 }
 
 (async () => {
   console.log('== 面板结构 / 入口 ==');
   {
-    const { w, doc, errors } = makeDom();
+    const { w, doc, errors } = makeDom({ withDoc: true });
     await sleep(2500);
     const shell = Array.from(doc.querySelector('.shell').children).map((c) => c.id || c.tagName);
     check('右侧只有一块面板（.shell 子元素）', shell.join(',') === 'ASIDE,MAIN,sidePanel', shell.join(' | '));
     check('没有旧的独立面板 #docPanel', !doc.getElementById('docPanel'));
-    check('「文档」入口在侧边面板里', !!doc.querySelector('#spQuad .qbtn[data-v="doc"]'));
+    /* R9：面板恢复原样 —— 4 个圆钮、文档那套外壳一件不剩 */
+    const quads = Array.from(doc.querySelectorAll('#spQuad .qbtn')).map((b) => b.dataset.v);
+    check('侧边面板只剩 4 个圆钮（状态/引用/知识源/会话）',
+      quads.join(',') === 'term,docs,web,chat', quads.join(' | '));
+    check('没有「文档」圆钮与角标',
+      !doc.querySelector('#spQuad .qbtn[data-v="doc"]') && !doc.getElementById('spDocTag'));
+    check('没有拖宽手柄', !doc.getElementById('wzDocGrip') && !doc.getElementById('docPanelGrip'));
+    check('面板里没有常驻文件 input', !doc.querySelector('#sidePanel input[type=file]'));
+    check('面板宽度回到窄栏（没有 sp-doc 类）', !doc.getElementById('sidePanel').classList.contains('sp-doc'));
+    check('副标题回到四项',
+      /运行状态 · 引用 · 知识源 · 会话$/.test(txt(doc.querySelector('#sidePanel .sp-sub'))),
+      txt(doc.querySelector('#sidePanel .sp-sub')));
+    check('面板里不再渲染文档正文', !doc.querySelector('#spBody .dp-word'));
     await openDocPanel(doc);
-    check('点它进教案工作台的文档页签（R8：文档搬家了）',
-      doc.getElementById('view-design').classList.contains('active') &&
-      doc.getElementById('wzDocPane').style.display !== 'none' &&
-      !!doc.querySelector('#wzDocPane .dp-bd'),
+    check('入口（教案中心 → 文档页签）能打开文档',
+      !!doc.querySelector('#wzDocPane .dp-word[contenteditable="true"]'),
       (doc.querySelector('#wzTabs .wz-tab.wz-on') || {}).textContent || '(无页签)');
     const ed = doc.querySelector('#wzDocPane .dp-word[contenteditable="true"]');
     check('文档页签可直接编辑', !!ed);
-    check('编辑工具栏显示', doc.getElementById('docPanelFmt').style.display === 'flex');
+    check('编辑工具栏显示', doc.getElementById('wzDocFmt').style.display === 'flex');
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(900);
     check('幻灯片页签有 16:9 预览台（.dp-canvas）', !!doc.querySelector('#wzDocPane .dp-canvas'));
     check('旧的深蓝预览台已退役', !doc.querySelector('#wzDocPane .dp-stage'));
@@ -237,7 +287,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
   {
-    const { w, doc, errors, saves, renderCalls } = makeDom();
+    const { w, doc, errors, saves, renderCalls } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -308,7 +358,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：拆页/字数提示显示在页签里 ==');
   {
-    const { w, doc, errors } = makeDom({ slideWarn: true });
+    const { w, doc, errors } = makeDom({ slideWarn: true , withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
@@ -321,7 +371,7 @@ async function openDocPanel(doc) {
 
   console.log('== 模板：导入 / 选择 / 用模板填一遍（M4b） ==');
   {
-    const { w, doc, errors, fills } = makeDom();
+    const { w, doc, errors, fills, deletes } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
@@ -353,65 +403,92 @@ async function openDocPanel(doc) {
       body.template_id + ' / ' + (body.slides || []).length + ' 页');
     await sleep(400);
     check('结果条给出文件名与下载链接',
-      /教案_3\.3 幂函数_学校模板\.pptx/.test(txt(doc.getElementById('docPanelRes'))) &&
-      !!doc.querySelector('#docPanelRes a[href*="/api/wps/download"]'),
-      txt(doc.getElementById('docPanelRes')).slice(0, 60));
+      /教案_3\.3 幂函数_学校模板\.pptx/.test(txt(doc.getElementById('wzDocRes'))) &&
+      !!doc.querySelector('#wzDocRes a[href*="/api/wps/download"]'),
+      txt(doc.getElementById('wzDocRes')).slice(0, 60));
     check('填充提示（如"删掉多余页"）显示在结果条',
-      /删掉模板多余的内容页/.test(txt(doc.getElementById('docPanelRes'))));
+      /删掉模板多余的内容页/.test(txt(doc.getElementById('wzDocRes'))));
+
+    /* R9：删掉导错的演示模板（两下确认 → 发一次 delete，列表回到"只借内置主题"） */
+    const del = doc.getElementById('dpTplDel');
+    check('模板行有「删」按钮且选中模板时可用',
+      !!del && del.disabled === false && txt(del) === '删', del ? txt(del) : '(无)');
+    if (del) {
+      del.click(); await sleep(300);
+      check('第一下只是"确认删除"（不立刻删）',
+        del.dataset.armed === '1' && /确认删除/.test(txt(del)) && deletes.length === 0,
+        txt(del) + ' / 已发请求 ' + deletes.length);
+      del.click();
+      for (let i = 0; i < 12 && !deletes.length; i++) await sleep(250);
+      check('第二下才真删，且带上选中的模板 id',
+        deletes.length === 1 && deletes[0].template_id === '学校模板',
+        JSON.stringify(deletes[0] || {}));
+      await sleep(600);
+      check('删完回到"只借内置主题"（选择被清掉）',
+        doc.getElementById('dpTpl').value === '', doc.getElementById('dpTpl').value || '(空)');
+    } else {
+      check('第一下只是"确认删除"（不立刻删）', false, '没找到删按钮');
+      check('第二下才真删，且带上选中的模板 id', false, '没找到删按钮');
+      check('删完回到"只借内置主题"（选择被清掉）', false, '没找到删按钮');
+    }
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
 
   console.log('== 导出：新版式 PPT 接线（桩 /api/wps/export） ==');
   {
-    const { w, doc, errors, exports } = makeDom();
+    const { w, doc, errors, exports } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
-    const items = Array.from(doc.querySelectorAll('#docPanelMenu [data-dl]')).map((b) => b.dataset.dl);
+    const items = Array.from(doc.querySelectorAll('#wzDocMenu [data-dl]')).map((b) => b.dataset.dl);
     check('下载菜单 = Word + 新旧两条 PPT + HTML',
       items.join(',') === 'docx,pptx-deck,pptx,html', items.join(','));
     check('新版式那项写明了与预览同源', /与预览同一份/.test(txt(doc.querySelector('[data-dl="pptx-deck"]'))),
       txt(doc.querySelector('[data-dl="pptx-deck"]')));
-    doc.getElementById('docPanelDownBtn').click();
+    doc.getElementById('wzDocDownBtn').click();
     doc.querySelector('[data-dl="pptx-deck"]').click();
     for (let i = 0; i < 12 && !exports.length; i++) await sleep(300);
-    for (let i = 0; i < 12 && /处理中/.test(txt(doc.getElementById('docPanelRes'))); i++) await sleep(300);
+    for (let i = 0; i < 12 && /处理中/.test(txt(doc.getElementById('wzDocRes'))); i++) await sleep(300);
     const body = exports[0] || {};
     check('点它 POST 的是 pptx-deck', body.kind === 'pptx-deck', String(body.kind));
     check('带上面板那份 slides（预览=导出的关键）',
       Array.isArray(body.slides) && body.slides.length > 0, (body.slides || []).length + ' 页');
     check('带上当前主题 id', !!body.theme_id, String(body.theme_id || ''));
     check('结果条给文件名与下载链接',
-      /教案_3\.3 幂函数\.pptx/.test(txt(doc.getElementById('docPanelRes'))) &&
-      !!doc.querySelector('#docPanelRes a[href*="/api/wps/download"]'),
-      txt(doc.getElementById('docPanelRes')).slice(0, 60));
+      /教案_3\.3 幂函数\.pptx/.test(txt(doc.getElementById('wzDocRes'))) &&
+      !!doc.querySelector('#wzDocRes a[href*="/api/wps/download"]'),
+      txt(doc.getElementById('wzDocRes')).slice(0, 60));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
 
   console.log('== 导出：新版式失败时如实说明已回退 ==');
   {
-    const { w, doc, errors } = makeDom({ wpsFallback: true });
+    const { w, doc, errors } = makeDom({ wpsFallback: true , withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
-    doc.getElementById('docPanelDownBtn').click();
+    doc.getElementById('wzDocDownBtn').click();
     doc.querySelector('[data-dl="pptx-deck"]').click();
     await sleep(900);
-    check('结果条注明"已回退到旧版式"', /已回退到旧版式/.test(txt(doc.getElementById('docPanelRes'))),
-      txt(doc.getElementById('docPanelRes')).slice(0, 80));
+    check('结果条注明"已回退到旧版式"', /已回退到旧版式/.test(txt(doc.getElementById('wzDocRes'))),
+      txt(doc.getElementById('wzDocRes')).slice(0, 80));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
 
   console.log('== 幻灯片：窄屏（模拟 320px 视口） ==');  {
-    const { w, doc, errors } = makeDom({ innerWidth: 320 });
+    const { w, doc, errors } = makeDom({ innerWidth: 320 , withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
+    /* R9：面板宽度不再由文档视图控制（那条 --docp-w 拖宽逻辑已删）——
+       这里改成断言"面板不再有内联宽度"，窄屏下由 CSS 自己收（.sidepanel 的媒体查询）。 */
     const pw = doc.documentElement.style.getPropertyValue('--docp-w');
-    check('面板宽度被夹到下限 360px', pw === '360px', pw || '(empty)');
+    check('面板不再有文档视图的拖宽变量（R9 已删）', pw === '', pw || '(empty)');
+    check('窄屏下面板仍是那块面板（没被隐藏）',
+      !!doc.getElementById('sidePanel') && doc.getElementById('sidePanel').style.display !== 'none');
     const wrap = doc.querySelector('#wzDocPane .dp-slidewrap');
     check('窄屏下缩放系数仍为正数', !!wrap && parseFloat(wrap.dataset.scale) > 0,
       wrap ? wrap.dataset.scale : '(no wrap)');
@@ -422,7 +499,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：服务端渲染不可用时退化成纯文本（不白屏） ==');
   {
-    const { w, doc, errors } = makeDom({ slideFail: true });
+    const { w, doc, errors } = makeDom({ slideFail: true , withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
@@ -435,7 +512,7 @@ async function openDocPanel(doc) {
 
   console.log('== R6-4/R6-5：PPT 优化不再作为独立模块 / 页面减肥 ==');
   {
-    const { w, doc, errors } = makeDom();
+    const { w, doc, errors } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -452,7 +529,7 @@ async function openDocPanel(doc) {
 
   console.log('== 槽位对齐：点一次「对齐」列出结构，可改角色并保存 ==');
   {
-    const { w, doc, errors } = makeDom();
+    const { w, doc, errors } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -480,7 +557,9 @@ async function openDocPanel(doc) {
     w.close();
   }  console.log('== 会话侧：无「下一步」卡片 + 每条回答有【生成文档】 ==');
   {
-    const { w, doc, errors } = makeDom();
+    /* 用桩历史：以前这里数的是服务器上"当前会话"里那 13 条回答，
+       换一次会话就变成 0 个按钮 → 假失败（踩过）。 */
+    const { w, doc, errors } = makeDom({ withDoc: true });
     await sleep(3000);
     const vis = (() => { const c = doc.body.cloneNode(true); c.querySelectorAll('script,style').forEach((n) => n.remove()); return c.textContent.replace(/\s+/g, ' '); })();
     check('页面上没有「下一步」字样', !/下一步/.test(vis));
@@ -494,7 +573,7 @@ async function openDocPanel(doc) {
   console.log('== R8：文档并进教案工作台（页签 / MD 源码预览 / 环节写回 / 学生下载 / 老数据迁移） ==');
   {
     /* ① 四个页签 + 左栏随页签切换 */
-    const { w, doc, errors, saves } = makeDom();
+    const { w, doc, errors, saves } = makeDom({ withDoc: true });
     await sleep(2500);
     const tabs = Array.from(doc.querySelectorAll('#wzTabs .wz-tab')).map(txt);
     check('教案工作台有 4 个页签（教案/文档/Markdown/幻灯片）',
@@ -543,7 +622,7 @@ async function openDocPanel(doc) {
 
   {
     /* ④ 学生角色：那条按钮是「下载 Word」且真的走导出 */
-    const { w, doc, errors, exports } = makeDom({ role: 'student' });
+    const { w, doc, errors, exports } = makeDom({ role: 'student', withDoc: true });
     await sleep(2600);
     const btns = Array.from(doc.querySelectorAll('.pill-btn')).map(txt);
     check('学生看到的是「下载 Word」（不是【生成文档】）',

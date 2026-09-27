@@ -284,6 +284,54 @@ class DesignBakedRolesTest(_LibCase):
         self.assertEqual([s["role"] for s in self._roles(tid) if s["shape_index"] == 1], ["body"])
 
 
+class TemplateDeleteApiTest(_LibCase):
+    """演示模板的删除入口（R9）。
+
+    为什么补它：老师导错一份 .pptx 就再也去不掉了 —— 之前 API 只有"导入/对齐"，
+    R8 清理体检残留时只能绕过接口直接调库函数（见 docs/25 §8.1 的"已知限制"）。
+    边界：**内置的三套数值模板不许删**；删是**软删**（移进 `_trash`，能找回）。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._old_data = os.environ.get("EDU_DATA_DIR")
+        # ⚠️ 用**单独的**临时目录：会话库 (sqlite) 会被持有到进程结束，
+        # 若指向 self.tmp，_LibCase 收尾 rmtree 会因文件占用报 PermissionError（踩过）。
+        os.environ["EDU_DATA_DIR"] = tempfile.mkdtemp(prefix="edu_tpl_data_")
+        self.addCleanup(self._restore_data)
+
+    def _restore_data(self):
+        if self._old_data is None:
+            os.environ.pop("EDU_DATA_DIR", None)
+        else:
+            os.environ["EDU_DATA_DIR"] = self._old_data
+
+    @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx 当模板")
+    def test_delete_imported_template_is_soft(self):
+        from edu_agent import web_server as ws
+
+        tid = st.import_pptx(SAMPLE_PPTX, name="要删掉的模板")["id"]
+        r = ws.api_slide_template_delete({"template_id": tid})
+        self.assertTrue(r["ok"], r.get("error"))
+        self.assertIn("_trash", r["moved_to"])
+        self.assertIsNone(st.get(tid), "库里不该还有它")
+        self.assertTrue(Path(r["moved_to"], "template.pptx").is_file(), "软删 = 原稿还在，能找回")
+
+    def test_builtin_cannot_be_deleted(self):
+        from edu_agent import web_server as ws
+
+        r = ws.api_slide_template_delete({"template_id": "tech-editorial"})
+        self.assertFalse(r["ok"])
+        self.assertIn("内置", r["error"])
+        self.assertIsNotNone(st.get("tech-editorial"))
+
+    def test_blank_id_is_rejected(self):
+        from edu_agent import web_server as ws
+
+        r = ws.api_slide_template_delete({})
+        self.assertEqual(getattr(r, "status_code", 200), 400, "没给 id 要明确报错，别静默")
+
+
 if __name__ == "__main__":
     unittest.main()
     """槽位对齐（R6 之后）：老师在一个结构上标一次，**所有同结构页都跟着对**。"""

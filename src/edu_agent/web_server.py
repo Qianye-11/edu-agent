@@ -1159,6 +1159,26 @@ def api_slide_templates():
             "imported": [t for t in items if t["kind"] == "pptx"]}
 
 
+@app.post("/api/slide/template/delete")
+def api_slide_template_delete(body: dict):
+    """**软删**一份导入的演示模板（移进 `content/ppt_templates/_trash/`，老师能找回来）。
+
+    为什么补这个入口：老师导错一份 .pptx 就再也去不掉了（R8 清理体检残留时只能直接调库函数），
+    内置的三套数值模板**不允许删**。
+    边界：只动 `content/ppt_templates/` 下这一个模板目录，原稿在 `_trash` 里保留。
+    """
+    from edu_agent import slide_template
+
+    tid = str((body or {}).get("template_id") or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "没给模板 id"}, status_code=400)
+    try:
+        out = slide_template.delete_template(tid)
+    except Exception as exc:  # noqa: BLE001 删失败要说清楚，别让按钮点了没反应
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
 @app.post("/api/slide/template/import")
 async def api_slide_template_import(file: UploadFile = File(...), name: str = Query("")):
     """导入一份 `.pptx` 当演示模板（原稿收进模板库、**只读**；抽不出槽位就退化成只借配色）。"""
