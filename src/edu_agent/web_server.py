@@ -994,6 +994,60 @@ def api_session_doc_preview(body: DocPreviewReq):
     }
 
 
+@app.get("/api/slide/fill/plan")
+def api_slide_fill_plan(template_id: str = Query(""), session_id: str = Query(""), title: str = Query("")):
+    """**给外部 agent 的读端**：模板槽位清单 + 我们的内容 + 确定性草案（docs/24 的契约）。
+
+    不做 skill、不设开关：这是"另一个会生成教案的 agent"接入我们出 PPT 的接口。
+    """
+    from edu_agent import slide_fill
+
+    tid = str(template_id or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "缺少 template_id"}, status_code=400)
+    slides = _store.get_session_doc(str(session_id or "").strip() or (_store.current_id() or "")).get("slides") or []
+    try:
+        return slide_fill.plan_payload(tid, slides, title=str(title or ""))
+    except (FileNotFoundError, ValueError) as exc:
+        return JSONResponse({"ok": False, "schema": slide_fill.SCHEMA, "error": str(exc)}, status_code=400)
+
+
+class SlideDeckReq(BaseModel):
+    """**外部 agent 的写端（一步到位）**：一份教案结构 → 直接出 pptx。"""
+
+    lesson: dict | None = None            # {"title": "...", "slides": [{name, bullets[], minutes}]}
+    template_id: str = ""                 # 给了就"按模板填充"；不给就按主题生成
+    theme_id: str = ""
+    outDir: str = ""
+    confirm: bool = False
+    session_id: str = ""
+
+
+@app.post("/api/slide/deck")
+def api_slide_deck(body: SlideDeckReq):
+    """一步出稿：`lesson` → pptx（有模板走填充，没模板走我们的 6 版式）。"""
+    from edu_agent import permissions
+    from edu_agent import slide_fill
+
+    blocked = permissions.guard("export_pptx", bool(body.confirm))
+    if blocked:
+        return blocked
+    lesson = body.lesson if isinstance(body.lesson, dict) else {}
+    slides = [s for s in (lesson.get("slides") or []) if isinstance(s, dict)]
+    title = str(lesson.get("title") or "").strip()
+    if not slides:
+        return JSONResponse({"ok": False, "schema": slide_fill.SCHEMA,
+                             "error": "lesson.slides 为空：至少要有一个环节"}, status_code=400)
+    out_dir = (body.outDir or "").strip() or None
+    tid = str(body.template_id or "").strip()
+    if tid:
+        out = slide_fill.fill_pptx(tid, slides, title=title, out_dir=out_dir)
+    else:
+        out = slide_deck.export_deck_pptx(body.theme_id, slides, title=title, out_dir=out_dir)
+    out["schema"] = slide_fill.SCHEMA
+    return out
+
+
 # ---------- 幻灯片渲染收口（docs/22 D13 / docs/23 M1） ----------
 #   · /api/slide/themes：内置主题清单（面板的下拉用），不设门禁；
 #   · /api/slide/render：会话数据 → 每页 SVG，**纯内存**；面板只做等比缩放与翻页。

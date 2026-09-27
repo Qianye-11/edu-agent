@@ -78,7 +78,7 @@ class PlanTest(_FillCase):
         p = sf.plan(self.tid, deck, "3.3 幂函数")
         self.assertGreater(p["policy"].get("copied", 0), 0)
         self.assertTrue(any("复制" in w for w in p["warnings"]))
-        self.assertEqual(len(p["pages"]), len(deck))
+        self.assertGreaterEqual(len(p["pages"]), len(deck), "页数 ≥ 会话页数（超出容量时还会再分页）")
 
     def test_no_slots_degrades(self):
         (Path(self.tmp.name) / "empty-tpl").mkdir()
@@ -128,8 +128,7 @@ class FillTest(_FillCase):
         self.assertEqual(before, after)
 
     def test_long_text_is_flagged_but_not_cut(self):
-        """超容量只提示、不截断。注意：我们自己的 400 字/块上限 < 模板正文槽容量，
-        所以要用**多块**把这一页撑过容量（单块撑不过去）。"""
+        """R6 新策略：**不允许"容量不足"** —— 由"适度压缩 + 另起一页"消化，且内容不丢。"""
         probe = sf.plan(self.tid, DECK, "3.3 幂函数")
         caps = [int(f.get("capacity") or 0) for page in probe["pages"] for f in page["fills"]]
         cap = max(caps) if caps else 0
@@ -137,16 +136,20 @@ class FillTest(_FillCase):
         deck = [DECK[0], {"name": "长内容", "bullets": bullets}]
         self.assertGreater(sum(len(b) for b in bullets), cap)
         p = sf.plan(self.tid, deck, "3.3 幂函数")
-        self.assertTrue(any("超出模板框" in w for w in p["warnings"]), p["warnings"])
-        self.assertTrue(any("拆页" in w or "缩短标题" in w for w in p["warnings"]), p["warnings"])
+        self.assertFalse(any("容量" in w for w in p.get("warnings") or []), p.get("warnings"))
+        self.assertTrue(p.get("adjustments"), "压缩/分页要留痕（adjustments）")
+        self.assertTrue({"trim", "new-page"} & {a.get("action") for a in p["adjustments"]}, p["adjustments"])
         out = sf.fill_pptx(self.tid, deck, "3.3 幂函数", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
         from pptx import Presentation
 
         prs = Presentation(out["file"])
         blob = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes
                          if getattr(sh, "has_text_frame", False))
-        self.assertIn(bullets[0][:40], blob, "超容量只提示，文字不截断")
-        self.assertIn(bullets[2][:40], blob, "最后一块也要在（没被丢掉）")
+        for i, b in enumerate(bullets):
+            with self.subTest(bullet=i):
+                self.assertIn(b[:12], blob, "每条的开头都要在（压缩只去尾巴，不整条丢）")
+        self.assertTrue({c["name"]: c["ok"] for c in out["checks"]}["内容零丢失"])
 
     def test_unknown_template_is_explicit(self):
         out = sf.fill_pptx("没有这个模板", DECK, "x", out_dir=self.out)
@@ -324,6 +327,94 @@ class NoCoverDeckMappingTest(_FillCase):
         for i in range(6):
             with self.subTest(page=i):
                 self.assertIn(f"环节 {i}", blob)
+
+
+class AgentApiTest(_FillCase):
+    """R6-3：给外部 agent 的接口（不做 skill）—— 读端 plan、写端 mapping / 一步出稿。"""
+
+    def setUp(self):
+        super().setUp()
+        import tempfile as _tf
+
+        self._old_data = os.environ.get("EDU_DATA_DIR")
+        os.environ["EDU_DATA_DIR"] = _tf.mkdtemp(prefix="edu_agent_api_")
+        from edu_agent import capabilities as cap
+        from edu_agent import web_server as ws
+
+        self.ws, self.cap = ws, cap
+        cap._CACHE.clear()
+        self.addCleanup(self._restore_data)
+
+    def _restore_data(self):
+        if self._old_data is None:
+            os.environ.pop("EDU_DATA_DIR", None)
+        else:
+            os.environ["EDU_DATA_DIR"] = self._old_data
+        self.cap._CACHE.clear()
+
+    @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx 当模板")
+    def test_plan_payload_schema_and_stability(self):
+        a = sf.plan_payload(self.tid, DECK, "3.3 幂函数")
+        b = sf.plan_payload(self.tid, DECK, "3.3 幂函数")
+        self.assertTrue(a["ok"], a.get("error"))
+        self.assertEqual(a["schema"], sf.SCHEMA)
+        self.assertEqual(a, b, "同输入同输出（agent 要能据此做判断）")
+        self.assertIn("slots", a["template"])
+        roles = {s["role"] for p in a["template"]["slots"] for s in p["slots"]}
+        self.assertTrue(roles <= {"title", "body", "decoration"}, roles)
+
+    @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx 当模板")
+    def test_apply_mapping_sanitizes_and_trims(self):
+        p = sf.plan(self.tid, DECK, "3.3 幂函数")
+        first = p["pages"][0]
+        ti = first["template_index"]
+        cap = int((first["fills"][0].get("capacity") or 0))
+        long_text = "字" * (cap + 20) if cap else "字" * 50
+        out = sf.apply_mapping(p, [
+            {"template_index": ti, "fills": [{"role": first["fills"][0]["role"], "text": long_text}]},
+            {"template_index": 9999, "fills": [{"role": "title", "text": "不该生效"}]},      # 不存在的页
+            {"template_index": ti, "fills": [{"role": "不存在的角色", "text": "不该生效"}]},   # 不存在的角色
+        ])
+        self.assertEqual(out["mapping_applied"], 1, "只认已有的页与角色")
+        got = out["pages"][0]["fills"][0]["text"]
+        self.assertLessEqual(len(got), cap or len(got), "超容量要被压到放得下")
+        self.assertTrue(any(a.get("by") == "agent-mapping" for a in out.get("adjustments") or []))
+        self.assertNotIn("不该生效", str(out))
+
+    @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx 当模板")
+    def test_deck_one_shot_endpoint(self):
+        import unittest.mock as mock
+
+        called: dict = {}
+
+        def fake_fill(tid, slides, title="", **kw):
+            called.update({"tid": tid, "slides": slides, "title": title, "out": kw.get("out_dir")})
+            return {"ok": True, "filename": "x.pptx", "file": "d/x.pptx", "outDir": "d",
+                    "download_url": "/d/x", "checks": [], "pages": len(slides)}
+
+        with mock.patch("edu_agent.slide_fill.fill_pptx", side_effect=fake_fill):
+            r = self.ws.api_slide_deck(self.ws.SlideDeckReq(
+                lesson={"title": "3.3 幂函数", "slides": DECK}, template_id=self.tid,
+                outDir=str(self.out), confirm=True))
+        self.assertTrue(r["ok"], r.get("error"))
+        self.assertEqual(called["tid"], self.tid)
+        self.assertEqual(r["schema"], sf.SCHEMA)
+
+    def test_deck_without_template_uses_theme_path(self):
+        import unittest.mock as mock
+
+        with mock.patch.object(self.ws.slide_deck, "export_deck_pptx",
+                               return_value={"ok": True, "filename": "y.pptx", "file": "d/y.pptx",
+                                             "outDir": "d", "pages": 2}) as m:
+            r = self.ws.api_slide_deck(self.ws.SlideDeckReq(
+                lesson={"title": "t", "slides": DECK}, theme_id="tech-editorial",
+                outDir=str(self.out), confirm=True))
+        self.assertTrue(r["ok"])
+        self.assertTrue(m.called, "没给模板 → 走主题生成那条路")
+
+    def test_deck_requires_content(self):
+        r = self.ws.api_slide_deck(self.ws.SlideDeckReq(lesson={"title": "x", "slides": []}, confirm=True))
+        self.assertEqual(getattr(r, "status_code", 200), 400)
 
 
 class EndpointFillTest(_FillCase):

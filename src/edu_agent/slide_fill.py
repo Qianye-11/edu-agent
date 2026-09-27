@@ -58,6 +58,66 @@ def template_pages(template_id: str) -> tuple[list[dict], str]:
     return pages, ""
 
 
+def _fit_text(text: str, cap: int) -> tuple[str, bool]:
+    """**适度压缩**（不是极简）：超容量时按"先留主干"的顺序砍
+
+    1. 去掉成对括号里的补充说明（（…）/(…)）；
+    2. 按「，、；」切分，从**末尾**逐段去掉，直到放得下；
+    3. 仍放不下才硬截到容量上限（并交给调用方记进 adjustments，属于最后手段）。
+    """
+    s = str(text or "").strip()
+    if cap <= 0 or len(s) <= cap:
+        return s, False
+    trimmed = s
+    for a, b in (("（", "）"), ("(", ")")):
+        while a in trimmed and b in trimmed[trimmed.index(a):]:
+            i = trimmed.index(a)
+            j = trimmed.find(b, i)
+            if j < 0:
+                break
+            trimmed = (trimmed[:i] + trimmed[j + 1:]).strip()
+    if len(trimmed) <= cap:
+        return trimmed, True
+    for sep in ("；", "。", "，", "、"):
+        if len(trimmed) <= cap:
+            break
+        parts = [p for p in trimmed.split(sep) if p.strip()]
+        while len(parts) > 1 and len(sep.join(parts)) > cap:
+            parts.pop()
+        trimmed = sep.join(parts)
+    if len(trimmed) <= cap:
+        return trimmed, True
+    return trimmed[:cap], True
+
+
+def _paginate(items: list[str], n_slots: int, caps: list[int], out: dict) -> list[list[str]]:
+    """把条目按容量分页：每页最多 `n_slots` 条，每条不超过对应槽的容量。
+
+    **不允许"容量不足"**：一条放不下就先把它的压缩到放得下（记 `trim`），页满了就另起一页（记 `new-page`）。
+    返回"每页的条目列表"（长度 ≥ 1）；`out["adjustments"]` 里记每一步，便于复核。
+    """
+    pages: list[list[str]] = [[]]
+    slot_idx = 0
+    for raw in items:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        if slot_idx >= n_slots:                      # 本页槽用尽 → 另起一页
+            pages.append([])
+            slot_idx = 0
+            out.setdefault("adjustments", []).append(
+                {"action": "new-page", "why": "本页正文槽已用尽", "text": text[:20]})
+        cap = caps[slot_idx] if slot_idx < len(caps) else 0
+        fitted, changed = _fit_text(text, cap)
+        if changed:
+            out.setdefault("adjustments", []).append(
+                {"action": "trim", "cap": cap, "before": len(text), "after": len(fitted),
+                 "text": fitted[:24]})
+        pages[-1].append(fitted)
+        slot_idx += 1
+    return [p for p in pages if p] or [[]]
+
+
 def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
     """算出"哪一页填到模板的哪一页、每个槽写什么"——**只算不写**（可单测、可给面板预览）。"""
     items = slide_deck.clean_slides(slides)
@@ -95,20 +155,27 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
             else:
                 out["warnings"].append("模板一页都没有，无法填充")
 
-    # 2) 内容页：逐页顺序对应；不够就复制模板的内容页
+    # 2) 内容页：逐页顺序对应；一条放不下就压缩、一页装满就另起一页（复制模板的内容页）
     donor = content_pages[0] if content_pages else (cover_pages[0] if cover_pages else pages[0])
+    body_caps = [int(s.get("capacity") or 0) for s in (donor.get("slots") or [])
+                 if (s.get("role") or "") == "body"]
     for k, (idx, s) in enumerate(body_slides):
-        if k < len(content_pages):
-            tpl_page, copied = content_pages[k], False
-        else:
-            tpl_page, copied = donor, True
-            out["policy"].setdefault("copied", 0)
-            out["policy"]["copied"] += 1
-        out["pages"].append(_page_fill(tpl_page, {
-            "title": s.get("name") or s.get("title") or "",
-            "body": [b["text"] for b in (slide_deck._blocks(s) or [])] or slide_deck._bullets(s),  # noqa: SLF001
-            "minutes": str(s.get("minutes") or ""),
-        }, out, copied=copied))
+        items = [b["text"] for b in (slide_deck._blocks(s) or [])] or slide_deck._bullets(s)  # noqa: SLF001
+        groups = _paginate(items, max(1, len(body_caps)), body_caps, out)
+        for gi, group in enumerate(groups):
+            if k < len(content_pages) and gi == 0:
+                tpl_page, copied = content_pages[k], False
+            else:
+                tpl_page, copied = donor, True
+                out["policy"]["copied"] = int(out["policy"].get("copied") or 0) + 1
+            page_title = (s.get("name") or s.get("title") or "")
+            if gi > 0:
+                page_title = f"{page_title}（续 {gi + 1}）"
+            out["pages"].append(_page_fill(tpl_page, {
+                "title": page_title,
+                "body": group,
+                "minutes": str(s.get("minutes") or "") if gi == 0 else "",
+            }, out, copied=copied))
 
     # 3) 页数：模板里**没被计划用到的页**都删掉（含没用上的封面/结尾页）
     used = {p.get("template_index") for p in out["pages"] if not p.get("copied")}
@@ -145,10 +212,13 @@ def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -
     def emit(slot: dict, text: str, *, clear: bool = False) -> None:
         cap = int(slot.get("capacity") or 0)
         role = slot.get("role") or "body"
-        if text and cap > 0 and len(text) > cap:
-            where = f"第 {tpl_page.get('index', 0) + 1} 页" + ("标题" if role == "title" else "正文")
-            how = "建议缩短标题" if role == "title" else "建议拆页或精简"
-            out["warnings"].append(f"{where}超出模板框（{slot.get('sample') or '空框'}：容量 {cap} 字 < 填入 {len(text)} 字）→ {how}")
+        if text and cap > 0 and len(text) > cap:      # 兜底：规划阶段理应已经压到容量内
+            fitted, changed = _fit_text(text, cap)
+            if changed:
+                out.setdefault("adjustments", []).append(
+                    {"action": "trim", "where": f"第 {tpl_page.get('index', 0) + 1} 页", "cap": cap,
+                     "before": len(text), "after": len(fitted), "text": fitted[:24]})
+                text = fitted
         fills.append({"role": role, "capacity": cap, "text": text, "clear": bool(clear),
                       "shape_index": slot.get("shape_index"),
                       "sample": slot.get("sample") or "", "geo": slot.get("geo") or {}})
@@ -455,6 +525,74 @@ def _verify_fill(pptx: Path, want: list[str], the_plan: dict) -> list[dict]:
         {"name": "容量自查", "ok": not over, "blocking": False,
          "detail": f"{len(over)} 处超容量（只提示，不阻断）" if over else "没有超容量"},
     ]
+
+
+#: 接口契约版本（外部 agent 按它对齐；改了就要在 docs/24 里加一段变更记录）
+SCHEMA = "edu-agent.fill-plan.v1"
+
+
+def apply_mapping(the_plan: dict, mapping: list[dict] | None) -> dict:
+    """把**外部 agent** 给的 `mapping` 收干净后套进计划（判断由 agent 做，执行由我们做）。
+
+    `mapping` 形状（与 `plan["pages"]` 同构，可以只给一部分页）：
+
+        [{"template_index": 1, "fills": [{"role": "title", "text": "情境导入"},
+                                         {"role": "body",  "text": "投影五个实例"}]}]
+
+    规则：只认计划里**已有的模板页**与**已有的 role**；文字超容量仍走 `_fit_text` 适度压缩并记 `adjustments`；
+    没给到的页保持草案原样（所以"只改一页"是合法的）。
+    """
+    if not isinstance(mapping, list) or not mapping:
+        return the_plan
+    by_index = {p.get("template_index"): p for p in the_plan.get("pages") or []}
+    touched = 0
+    for row in mapping:
+        if not isinstance(row, dict):
+            continue
+        page = by_index.get(row.get("template_index"))
+        if page is None:
+            continue
+        wanted = {str(f.get("role") or ""): str(f.get("text") or "")
+                  for f in (row.get("fills") or []) if isinstance(f, dict)}
+        for fill in page.get("fills") or []:
+            role = fill.get("role") or "body"
+            if role not in wanted:
+                continue
+            text = wanted[role].strip()
+            cap = int(fill.get("capacity") or 0)
+            if text and cap > 0 and len(text) > cap:
+                text, changed = _fit_text(text, cap)
+                if changed:
+                    the_plan.setdefault("adjustments", []).append(
+                        {"action": "trim", "by": "agent-mapping", "cap": cap,
+                         "before": len(wanted[role]), "after": len(text), "text": text[:24]})
+            fill["text"] = text
+            fill["clear"] = not text
+            touched += 1
+    the_plan["mapping_applied"] = touched
+    return the_plan
+
+
+def plan_payload(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
+    """给**外部 agent** 的稳定载荷：模板槽位清单 + 我们的内容 + 确定性草案。
+
+    这是"另一个 agent 生成教案 → 交给我们出 PPT"那条链路的读端；写端是 `apply_mapping()`。
+    """
+    pages, err = template_pages(template_id)
+    the_plan = plan(template_id, slides, title)
+    items = slide_deck.clean_slides(slides)
+    return {"ok": not err and bool(pages), "schema": SCHEMA,
+            "template": {"id": template_id, "pages": len(pages),
+                         "slots": [{"index": p.get("index"), "layout": p.get("layout"),
+                                    "slots": [{"role": s.get("role"), "capacity": s.get("capacity"),
+                                               "sample": s.get("sample")} for s in (p.get("slots") or [])]}
+                                   for p in pages]},
+            "content": {"title": title, "slides": items},
+            "draft": the_plan,
+            "notes": ["draft 是我们按规则算出来的草案；你可以改 pages[].fills[].text 后回传给 /api/slide/fill",
+                      "只给要改的页也可以（没给到的页保持草案）",
+                      "超容量的文字会被适度压缩（去括号补充、从末尾减分句），并在 adjustments 里留痕"],
+            "error": err}
 
 
 if __name__ == "__main__":        # 冒烟：python -m edu_agent.slide_fill <模板id>
