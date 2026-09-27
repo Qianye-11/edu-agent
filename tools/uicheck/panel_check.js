@@ -317,7 +317,7 @@ async function openDocPanel(doc) {
     await sleep(700);
     check('换主题会重新要一份 SVG', doc.querySelector('#wzDocPane .dp-canvas svg') !== null &&
       /手绘墨/.test(txt(doc.querySelector('.dp-slstat'))), txt(doc.querySelector('.dp-slstat')));
-    check('提示小字仍在', /内存预览效果/.test(txt(doc.querySelector('.dp-note'))), txt(doc.querySelector('.dp-note')));
+    check('文档页签的说明小字还在（改成一句实话）', /下载在顶栏/.test(txt(doc.querySelector('.dp-note'))), txt(doc.querySelector('.dp-note')));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -468,11 +468,10 @@ async function openDocPanel(doc) {
       body.template_id + ' / ' + (body.slides || []).length + ' 页');
     await sleep(400);
     check('结果条给出文件名与下载链接',
-      /教案_3\.3 幂函数_学校模板\.pptx/.test(txt(doc.getElementById('wzDocRes'))) &&
-      !!doc.querySelector('#wzDocRes a[href*="/api/wps/download"]'),
-      txt(doc.getElementById('wzDocRes')).slice(0, 60));
+      /教案_3\.3 幂函数_学校模板\.pptx/.test(txt(doc.getElementById('dzExportResult'))) &&
+      txt(doc.getElementById('dzExportResult')).slice(0, 60));
     check('填充提示（如"删掉多余页"）显示在结果条',
-      /删掉模板多余的内容页/.test(txt(doc.getElementById('wzDocRes'))));
+      /删掉模板多余的内容页/.test(txt(doc.getElementById('dzExportResult'))));
 
     /* R11：**模板填充页也能点着改**（老师要求"ppt 有关的编辑都要能编辑"）——
        盒子来自填充计划的 fills[].geo；改完先记着、点「应用修改」才重填（重填要 3~6 秒）。 */
@@ -537,24 +536,24 @@ async function openDocPanel(doc) {
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
-    const items = Array.from(doc.querySelectorAll('#wzDocMenu [data-dl]')).map((b) => b.dataset.dl);
+    const items = Array.from(doc.querySelectorAll('#wzDownMenu [data-dl]')).map((b) => b.dataset.dl);
     check('下载菜单 = Word + 新旧两条 PPT + HTML',
-      items.join(',') === 'docx,pptx-deck,pptx,html', items.join(','));
+      items.join(',') === 'docx,pptx-deck,pptx,html,outdir', items.join(','));
     check('新版式那项写明了与预览同源', /与预览同一份/.test(txt(doc.querySelector('[data-dl="pptx-deck"]'))),
       txt(doc.querySelector('[data-dl="pptx-deck"]')));
-    doc.getElementById('wzDocDownBtn').click();
+    doc.getElementById('wzDownBtn').click();
     doc.querySelector('[data-dl="pptx-deck"]').click();
     for (let i = 0; i < 12 && !exports.length; i++) await sleep(300);
-    for (let i = 0; i < 12 && /处理中/.test(txt(doc.getElementById('wzDocRes'))); i++) await sleep(300);
+    for (let i = 0; i < 12 && /处理中/.test(txt(doc.getElementById('dzExportResult'))); i++) await sleep(300);
     const body = exports[0] || {};
     check('点它 POST 的是 pptx-deck', body.kind === 'pptx-deck', String(body.kind));
     check('带上面板那份 slides（预览=导出的关键）',
       Array.isArray(body.slides) && body.slides.length > 0, (body.slides || []).length + ' 页');
     check('带上当前主题 id', !!body.theme_id, String(body.theme_id || ''));
     check('结果条给文件名与下载链接',
-      /教案_3\.3 幂函数\.pptx/.test(txt(doc.getElementById('wzDocRes'))) &&
-      !!doc.querySelector('#wzDocRes a[href*="/api/wps/download"]'),
-      txt(doc.getElementById('wzDocRes')).slice(0, 60));
+      /教案_3\.3 幂函数\.pptx/.test(txt(doc.getElementById('dzExportResult'))) &&
+      !!doc.querySelector('#dzExportResult a[href*="/api/wps/download"]'),
+      txt(doc.getElementById('dzExportResult')).slice(0, 60));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -565,11 +564,11 @@ async function openDocPanel(doc) {
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
-    doc.getElementById('wzDocDownBtn').click();
+    doc.getElementById('wzDownBtn').click();
     doc.querySelector('[data-dl="pptx-deck"]').click();
     await sleep(900);
-    check('结果条注明"已回退到旧版式"', /已回退到旧版式/.test(txt(doc.getElementById('wzDocRes'))),
-      txt(doc.getElementById('wzDocRes')).slice(0, 80));
+    check('结果条注明"已回退到旧版式"', /已回退到旧版式/.test(txt(doc.getElementById('dzExportResult'))),
+      txt(doc.getElementById('dzExportResult')).slice(0, 80));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -678,6 +677,17 @@ async function openDocPanel(doc) {
       /教案/.test(txt(doc.querySelector('#wzTabs .wz-tab.wz-on'))), txt(doc.querySelector('#wzTabs .wz-tab.wz-on')));
     check('教案页签有左栏（环节目录）', !!doc.querySelector('#wzLeft .wz-rail-h'));
     check('教案页签的舞台是环节编辑器', !!doc.querySelector('#wzPlanPane #dzSteps'));
+    check('默认只画左栏选中**那一个**环节（不再左右各列一遍）',
+      doc.querySelectorAll('#wzPlanPane #dzSteps .dz-step').length === 1,
+      doc.querySelectorAll('#wzPlanPane #dzSteps .dz-step').length + ' 张卡');
+    check('左栏环节列表把选中那个标出来了',
+      !!doc.querySelector('#wzLeft .wz-item.wz-cur'), txt(doc.querySelector('#wzLeft .wz-item.wz-cur')));
+    doc.getElementById('wzPlanAll').click(); await sleep(400);
+    const nAll = doc.querySelectorAll('#wzPlanPane #dzSteps .dz-step').length;
+    check('点「全部展开」把所有环节列出来', nAll > 1, nAll + ' 张卡');
+    doc.getElementById('wzPlanAll').click(); await sleep(400);
+    check('再点回到"只看选中"',
+      doc.querySelectorAll('#wzPlanPane #dzSteps .dz-step').length === 1);
 
     /* ② 环节编辑 = 改会话里那份 slides（不再有第二套本地数据） */
     const nameInp = doc.querySelector('#wzPlanPane #dzSteps input.name');
@@ -687,7 +697,15 @@ async function openDocPanel(doc) {
       nameInp.dispatchEvent(new w.Event('input', { bubbles: true }));
       for (let i = 0; i < 14 && !saves.length; i++) await sleep(250);
       const s0 = (saves[saves.length - 1] || {}).slides || [];
-      check('改环节名写回会话的 slides（唯一数据源）', s0[0] && s0[0].name === '导入（改过的）',
+      check('状态栏说清了篇幅（全页只在这里说一次）',
+      /共 \d+ 个环节/.test(txt(doc.getElementById('wzStatusBar'))),
+      txt(doc.getElementById('wzStatusBar')));
+    check('「生成骨架/＋添加环节」只在教案页签出现',
+      doc.getElementById('wzPlanOps').hidden === false);
+    check('保存状态显示在顶栏（已自动保存）',
+      /已自动保存/.test(txt(doc.getElementById('wzSaveState'))),
+      txt(doc.getElementById('wzSaveState')));
+    check('改环节名写回会话的 slides（唯一数据源）', s0[0] && s0[0].name === '导入（改过的）',
         s0[0] ? s0[0].name : '(无)');
     } else {
       check('改环节名写回会话的 slides（唯一数据源）', false, '教案页签没有环节编辑器（没有文档？）');

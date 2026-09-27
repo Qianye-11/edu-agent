@@ -233,6 +233,18 @@ svg{display:block}
 /* ===== 教案 × PPT 可视化编排工作台 ===== */
 .dz-grid{display:grid;grid-template-columns:minmax(340px,1fr) minmax(300px,1fr);gap:16px;padding:16px 34px 40px;align-items:start}
 /* ==== 教案工作台（R8）：页签 + 左栏 + 舞台 ==== */
+/* ==== 教案工作台（R8 建，R12.5 简明化）：一行工具栏 + 页签 + 左栏/舞台 + 一条状态栏 ==== */
+.wz-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 14px}
+.wz-bar-ops{display:inline-flex;gap:8px}
+.wz-bar-ops[hidden]{display:none}
+.wz-save{font-size:11.5px;color:var(--ink-400);flex:none}
+.wz-save.wz-dirty{color:#B45309}
+.wz-resultbar{margin-top:8px;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.wz-statusbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:7px 34px 14px;
+  font-size:11.5px;color:var(--ink-500);border-top:.5px solid var(--line);margin:0 34px}
+.wz-statusbar b{font-weight:600;color:var(--ink-700)}
+.wz-statusbar .sp{flex:1}
+.dz-h .dp-mini{margin-left:auto}
 .wz-tabs{display:flex;gap:4px;align-items:center;padding:6px 34px 0;border-bottom:.5px solid var(--line);flex-wrap:wrap}
 .wz-tab{border:none;background:none;font-size:13px;color:var(--ink-500);padding:7px 14px;border-radius:9px 9px 0 0;cursor:pointer;font-family:inherit}
 .wz-tab:hover{background:var(--bg-hover)}
@@ -792,56 +804,67 @@ body.theme-dark .avt{color:#fff}
           </div>
         </div>
 
-        <!-- ===== 教案工作台（教案中心；2026-09-10 建，2026-09-27 R8 把「文档」整套并入） =====
-             一个工作区、一份数据（会话里那份）：教案结构 / 文档 / Markdown / 幻灯片 四个页签，
-             舞台是唯一"看东西"的地方；左栏在教案页签是环节目录，在幻灯片页签是页缩略图。 -->
+        <!-- ===== 教案工作台（教案中心；2026-09-10 建，R8 并入文档，R12.5 简明化） =====
+             一个工作区、一份数据（会话里那份）：教案 / 文档 / Markdown / 幻灯片 四个页签。
+             结构就三块：**一行工具栏**（课题·学情·教案专属按钮·保存·下载▾）→ **页签** → **左栏 + 舞台**，
+             底下一条**状态栏**（页码/篇幅/主题/保存状态，全页只在这里说一次）。
+             出口只有一处：「下载▾」里四项（Word / PPT 新版式 / PPT 旧版式 / HTML）+「导出位置…」。 -->
         <div class="view" id="view-design">
           <div class="view-sec">
             <div class="view-h1">教案工作台</div>
-            <div class="view-sub">教案 · 文档 · Markdown · 幻灯片都在这里——改哪一边，另外几边跟着变</div>
+            <div class="view-sub">课题、正文、幻灯片是同一份内容——改哪一边，另外几边跟着变</div>
           </div>
-          <div class="view-sec" style="padding-top:14px" id="dzEditBar">
-            <div class="row-card" style="padding:14px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <input class="text-input" id="dzTitle" aria-label="教案课题" placeholder="课题，例：3.3 幂函数" style="width:230px;height:34px">
-              <input class="text-input" id="dzGrade" aria-label="学情与课时" placeholder="学情/课时，例：重点班 45 分钟" style="width:220px;height:34px">
-              <button class="pill-btn dark" id="dzSkeleton">生成骨架</button>
-              <button class="pill-btn" id="dzAddStep">＋ 添加环节</button>
+          <div class="view-sec" style="padding-top:12px" id="dzEditBar">
+            <div class="row-card wz-bar">
+              <input class="text-input" id="dzTitle" aria-label="教案课题" placeholder="课题，例：3.3 幂函数" style="width:220px;height:34px">
+              <input class="text-input" id="dzGrade" aria-label="学情与课时" placeholder="学情/课时，例：重点班 45 分钟" style="width:200px;height:34px">
+              <span id="wzPlanOps" class="wz-bar-ops">
+                <button class="pill-btn dark" id="dzSkeleton">生成骨架</button>
+                <button class="pill-btn" id="dzAddStep">＋ 添加环节</button>
+              </span>
               <span style="flex:1"></span>
-              <button class="pill-btn" id="dzSave">保存</button>
-              <button class="pill-btn" id="dzExport">导出 HTML</button>
-              <button class="pill-btn" id="dzExportWps" title="经 WPS 文字导出 .docx">导出 Word · WPS</button>
-              <button class="pill-btn dark" id="dzExportPpt" title="本地生成 .pptx 并用 WPS 演示打开">生成 PPT · WPS</button>
+              <span class="wz-save" id="wzSaveState">已自动保存</span>
+              <button class="pill-btn" id="dzSave" title="不用点也会自动存；点了立刻存一次">立即保存</button>
+              <span class="dp-dl" id="wzDown">
+                <button class="pill-btn dark" id="wzDownBtn" title="导出这份教案（鼠标悬停选择格式）">下载
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" style="margin-left:3px;vertical-align:-1px"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="dp-menu" id="wzDownMenu">
+                  <button data-dl="docx"><b>Word（.docx）</b><span>经 WPS 导出 · 落盘</span></button>
+                  <button data-dl="pptx-deck"><b>PPT（.pptx）</b><span>新版式 · 与预览同一份 · 字可改</span></button>
+                  <button data-dl="pptx"><b>PPT（旧版式）</b><span>兼容导出 · 每环节一页</span></button>
+                  <button data-dl="html"><b>HTML</b><span>网页版 · 直接下载</span></button>
+                  <button data-dl="outdir"><b>导出位置…</b><span id="wzOutDirNow">content/plans（项目内）</span></button>
+                </div>
+              </span>
             </div>
-            <div class="row-card" style="margin-top:8px;padding:10px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:12.5px;color:var(--ink-500);flex:none">导出位置</span>
-              <input class="text-input" id="dzOutDir" aria-label="教案导出位置" placeholder="留空 = content/plans（项目内）" style="flex:1;min-width:240px;height:32px;font-family:ui-monospace,Consolas,monospace;font-size:12px">
-              <button class="pill-btn" id="dzPickDir" style="flex:none">选择…</button>
-              <span id="dzExportResult" style="font-size:12px;color:var(--ink-500);flex:none"></span>
+            <div class="row-card wz-resultbar" id="wzResultBar" style="display:none">
+              <span id="dzExportResult"></span>
             </div>
-            <div class="row-card" id="tplBar" style="margin-top:8px;padding:10px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:12.5px;color:var(--ink-600);flex:none;font-weight:600">教案模板</span>
-              <button class="pill-btn" id="tplImport" title="导入你的 .docx：解析后可预览、可编辑、可下载成 Word / PPT">导入 .docx</button>
-              <span style="font-size:11.5px;color:var(--ink-400)">导入后就在下面的「文档」页签里看与改</span>
-            </div>
-            <input type="file" id="tplFile" accept=".docx" style="display:none">
+            <input class="text-input" id="dzOutDir" aria-label="教案导出位置（隐藏，导出流程用）" style="display:none">
           </div>
           <div class="wz-tabs" id="wzTabs">
             <button class="wz-tab" data-wz="plan">教案</button>
             <button class="wz-tab" data-wz="doc">文档</button>
             <button class="wz-tab" data-wz="md">Markdown</button>
             <button class="wz-tab" data-wz="slides">幻灯片</button>
-            <span id="wzTabNote" class="wz-note"></span>
           </div>
           <div class="wz-grid" id="wzGrid">
             <div class="wz-rail" id="wzLeft"></div>
             <div class="wz-stage">
               <div class="wz-pane" id="wzPlanPane">
-                <div class="dz-h">教案结构 <span id="dzStat" class="dz-stat"></span></div>
+                <div class="dz-h">
+                  <span id="wzPlanTitle">教案结构</span>
+                  <span id="dzStat" class="dz-stat"></span>
+                  <span style="flex:1"></span>
+                  <button class="pill-btn dp-mini" id="wzPlanAll" title="一次看到所有环节（默认只看左栏选中的那一个）">全部展开</button>
+                </div>
                 <div id="dzSteps"></div>
               </div>
               <div class="wz-pane" id="wzDocPane" style="display:none"></div>
             </div>
           </div>
+          <div class="wz-statusbar" id="wzStatusBar"></div>
         </div>
 
         <!-- ===== Question ===== -->
@@ -1108,21 +1131,16 @@ body.theme-dark .avt{color:#fff}
     return {cls:'', text:'不可用'};
   }
   function capSyncDesignBtn(){
-    /* WPS 未就绪时：编排台的「导出 Word · WPS」置灰 + 面板下载菜单的落盘项灰显（仍可点，点了会说清原因） */
+    /* WPS 未就绪时：顶栏「下载▾」菜单里的落盘项灰显（仍可点，点了会说清原因；HTML 不受影响） */
     var off = !CAP.wps_export_ready;
-    var w = document.getElementById('dzExportWps');
-    if(w){
-      w.style.opacity = off ? '.55' : '';
-      w.title = off ? 'WPS Office 服务未就绪（到「MCP 服务」开启）' : '经 WPS 文字导出 .docx';
-    }
-    document.querySelectorAll('#wzDocMenu [data-dl]').forEach(function(b){
-      if(b.dataset.dl === 'html') return;          /* HTML 直接下载，不依赖 WPS */
+    document.querySelectorAll('#wzDownMenu [data-dl]').forEach(function(b){
+      if(b.dataset.dl === 'html' || b.dataset.dl === 'outdir') return;   /* 这两项不依赖 WPS */
       b.classList.toggle('dp-off', !!off);
       b.title = off ? 'WPS Office 服务未就绪（到「MCP 服务」开启）' : '';
     });
-    var btn = document.getElementById('wzDocDownBtn');
+    var btn = document.getElementById('wzDownBtn');
     if(btn) btn.title = off ? '下载（Word / PPT 需先开启 WPS 服务；HTML 不受影响）'
-                            : '下载这份文档（鼠标悬停选择格式）';
+                            : '导出这份教案（鼠标悬停选择格式）';
   }
   var svcSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>';
   function capSwitchHtml(kind, id, on, tip, name){
@@ -2998,6 +3016,9 @@ body.theme-dark .avt{color:#fff}
   var DZ_KEY = 'edu_design_v1';
   var DZ_BAK_KEY = 'edu_design_v1.bak';
   var WZ_TAB = 'plan';                       /* plan | doc | md | slides */
+  var WZ_PLAN_SEL = 0;                       /* 教案页签：当前选中的环节（R12.5 简明化） */
+  var WZ_PLAN_ALL = false;                   /* 教案页签：是否一次列出全部环节 */
+  var WZ_SAVE_STATE = 'saved';               /* saved | dirty —— 状态栏与顶栏都读它 */
   var WZ_SEED = [
     { name:'导入', minutes:5, points:'情境/问题引入\n回顾上一节' },
     { name:'新知讲授', minutes:15, points:'核心概念与定义\n关键结论与注意点' },
@@ -3047,46 +3068,95 @@ body.theme-dark .avt{color:#fff}
   function wzRailSteps(){
     var el = document.getElementById('wzLeft'); if(!el) return;
     var steps = wzSteps();
-    var h = '<div class="wz-rail-h">环节目录</div>';
+    var h = '<div class="wz-rail-h">环节' + (steps.length ? '（' + steps.length + '）' : '') + '</div>';
     if(!steps.length){
       el.innerHTML = h + '<div class="wz-item" style="cursor:default;color:var(--ink-400)">（还没有环节）</div>';
       return;
     }
+    if(WZ_PLAN_SEL > steps.length - 1) WZ_PLAN_SEL = steps.length - 1;
+    if(WZ_PLAN_SEL < 0) WZ_PLAN_SEL = 0;
     steps.forEach(function(s, i){
-      h += '<div class="wz-item" data-step="'+i+'" role="button" tabindex="0">' +
-        '<span class="n">'+(i+1)+'</span><div style="min-width:0">' +
-        '<div class="t">'+escHtml(s.name || '（未命名）')+'</div>' +
-        '<div class="m">'+(parseInt(s.minutes, 10) || 0)+' 分钟 · 第 '+(i+1)+' 页</div>' +
+      h += '<div class="wz-item' + (i === WZ_PLAN_SEL && !WZ_PLAN_ALL ? ' wz-cur' : '') +
+        '" data-step="' + i + '" role="button" tabindex="0">' +
+        '<span class="n">' + (i + 1) + '</span><div style="min-width:0">' +
+        '<div class="t">' + escHtml(s.name || '（未命名）') + '</div>' +
+        '<div class="m">' + (parseInt(s.minutes, 10) || 0) + ' 分钟</div>' +
         '</div></div>';
     });
     el.innerHTML = h;
     Array.prototype.forEach.call(el.querySelectorAll('.wz-item[data-step]'), function(it){
       it.addEventListener('click', function(){
-        var i = parseInt(it.dataset.step, 10);
-        var row = document.querySelector('#dzSteps .dz-step[data-i="'+i+'"]');
-        if(row){
-          if(row.scrollIntoView) row.scrollIntoView({ block:'center' });
-          var inp = row.querySelector('input.name'); if(inp) inp.focus();
+        WZ_PLAN_SEL = parseInt(it.dataset.step, 10) || 0;
+        if(WZ_PLAN_ALL){                       /* 展开态：选中并滚到那一张卡 */
+          var row = document.querySelector('#dzSteps .dz-step[data-i="' + WZ_PLAN_SEL + '"]');
+          if(row){
+            if(row.scrollIntoView) row.scrollIntoView({ block:'center' });
+            var inp = row.querySelector('input.name'); if(inp) inp.focus();
+            wzRailSteps();
+          }
+          return;
         }
+        dzRender();                            /* 单卡态：换一张卡 */
       });
     });
+  }
+  /* 状态栏：全页**只在这里**说一次页数/篇幅/主题/保存状态（原先三处重复，R12.5 收口） */
+  function wzStatusRender(){
+    var el = document.getElementById('wzStatusBar'); if(!el) return;
+    var sl = wzSlides();
+    var saved = WZ_SAVE_STATE === 'dirty' ? '<span>正在写入…</span>' : '<span>已自动保存到会话</span>';
+    if(WZ_TAB === 'plan'){
+      el.innerHTML = '<b>共 ' + sl.length + ' 个环节</b><span>' + dzTotal() + ' 分钟</span>' +
+        '<span>' + (WZ_PLAN_ALL ? '显示全部环节' : '只显示第 ' + (WZ_PLAN_SEL + 1) + ' 个（左栏点别的切换）') + '</span>' +
+        '<span class="sp"></span>' + saved;
+      return;
+    }
+    if(WZ_TAB === 'doc' || WZ_TAB === 'md'){
+      var st = (DOCP && DOCP.stats) || {};
+      el.innerHTML = '<b>' + escHtml((DOCP && DOCP.title) || '还没有文档') + '</b>' +
+        '<span>' + (st.chars || 0) + ' 字</span><span>' + (st.slides || sl.length) + ' 页</span>' +
+        '<span class="sp"></span>' + saved;
+      return;
+    }
+    el.innerHTML = '<b>第 ' + (DOCP_PAGE + 1) + ' / ' + Math.max(1, sl.length) + ' 页</b>' +
+      '<span>共 ' + sl.length + ' 页</span>' +
+      '<span>' + escHtml(docpThemeName(docpThemeGet()) || '学术蓝') + '</span>' +
+      '<span>' + (DOCP_SL.fail ? '纯文本预览' : '点页面上的字就能改 · Ctrl+Z 撤销') + '</span>' +
+      '<span class="sp"></span>' + saved;
+  }
+  /* 保存状态：改动时标"正在写入"，服务端确认后回"已保存"（顶栏那行字与状态栏同步） */
+  function wzSaveState(state){
+    WZ_SAVE_STATE = state === 'dirty' ? 'dirty' : 'saved';
+    var s = document.getElementById('wzSaveState');
+    if(s){
+      s.textContent = WZ_SAVE_STATE === 'dirty' ? '保存中…' : '已自动保存';
+      s.classList.toggle('wz-dirty', WZ_SAVE_STATE === 'dirty');
+    }
+    wzStatusRender();
   }
   function dzRender(){
     var tEl = document.getElementById('dzTitle');
     if(tEl && DOCP && tEl.value !== (DOCP.title || '')) tEl.value = DOCP.title || '';
     var box = document.getElementById('dzSteps'); if(!box) return;
     var slides = wzSlides();
+    var title = document.getElementById('wzPlanTitle');
     if(!slides.length){
       box.innerHTML = '<div class="wz-empty">这里还没有教案内容。<br>' +
         '· 问一句教案（例：帮我备一节 3.3 幂函数的课）→ 自动出现在这里；<br>' +
         '· 或点上面【生成骨架】按 5 个环节起个头；<br>' +
-        '· 或【导入 .docx】把你自己的教案放进来。</div>';
+        '· 或点【文档】页签里的【导入】把你自己的教案放进来。</div>';
       var st0 = document.getElementById('dzStat'); if(st0) st0.textContent = '';
-      if(WZ_TAB === 'plan') wzRailSteps();       /* 同上：左栏只属于「教案」页签 */
+      if(title) title.textContent = '教案结构';
+      if(WZ_TAB === 'plan') wzRailSteps();
+      wzStatusRender();
       return;
     }
+    /* 默认**只画左栏选中的那一个环节**（左右各列一遍是冗余）；点「全部展开」才全画 */
+    if(WZ_PLAN_SEL > slides.length - 1) WZ_PLAN_SEL = slides.length - 1;
+    var idxs = WZ_PLAN_ALL ? slides.map(function(_, i){ return i; }) : [WZ_PLAN_SEL];
     var h = '';
-    slides.forEach(function(s, i){
+    idxs.forEach(function(i){
+      var s = slides[i];
       h += '<div class="dz-step" data-i="'+i+'"><div class="r1">' +
         '<span class="idx">'+(i+1)+'</span>' +
         '<input class="name" data-i="'+i+'" data-f="name" value="'+escHtml(s.name || s.title || '')+'" placeholder="环节名，例：新知讲授">' +
@@ -3102,12 +3172,15 @@ body.theme-dark .avt{color:#fff}
     });
     box.innerHTML = h;
     var st = document.getElementById('dzStat');
-    if(st) st.textContent = '共 '+slides.length+' 个环节 · '+dzTotal()+' 分钟';
+    if(st) st.textContent = WZ_PLAN_ALL
+      ? ('共 ' + slides.length + ' 个环节 · ' + dzTotal() + ' 分钟')
+      : ('第 ' + (WZ_PLAN_SEL + 1) + ' 个 / 共 ' + slides.length + ' 个 · ' + dzTotal() + ' 分钟');
+    if(title) title.textContent = WZ_PLAN_ALL ? '全部环节' : '这一环节';
     /* 左栏只属于「教案」页签：文档/Markdown 的左栏是收起状态、幻灯片是页列表；
        这里不判断的话，任何一次 dzRender 都会把它们的左栏冲成"环节目录"（R9 截图里抓到的真 bug）。 */
     if(WZ_TAB === 'plan') wzRailSteps();
+    wzStatusRender();
   }
-  function dzExportPpt(){ dzExportRun('pptx', document.getElementById('dzExportPpt')); }
   /* ==== 工作区页签与"文档外壳"（R8：文档整套搬进教案中心）=========================
      外壳里的 id（wzDocTitle/Body/Fmt/Menu/…）沿用原来那套 —— docp* 那上百个函数
      一个都不用改，只是"到哪儿渲染"从 `#spBody` 换成 `#wzDocPane`。 */
@@ -3121,19 +3194,8 @@ body.theme-dark .avt{color:#fff}
           '<button class="pill-btn dp-mini" data-mdv="src" title="看/改纯文本源码">源码</button>' +
           '<button class="pill-btn dp-mini" data-mdv="view" title="看渲染后的效果">预览</button>' +
         '</span>' +
-        '<button class="pill-btn dp-mini" id="wzDocImport" title="导入一份 .docx：可看、可改、可下载">导入</button>' +
-        '<span class="dp-dl" id="wzDocDown">' +
-          '<button class="pill-btn dp-mini dark" id="wzDocDownBtn" title="下载这份文档（鼠标悬停选择格式）">下载' +
-          '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" ' +
-          'style="margin-left:3px;vertical-align:-1px"><path d="M6 9l6 6 6-6"/></svg></button>' +
-          '<div class="dp-menu" id="wzDocMenu">' +
-            '<button data-dl="docx"><b>Word（.docx）</b><span>经 WPS 导出 · 落盘</span></button>' +
-            '<button data-dl="pptx-deck"><b>PPT（.pptx）</b><span>新版式 · 与预览同一份 · 字可改</span></button>' +
-            '<button data-dl="pptx"><b>PPT（旧版式）</b><span>兼容导出 · 每环节一页</span></button>' +
-            '<button data-dl="html"><b>HTML</b><span>网页版 · 直接下载</span></button>' +
-          '</div>' +
-        '</span>' +
-        '<span class="dp-note" style="margin-left:10px">这里看到的是内存预览效果，实际排版以导出 WPS 文件为准</span>' +
+        '<button class="pill-btn dp-mini" id="wzDocImport" title="导入一份 .docx 或 .pptx：可看、可改">导入</button>' +
+        '<span class="dp-note" style="margin-left:10px">这里改的就是导出用的那份；下载在顶栏「下载▾」</span>' +
       '</div>' +
       '<div class="dp-fmt" id="wzDocFmt" style="display:none;padding-left:0;padding-right:0">' +
         '<button data-fmt="bold" title="加粗"><b>B</b></button>' +
@@ -3146,7 +3208,7 @@ body.theme-dark .avt{color:#fff}
         '<span class="dp-fmt-tip" id="wzDocFmtTip">可直接在下面改；改动会同步到 Markdown、幻灯片与导出</span>' +
       '</div>' +
       '<div class="dp-bd" id="wzDocBody" style="padding:12px 0 16px"></div>' +
-      '<div class="dp-ft" id="wzDocRes"></div>';
+      '';                                     /* 结果条已收到顶栏（见 dzResult），这里不再留一条 */
   }
   /* 幻灯片页签的左栏：**真页缩略图**（复用服务端那份 SVG，缩到小框里）+ 悬停页操作（R11）。
      拖动排序留到 R12 —— 先把"看着像 WPS、点点就能换页、能加/删/复制"做扎实。 */
@@ -3262,7 +3324,6 @@ body.theme-dark .avt{color:#fff}
     });
     var planPane = document.getElementById('wzPlanPane'), docPane = document.getElementById('wzDocPane');
     var grid = document.getElementById('wzGrid'), rail = document.getElementById('wzLeft');
-    var note = document.getElementById('wzTabNote');
     var needDoc = (WZ_TAB !== 'plan');
     if(planPane) planPane.style.display = needDoc ? 'none' : '';
     if(docPane) docPane.style.display = needDoc ? '' : 'none';
@@ -3270,7 +3331,10 @@ body.theme-dark .avt{color:#fff}
     var noRail = (WZ_TAB === 'doc' || WZ_TAB === 'md');
     if(grid) grid.classList.toggle('wz-noRail', noRail);
     if(rail) rail.style.display = noRail ? 'none' : '';
-    if(note) note.textContent = '';
+    /* 工具栏按页签显隐：「生成骨架 / ＋添加环节」只在教案页签有意义，
+       其余页签显示它们只是占地方（R12.5 简明化）。 */
+    var ops = document.getElementById('wzPlanOps');
+    if(ops) ops.hidden = (WZ_TAB !== 'plan');
     if(needDoc){
       DOCP_TAB = (WZ_TAB === 'slides') ? 'slides' : WZ_TAB;      /* doc | md | slides 与服务端页签同名 */
       wzMountDoc();
@@ -3278,7 +3342,7 @@ body.theme-dark .avt{color:#fff}
     }else{
       dzRender();
     }
-    if(WZ_TAB === 'slides' && note) note.textContent = DOCP_SL.fillPreview ? '（当前是按模板填出来的样子）' : '';
+    wzStatusRender();
   }
   /* 首屏：先把老编排台的数据搬进会话（D10，只搬一次），再渲染当前页签 */
   function wzBoot(){
@@ -3397,26 +3461,48 @@ body.theme-dark .avt{color:#fff}
       docpSaveSlides();
       docpEditFlush();
       if(DOCP.markdown) docpRederive();
+      wzSaveState('saved');
       showToast('已保存到会话（换浏览器也还在）');
     });
-    var ex = document.getElementById('dzExport');
-    if(ex) ex.addEventListener('click', function(){ dzExportHTML(); });
-    var exw = document.getElementById('dzExportWps');
-    if(exw) exw.addEventListener('click', function(){ dzExportWps(); });
-    var exp = document.getElementById('dzExportPpt');
-    if(exp) exp.addEventListener('click', function(){ dzExportPpt(); });
-    var pk = document.getElementById('dzPickDir');
-    if(pk) pk.addEventListener('click', function(){
-      openDirPicker(function(dir){ dzOutDirSet(dir); showToast('导出位置：' + dir); },
-                    { title:'选择导出位置',
-                      sub:'Word / PPT 将保存到该目录（不存在会自动创建）；留空则存到项目内 content/plans',
-                      start: dzOutDirGet() || undefined });
+    /* 出口只有一处：「下载▾」菜单（Word / PPT 新版式 / PPT 旧版式 / HTML / 导出位置…） */
+    var dbox = document.getElementById('wzDown'), dbtn = document.getElementById('wzDownBtn');
+    if(dbtn) dbtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(dbox) dbox.classList.toggle('open');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#wzDownMenu [data-dl]'), function(b){
+      b.addEventListener('click', function(){
+        if(dbox) dbox.classList.remove('open');
+        var k = b.dataset.dl;
+        if(k === 'outdir'){
+          openDirPicker(function(dir){ dzOutDirSet(dir); showToast('导出位置：' + dir); },
+                        { title:'选择导出位置',
+                          sub:'Word / PPT 将保存到该目录（不存在会自动创建）；留空则存到项目内 content/plans',
+                          start: dzOutDirGet() || undefined });
+          return;
+        }
+        if(k === 'html'){ dzExportHTML(); return; }
+        dzResult('处理中…');
+        dzExportRun(k, b);
+      });
+    });
+    document.addEventListener('click', function(e){                 /* 点别处收菜单 */
+      if(!dbox) return;
+      if(e.target && e.target.closest && e.target.closest('#wzDown')) return;
+      dbox.classList.remove('open');
     });
     syncOutDirInput();
 
     /* 页签：教案 / 文档 / Markdown / 幻灯片（R8 起，文档整套就在这个工作区里） */
     Array.prototype.forEach.call(document.querySelectorAll('#wzTabs .wz-tab'), function(b){
       b.addEventListener('click', function(){ wzTabSet(b.dataset.wz); });
+    });
+    /* 「全部展开」：默认只看左栏选中的那一个环节（左右各列一遍是冗余），点了就展开全部 */
+    var all = document.getElementById('wzPlanAll');
+    if(all) all.addEventListener('click', function(){
+      WZ_PLAN_ALL = !WZ_PLAN_ALL;
+      all.textContent = WZ_PLAN_ALL ? '只看选中' : '全部展开';
+      dzRender();
     });
     /* 首次渲染与"搬老数据"放到脚本最后（appInit）做：
        这里还太早 —— 下面那些 var（DOCP_SL / DOCP_TAB…）此刻还是 undefined（var 提升但不赋值，踩过）。 */
@@ -3523,7 +3609,15 @@ body.theme-dark .avt{color:#fff}
   var DZ_OUT_KEY = 'edu_dz_outdir';
   function dzOutDirGet(){ try{ return localStorage.getItem(DZ_OUT_KEY) || ''; }catch(e){ return ''; } }
   function dzOutDirSet(v){ try{ if(v) localStorage.setItem(DZ_OUT_KEY, v); else localStorage.removeItem(DZ_OUT_KEY); }catch(e){} syncOutDirInput(); }
-  function syncOutDirInput(){ var el = document.getElementById('dzOutDir'); if(el) el.value = dzOutDirGet(); }
+  /* 结果条只有一处（顶栏那条）：文档页签里的导出/填充结论都转发到那儿。
+     ⚠️ 只许有**一份**定义：后定义的会覆盖前面的，结果就「看不见」了（踩过）。 */
+  function docpResult(html){ dzResult(html || ''); }
+  function syncOutDirInput(){
+    var el = document.getElementById('dzOutDir'); if(el) el.value = dzOutDirGet();
+    /* 下载菜单里那行小字就是「当前导出位置」—— 全页只在这一处显示它 */
+    var now = document.getElementById('wzOutDirNow');
+    if(now) now.textContent = dzOutDirGet() || 'content/plans（项目内）';
+  }
   /* 「导出 HTML」：纯前端拼一份（教案 + 每页大纲），不落盘、不调 WPS */
   function dzExportHTML(){
     var stepsArr = wzSteps();
@@ -3555,7 +3649,12 @@ body.theme-dark .avt{color:#fff}
     if(expDownloadHtml(html, (docTitle || '教案') + '-教案与PPT大纲.html')) showToast('已导出 HTML（下载里找）');
   }
   /* 教案 -> WPS 文字 .docx / 本地生成 .pptx（开关与「MCP 服务」同源：关掉即拒绝） */
-  function dzResult(html){ var el = document.getElementById('dzExportResult'); if(el) el.innerHTML = html; }
+  function dzResult(html){
+    var el = document.getElementById('dzExportResult');
+    if(el) el.innerHTML = html;
+    var bar = document.getElementById('wzResultBar');
+    if(bar) bar.style.display = (html && String(html).trim()) ? '' : 'none';   /* 没内容就不占一行 */
+  }
   /* 导出载荷 = 会话里那份（唯一数据源）；`payload` 这个形状服务端一直在用，别改 */
   function dzPayload(){
     var stepsArr = wzSteps();
@@ -3577,7 +3676,6 @@ body.theme-dark .avt{color:#fff}
                      markdown: (DOCP && DOCP.markdown) || '', title: p.title });
     }catch(err){ showToast('异常：' + (err && err.message ? err.message : err), false); }
   }
-  function dzExportWps(){ dzExportRun('docx', document.getElementById('dzExportWps')); }
   /* ==== 会话内文档预览面板 ==================================================
      两条链路严格分开（对应「会话内内存预览」与「WPS 落盘导出」）：
        · 预览：纯内存渲染，不落盘、不调用 WPS、不看 WPS 开关；
@@ -3631,7 +3729,8 @@ body.theme-dark .avt{color:#fff}
     DOCP_TAB = 'outline';
     docpRender();                     /* 「结构」不再占页签，仍可由代码直接渲染 */
   }
-  function docpResult(html){ var el = docpEl('wzDocRes'); if(el) el.innerHTML = html || ''; }
+  /* 结果条只有一处（顶栏那条，见 dzResult）；这里只是转发。
+     注意别再写第二份定义 —— 后定义的会覆盖前面的，结果就「看不见」了（踩过）。 */
   /* HTML 下载：改过 → 用面板里的改后内容在**内存**里生成一份（不落盘、不碰 WPS）；
      没改过就直连服务端已落的那份网页版。 */
   function docpDownloadHtml(){
@@ -4064,6 +4163,7 @@ body.theme-dark .avt{color:#fff}
   }
   /* 存回会话（防抖 700ms）；只有内容没再变才用服务端"洗干净"的结果覆盖本地 */
   function docpSaveSlides(){
+    wzSaveState('dirty');
     if(DOCP_SL.saveTimer) clearTimeout(DOCP_SL.saveTimer);
     DOCP_SL.saveTimer = setTimeout(function(){
       var seq = ++DOCP_SL.seq;
@@ -4076,6 +4176,7 @@ body.theme-dark .avt{color:#fff}
         }
         DOCP_SL.edited = true;
         DOCP_SL.warn = d.warnings || [];
+        wzSaveState('saved');
         DOCP_SL.sig = '';                          /* 逼下一页重出 SVG */
         var bd = docpEl('wzDocBody');
         if(bd) docpPagesEnsure(bd, DOCP.slides, function(){ docpPaintStage(bd); });
@@ -4583,6 +4684,7 @@ body.theme-dark .avt{color:#fff}
     docpPaintStage(bd);
     var bar = bd.querySelector('.dp-pagebar span');
     if(bar) bar.textContent = '第 ' + (DOCP_PAGE + 1) + ' / ' + total + ' 页　点左栏缩略图换页';
+    wzStatusRender();                          /* 页码/主题只在状态栏说一次 */
   }
   function docpRenderSlides(bd){
     var deck = docpBuildDeck(), sl = deck.slides || [];
@@ -5064,26 +5166,10 @@ body.theme-dark .avt{color:#fff}
       docpOpen(d);
     }).catch(function(){});
   }
-  /* 文档视图的按钮接线：容器每次重建（切视图）都要重来一遍，所以单独成函数 */
+  /* 文档页签的按钮接线（容器每次重建都要重来一遍）。R12.5：下载与结果条都收到顶栏了，这里只剩导入与格式栏。 */
   function docpWireView(){
-    var dbox = docpEl('wzDocDown'), dbtn = docpEl('wzDocDownBtn');
-    document.querySelectorAll('#wzDocMenu [data-dl]').forEach(function(b){
-      b.addEventListener('click', function(){
-        if(dbox) dbox.classList.remove('open');
-        var k = b.dataset.dl;
-        if(k === 'html') docpDownloadHtml();
-        else docpExport(k, b);
-      });
-    });
-    if(dbtn) dbtn.addEventListener('click', function(e){
-      e.stopPropagation();
-      if(dbox) dbox.classList.toggle('open');
-    });
     var pImp = docpEl('wzDocImport');
     if(pImp) pImp.addEventListener('click', function(){ var f = docpEl('wzDocFile'); if(f) f.click(); });
-    document.querySelectorAll('#spBody .dp-tab').forEach(function(b){
-      b.addEventListener('click', function(){ docpTabSet(b.dataset.dp); });
-    });
     docpBindFmt();
   }
   /* 启动初始化（R9 起面板不再有文档视图，这里只剩"预览台尺寸跟着窗口变"这一件事） */
@@ -5099,15 +5185,6 @@ body.theme-dark .avt{color:#fff}
     /* 教案工作区：搬老数据（D10）+ 首屏渲染。放这里是有原因的 —— 必须等整个脚本求值完，
        否则 DOCP_SL / DOCP_TAB 这些 var 还是 undefined（踩过：saveTimer of undefined）。 */
     wzBoot();
-    /* 模板「导入 .docx」：解析后进教案工作台的文档页签（不建模板、不进模板库） */
-    var tImport = document.getElementById('tplImport'), tFile = document.getElementById('tplFile');
-    if(tImport && tFile){
-      tImport.addEventListener('click', function(){ tFile.click(); });
-      tFile.addEventListener('change', function(){
-        if(tFile.files && tFile.files[0]) docpImportFile(tFile.files[0]);
-        tFile.value = '';
-      });
-    }
     /* ==== 只读调试钩子（给 UI 自动化与排查用，不参与业务逻辑，也不写任何状态）====
        为什么需要：应用逻辑全在这个 IIFE 里，`switchView` 不是全局函数 ——
        无头截图/脚本没法"先切到教案工作台再拍"，上一轮为此折腾了很久（见 docs/25 §8.1）。
