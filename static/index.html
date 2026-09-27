@@ -680,6 +680,10 @@ body.theme-dark .avt{color:#fff}
 .dp-show .bar button{height:26px;padding:0 10px;border-radius:7px;border:.5px solid rgba(255,255,255,.45);background:rgba(255,255,255,.08);color:#fff;font-size:12px;font-family:var(--font);cursor:pointer}
 .dp-show .bar button:hover{background:rgba(255,255,255,.2)}
 .dp-show .dp-show-tip{color:rgba(255,255,255,.6)}
+/* R18 前置：联网取图的输入框 */
+.dp-imgin{flex:1;min-width:200px;height:26px;border:.5px solid var(--line-strong);border-radius:7px;padding:0 8px;font-size:12px;font-family:var(--font)}
+.dp-imgcr{width:130px;height:26px;border:.5px solid var(--line-strong);border-radius:7px;padding:0 8px;font-size:12px;font-family:var(--font)}
+.dp-toolgroup button:disabled{opacity:.45;cursor:not-allowed}
 /* 放大后要能滚（transform 不改变布局尺寸，靠 #dpZoomBox 撑出滚动区） */
 .dp-zoombox{position:relative}
 /* R16：备注（这一页的讲稿，导出后 WPS 备注栏能看到） */
@@ -4029,7 +4033,9 @@ body.theme-dark .avt{color:#fff}
                   zoom: 0, fit: 0.375, browse: false, grid: false, group: 'home', fonts: [],
                   notesTimer: null,
                   /* R17：放映（全屏层；page = 当前放映到第几页，0 起） */
-                  show: { on: false, page: 0 } };
+                  show: { on: false, page: 0 },
+                  /* R18 前置：联网取图（状态文案缓存，避免每次重画都打接口） */
+                  imgState: '', imgHint: '' };
   var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
                       ['two-col', '两栏'], ['media', '图文'], ['end', '结尾']];
   var CHARS_PER_BLOCK = 22;                     /* 与 slide_deck.CHARS_PER_BLOCK 对齐（只提示不截断） */
@@ -5153,11 +5159,12 @@ body.theme-dark .avt{color:#fff}
   var DOCP_GROUPS = [['home', '开始'], ['insert', '插入'], ['design', '设计'], ['show', '放映']];
   function docpToolTabsHtml(){
     return '<div class="dp-tooltabs">' + DOCP_GROUPS.map(function(g){
-      var soon = (g[0] === 'insert');          /* R17 起「放映」是真的了；插入类还在 R21–R22 */
+      /* R17 起「放映」是真的、R18 起「插入」里有联网取图 —— 四组都能点，
+         还没做的东西**写在组里**（如"文本框/形状在 R21"），不靠灰按钮糊弄。 */
       return '<button class="dp-tt' + (DOCP_SL.group === g[0] ? ' on' : '') + '" data-tool="' + g[0] + '"' +
-        (soon ? ' data-soon="1"' : '') + ' title="' + (soon ? '这一组在后面的轮次里加进来' :
-          (g[0] === 'design' ? '主题 / 模板 / 网格 / 缩放'
-            : (g[0] === 'show' ? '从头放映（F5）/ 从本页放映（Shift+F5）' : '选中后改字与样式'))) + '">' +
+        ' title="' + (g[0] === 'design' ? '主题 / 模板 / 网格 / 缩放'
+          : (g[0] === 'show' ? '从头放映（F5）/ 从本页放映（Shift+F5）'
+            : (g[0] === 'insert' ? '联网取图（同事的 agent 给 URL 也行）' : '选中后改字与样式'))) + '">' +
         escHtml(g[1]) + '</button>';
     }).join('') + '<span class="sp"></span>' +
       '<span class="dp-cnt">' + (DOCP_SL.fillPreview ? '模板填充页：改了先记着，点【应用修改】才重填'
@@ -5174,9 +5181,18 @@ body.theme-dark .avt{color:#fff}
         '<button id="dpZoomOut" title="缩小（Ctrl+滚轮）">缩小 −</button></div>';
     }
     if(g === 'insert'){
-      var what = '文本框 / 形状 / 图片';
       return '<div class="dp-toolgroup" data-group="insert">' +
-        '<span class="dp-cnt">' + what + '在 R21–R22 加进来 —— 这一组先占位，不放假按钮</span></div>';
+        '<span class="dp-cnt">联网取图（同事的 agent 给图片 URL 也行）：</span>' +
+        '<input id="dpImgUrl" class="dp-imgin" type="url" placeholder="https://… 图片地址" ' +
+          'aria-label="图片地址">' +
+        '<input id="dpImgCredit" class="dp-imgcr" type="text" placeholder="出处（可留空）" ' +
+          'aria-label="图片来源">' +
+        '<button id="dpImgGet">取图并挂到本页</button>' +
+        '<button id="dpImgDel" title="把本页的图卸下来（文件还留在 data/uploads/）">卸下图</button>' +
+        '<span class="sp"></span>' +
+        '<span class="dp-cnt" id="dpImgState">' + escHtml(DOCP_SL.imgState || '（正在读联网状态…）') + '</span>' +
+        '<div class="dp-cnt" style="flex-basis:100%">文本框 / 形状在 R21 加进来（形状目录直接用 ' +
+        'ppt-master 的预设形状，保证"预览=导出"）；图片的**本地上传**也在 R22 补</div></div>';
     }
     if(g === 'show'){
       return '<div class="dp-toolgroup" data-group="show">' +
@@ -5510,14 +5526,16 @@ body.theme-dark .avt{color:#fff}
   function docpToolWire(bd){
     Array.prototype.forEach.call(bd.querySelectorAll('.dp-tt'), function(t){
       t.addEventListener('click', function(){
-        if(t.dataset.soon){
-          showToast('这组在后面的轮次里加进来（' + t.textContent.trim() + '）', false);
-          return;
-        }
         DOCP_SL.group = t.dataset.tool;
         docpRenderSlides(bd);
       });
     });
+    /* R18 前置：联网取图（同事的 agent 给图片 URL，我们取回来挂到本页） */
+    var imgGet = bd.querySelector('#dpImgGet');
+    if(imgGet) imgGet.addEventListener('click', function(){ docpImageGet(bd); });
+    var imgDel = bd.querySelector('#dpImgDel');
+    if(imgDel) imgDel.addEventListener('click', function(){ docpImageDetach(bd); });
+    if(!DOCP_SL.imgState) docpImageStatus(bd);
     /* R17：放映入口（F5 / Shift+F5 与这里同一套函数） */
     var showAll = bd.querySelector('#dpShowAll');
     if(showAll) showAll.addEventListener('click', function(){ docpShowStart(false); });
@@ -5811,6 +5829,90 @@ body.theme-dark .avt{color:#fff}
     if(ev.key === 'End'){ ev.preventDefault(); docpShowJump('last'); return; }
     if(ev.key === 'F5'){ ev.preventDefault(); docpShowStart(!!ev.shiftKey); return; }
     /* 放映中吞掉其它键（含 Delete 与方向微调）—— 不 return 也不做事，等于忽略 */
+  }
+  /* ==== 联网取图（R18 前置 · 与同事的 agent 相连那条路）=================================
+     为什么先做这一件：同事的教案 agent 找到/生成好的配图，传过来就是**一个 URL**；
+     我们这边要能把它取回来、挂到某一页、预览与导出都带上。这条路**不需要任何图源 key**。
+     红线（与服务端一致）：只写 `data/uploads/`；只认公网 http/https（拒内网）；单张 ≤10MB。 */
+  function docpImageStatus(bd){
+    var el = function(){ return bd.querySelector('#dpImgState'); };
+    spJson('/api/slide/image/providers', 'GET', null).then(function(d){
+      if(!d) return;
+      DOCP_SL.imgState = d.enabled
+        ? ((d.usable && d.usable.length) ? ('联网图源可用：' + d.usable.join('、'))
+                                         : ('取图可用（给 URL 就行）· 搜图暂不可用：' +
+                                            ((d.providers || []).filter(function(p){ return !p.usable; })
+                                              .map(function(p){ return p.id; }).join('、'))))
+        : '「联网取图」是关的 —— 到 Skill 市场 → 素材 打开它';
+      var e = el();
+      if(e) e.textContent = DOCP_SL.imgState;
+      DOCP_SL.imgHint = d.hint || '';
+    }).catch(function(){
+      var e = el();
+      if(e) e.textContent = '读联网状态失败（服务在吗？）';
+    });
+  }
+  function docpImagePaint(bd){
+    var s = docpSlideAt(DOCP_PAGE) || {};
+    var pic = s.image || null;
+    var e = bd.querySelector('#dpImgState');
+    if(e){
+      e.textContent = pic
+        ? ('本页有图：' + (pic.src || '').split('/').pop() + (pic.credit ? ('（' + pic.credit + '）') : ''))
+        : (DOCP_SL.imgState || '');
+    }
+    var del = bd.querySelector('#dpImgDel');
+    if(del) del.disabled = !pic;
+  }
+  function docpImageGet(bd){
+    var url = ((bd.querySelector('#dpImgUrl') || {}).value || '').trim();
+    var credit = ((bd.querySelector('#dpImgCredit') || {}).value || '').trim();
+    if(!url){ showToast('先把图片地址贴进来（或让同事的 agent 传给你）', false); return; }
+    if(!/^https?:\/\//i.test(url)){ showToast('只认 http/https 的图片地址', false); return; }
+    var s = docpSlideAt(DOCP_PAGE) || {};
+    var wasMedia = (s.layout === 'media');
+    var oldLayout = s.layout;
+    if(!wasMedia){ s.layout = 'media'; }           /* 图只有"图文"版式有位置：先说清楚再换 */
+    var btn = bd.querySelector('#dpImgGet');
+    if(btn){ btn.disabled = true; btn.textContent = '正在取图…'; }
+    spJsonPermission('/api/slide/image/attach', 'POST', {
+      session_id: CUR || '', index: DOCP_PAGE, url: url, credit: credit,
+      slides: (DOCP && DOCP.slides) || [], title: (DOCP && DOCP.title) || '',
+    }).then(function(d){
+      if(btn){ btn.disabled = false; btn.textContent = '取图并挂到本页'; }
+      if(!d || !d.ok){
+        /* 取图失败：把版式还原成原来的（别给老师留一个空的"图文"页） */
+        if(wasMedia) s.layout = 'media';
+        else if(oldLayout) s.layout = oldLayout;
+        else delete s.layout;
+        DOCP_SL.sig = '';
+        docpRenderSlides(bd);
+        showToast('取图失败：' + ((d && d.error) || '未知错误') +
+                  ((d && d.hint) ? ('　' + d.hint) : ''), false);
+        return;
+      }
+      DOCP.slides = d.slides || DOCP.slides;
+      DOCP_SL.sig = '';
+      docpRenderSlides(bd);
+      docpImagePaint(bd);
+      showToast((wasMedia ? '图挂上了' : '图挂上了（这一页已切成图文版式）') +
+                (d.detail ? ('：' + d.detail) : ''));
+    }).catch(function(e){
+      if(btn){ btn.disabled = false; btn.textContent = '取图并挂到本页'; }
+      showToast('取图失败：' + (e && e.message ? e.message : e), false);
+    });
+  }
+  function docpImageDetach(bd){
+    spJson('/api/slide/image/attach', 'POST', {
+      session_id: CUR || '', index: DOCP_PAGE, action: 'detach',
+      slides: (DOCP && DOCP.slides) || [],
+    }).then(function(d){
+      if(!d || !d.ok){ showToast('卸图失败：' + ((d && d.error) || ''), false); return; }
+      DOCP.slides = d.slides || DOCP.slides;
+      DOCP_SL.sig = '';
+      docpRenderSlides(bd);
+      showToast('本页的图卸下来了（文件还在 data/uploads/，要删自己删）');
+    }).catch(function(){ showToast('卸图失败（网络？）', false); });
   }
   /* 只换页：更新舞台 + 页码，**不重建 DOM**（重建会让页面滚动位置跳走 —— 踩过） */
   function docpPaintPage(bd){

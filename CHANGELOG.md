@@ -83,6 +83,32 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 新增（联网取图 · 与同事 agent 相连的那条路，2026-09-27）
+
+> 老师：「**启用联网功能**，因为计划与 agent 相连」。这一轮把"**取图 → 落盘 → 挂到某一页 →
+> 预览与导出都带图**"整条打通（配图最自然的形态就是同事 agent 给的一个 URL），
+> 并把它写进契约与计划（`docs/26` §11.4 影响台账 / §12 联网能力 / `docs/24` §5 配图）。
+
+- **新 skill `web-image`（「联网取图」，默认开）** + `POST /api/slide/image/attach`
+  （`{url, index, credit, confirm:true}`；`action:"detach"` 卸图）：把公网图片 URL 取回
+  `data/uploads/<会话>/`，挂到第 `index` 页（页面自动切成「图文」版式），预览与导出都带上。
+- **渲染**：`media` 版式有图就放真图（`<image href="data:…">` 内联，`slice` 铺满不变形），
+  没图仍是原来的纯矢量示意 —— **没图时逐字节不变**（单测钉住）；出处画在图上（CC 图源的硬要求）。
+- **安全红线（代码里兜，不靠自觉）**：只写 `data/uploads/`（`content/plans` 一个字不写，单测断言）；
+  只认公网 http/https（`127.0.0.1`/`localhost`/`10.x`/`192.168.x`/`file:`/`ftp:` 一律拒 = SSRF 防护）；
+  类型白名单 png/jpg/webp/gif（按文件头兜底识别）+ 单张 ≤10MB；**预览/渲染链路仍然不联网**（只读文件）。
+- **状态如实报**：`GET /api/slide/image/providers` 把"免 key 的两家（openverse / wikimedia）
+  **本机实测连不上**、要 key 的两家（Pexels / Pixabay）**还没配 key**"分开说清楚，
+  并提示"让同事的 agent 直接给 URL"这条不需要 key 的路；面板「插入」组的状态行照这张表显示。
+- **实测证据**：真 URL → 15,444 字节落到 uploads（记 sha256）→ 预览 SVG 内联 `data:image/png;base64` →
+  导出 pptx 里真有 `ppt/media/image_22eb1e51c92f3c01.png`，六条硬验收全过。
+
+配套：单测 515 → **525**（新 `tests/test_slide_image.py` 10 例：内网/协议负样本、类型与体积上限、
+只写 uploads、data URI 越界拒读、图源状态如实、`media` 版式有图/无图、`clean_slides` 收口、接口闸门）；
+面板检查 196 → **205**（插入组的输入与按钮、状态行、非 http(s)/空地址当场拦下、
+内网地址被拒且版式还原、取图请求带地址/出处/页码、挂图前切图文版式、卸图走 detach）；
+审计 `--gate` error 0、`ppt_smoke` 49/49、`jscheck` 通过。
+
 ### 计划（v1.18.0 · 两份 skill 融进后续轮次，2026-09-27）
 
 > 老师追问「`ppt-master` 与 `guizang-ppt-skill` 这两个 skill 与我项目的 PPT 什么关系」，

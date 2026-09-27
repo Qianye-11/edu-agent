@@ -1094,6 +1094,25 @@ class SlideFillReq(BaseModel):
     confirm: bool = False           # 落盘类操作，先过权限闸门
 
 
+class SlideImageReq(BaseModel):
+    """联网取图（R18 前置）：把一个图片地址取回本地并挂到某一页。
+
+    `url` = 同事的 agent / 老师给的公网图片地址；`index` = 挂到第几页（0 起）；
+    `slot` = 这一页的哪个位置（现在只有 `media` 版式有图位，默认就是它）。
+    `action`：`attach`（取图并挂上）/ `detach`（卸下这一页的图）。
+    """
+
+    action: str = "attach"
+    session_id: str = ""
+    index: int = 0
+    url: str = ""
+    alt: str = ""
+    credit: str = ""
+    slides: list[dict] | None = None
+    title: str = ""
+    confirm: bool = False           # 取图要落盘（data/uploads/），先过权限闸门
+
+
 def _md_sig(md: str) -> str:
     """教案正文的指纹：用来判断"改幻灯片之后，正文有没有被重出过"。"""
     return hashlib.sha1((md or "").encode("utf-8")).hexdigest()[:12]
@@ -1326,6 +1345,86 @@ def api_slide_slot(body: SlideSlotReq):
     warnings = _deck.length_warnings(cleaned)
     return {"ok": True, "slot": res.get("slot"), "index": idx, "slides": cleaned,
             "pages": len(cleaned), "warnings": warnings, "session_id": sid}
+
+
+@app.get("/api/slide/image/providers")
+def api_slide_image_providers():
+    """联网取图的状态：先把"现在能不能搜图、缺什么"说清楚（不假装能搜）。"""
+    from edu_agent import capabilities as _caps
+    from edu_agent import slide_image as _si
+
+    enabled = _caps.is_enabled("skill", "web-image")
+    st = _si.provider_status()
+    st.update({"enabled": enabled, "uploads": str(_si.uploads_root())})
+    if not enabled:
+        st["hint"] = "「联网取图」这个 skill 现在是关的 —— 到「Skill 市场 → 素材」打开它"
+    return st
+
+
+@app.post("/api/slide/image/attach")
+def api_slide_image_attach(body: SlideImageReq):
+    """**联网取图**：把 `url` 取回 `data/uploads/` 并挂到第 `index` 页（预览与导出都带图）。
+
+    为什么要过权限闸门：这是**落盘 + 出网**的动作（老师要求"联网功能"要能看见边界）。
+    红线：只写 `data/uploads/`（`content/plans/` 一个字不写）；只认公网 http/https（拒内网）；
+    单张 ≤10MB；类型白名单。搜索类图源缺 key 时**如实报**，并提示"让同事的 agent 直接给 URL"。
+    """
+    from edu_agent import capabilities as _caps
+    from edu_agent import slide_image as _si
+
+    if not _caps.is_enabled("skill", "web-image"):
+        return JSONResponse({"ok": False, "gate": "skill", "skill": "web-image",
+                             "error": "「联网取图」这个 skill 是关的（到 Skill 市场打开它）"},
+                            status_code=200)
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    if not slides:
+        slides = [s for s in (_store.get_session_doc(sid).get("slides") or []) if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可挂图的幻灯片（先有教案内容）"}, status_code=400)
+    idx = int(body.index if isinstance(body.index, int) else -1)
+    if not (0 <= idx < len(slides)):
+        return JSONResponse({"ok": False, "error": f"页号越界：第 {idx + 1} 页（共 {len(slides)} 页）"},
+                            status_code=400)
+    if str(body.action or "attach").lower() == "detach":
+        slides[idx].pop("image", None)
+        cleaned = slide_deck.clean_slides(slides)
+        cur = dict(_store.get_session_doc(sid) or {})
+        cur["slides"] = cleaned
+        cur["slides_edited"] = True
+        _store.set_session_doc(sid, cur)
+        return {"ok": True, "action": "detach", "index": idx, "slides": cleaned, "session_id": sid}
+
+    # 先把"这个地址本身行不行"说清楚（协议/主机），再谈权限与下载 —— 顺序反了会让空地址也走成权限提示
+    check = _si.check_url(str(body.url or ""))
+    if not check.get("ok"):
+        return JSONResponse({"ok": False, "error": check.get("error")}, status_code=400)
+    if not body.confirm:
+        return JSONResponse({"ok": False, "gate": "permission", "action": "web_image_fetch",
+                             "need": "confirm",
+                             "hint": f"这一步会：联网把这张图取回来存到 data/uploads/ 并挂到第 {idx + 1} 页。"},
+                            status_code=200)
+    got = _si.fetch_url(str(body.url or ""), sid)
+    if not got.get("ok"):
+        return {"ok": False, "error": got.get("error") or "取图失败", "providers": _si.provider_status()}
+    pic = {"src": got["path"]}
+    if str(body.alt or "").strip():
+        pic["alt"] = str(body.alt).strip()[:80]
+    credit = str(body.credit or "").strip() or (("来源：" + str(body.url).split("/")[2]) if body.url else "")
+    if credit:
+        pic["credit"] = credit[:40]
+    slides[idx]["image"] = pic
+    cleaned = slide_deck.clean_slides(slides)
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    if str(body.title or "").strip():
+        cur["title"] = str(body.title).strip()
+    _store.set_session_doc(sid, cur)
+    return {"ok": True, "action": "attach", "index": idx, "image": pic, "slides": cleaned,
+            "bytes": got.get("bytes"), "sha256": got.get("sha256"), "file": got.get("file"),
+            "session_id": sid,
+            "detail": f"已把这张图挂到第 {idx + 1} 页（{got.get('bytes', 0) // 1024} KB，存在 data/uploads/）"}
 
 
 def _plan_blocks(md: str) -> list[dict]:

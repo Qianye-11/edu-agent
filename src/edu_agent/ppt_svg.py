@@ -229,6 +229,22 @@ def polyline(points: list[tuple[float, float]], color: str, w: float = 2) -> str
     return f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="{round(w, 2)}"/>'
 
 
+def image(x: float, y: float, w: float, h: float, href: str, *, fit: str = "cover") -> str:
+    """一张图（`href` 是 `data:` URI，由服务端读 `data/uploads/` 现算 —— 预览不写盘）。
+
+    · `preserveAspectRatio="xMidYMid slice"` = 铺满并居中裁切（WPS 里"填充"那种），
+      比留白更常见；图片比例与框不一致时不会变形；
+    · **只认 data: URI**：外链在导出（离线转换）与预览里都可能取不到，会静默破图（R7 踩过）；
+    · 用 SVG2 的 `href`（不用 `xlink:href`）：这样不必给根节点加 `xmlns:xlink`，
+      没图的那些页仍然逐字节不变（有单测钉住）。
+    """
+    if not href or not str(href).startswith("data:"):
+        return ""
+    par = "xMidYMid slice" if fit == "cover" else "xMidYMid meet"
+    return (f'<image x="{round(x, 2)}" y="{round(y, 2)}" width="{round(w, 2)}" '
+            f'height="{round(h, 2)}" preserveAspectRatio="{par}" href="{esc(href)}"/>')
+
+
 # ---------------------------------------------------------------- 文字换行
 
 def char_w(ch: str, size: float) -> float:
@@ -472,14 +488,26 @@ def _two_col(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str
 
 
 def _media(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str]) -> str:
-    """图文：左边图示（纯矢量），右边注释 + 要点。"""
+    """图文：左边图示（**有图就放老师的图**，没图就用纯矢量示意），右边注释 + 要点。"""
     head, y = title_block(cv, slots)
     out = [head]
     size = cv.size("body")
     box_w = cv.span_w(7)
     box_h = min(340.0, cv.footer_y - 40 - y)
     out.append(rect(cv.margin, y, box_w, box_h, fill=cv.color("soft"), stroke=cv.color("line"), sw=1, r=2))
-    out.append(_chart(cv, cv.margin + 36, y + 36, box_w - 72, box_h - 72))
+    pic = image(cv.margin, y, box_w, box_h, str(slots.get("image") or ""))
+    if pic:
+        out.append(pic)                       # 图直接铺满那个软色框（不外链、不变形）
+        credit = str(slots.get("image_credit") or "").strip()
+        if credit:                            # 出处：老师给的图也要署上（CC 图源的硬要求）
+            csize = max(10.0, cv.size("caption") * 0.8)
+            cw = min(box_w - 16, sum(char_w(ch, csize) for ch in credit[:40]) + 14)
+            cy = y + box_h - csize * 2.2
+            out.append(rect(cv.margin + 6, cy, cw, csize * 1.6, fill=cv.color("text"), r=2))
+            out.append(text(cv, cv.margin + 13, cy + csize * 1.15, credit[:40],
+                            size=csize, fill=cv.bg))
+    else:
+        out.append(_chart(cv, cv.margin + 36, y + 36, box_w - 72, box_h - 72))
     x = cv.margin + box_w + cv.gutter * 1.5
     max_w = cv.right - x
     yy = y + size * 0.9

@@ -24,6 +24,7 @@ from pathlib import Path
 
 from . import ppt_svg
 from . import ppt_tokens as tk
+from . import slide_image
 
 #: 版式 id（与 docs/22 §5 一致；显式 `layout` 只认这些，其余按位置推断）
 LAYOUTS = ppt_svg.LAYOUTS
@@ -244,6 +245,29 @@ def pick_layout(slide: dict, index: int, total: int) -> str:
     return "bullets"
 
 
+def _clean_image(raw) -> dict:
+    """收干净"这一页的配图"（R18）：只认 `data/uploads/` 下的**图片相对路径** + 说明与出处。
+
+    为什么这么严：`src` 是**渲染时要去读的文件**（读成 data URI 内联进 SVG）。
+    只认"`<会话>/<文件名>.<图片后缀>`"这一种形状 —— 绝对路径、`..`、非图片后缀一律丢；
+    真读不到图时 `slide_image.data_uri()` 还会再挡一次（越界路径返回空串）。
+    """
+    if not isinstance(raw, dict):
+        return {}
+    src = str(raw.get("src") or "").strip().replace("\\", "/")
+    parts = [p for p in src.split("/") if p not in ("", ".")]
+    if (not parts or len(parts) > 3 or any(p == ".." for p in parts)
+            or len(src) > 200 or Path(parts[-1]).suffix.lower() not in
+            (".png", ".jpg", ".jpeg", ".webp", ".gif")):
+        return {}
+    out = {"src": "/".join(parts)}
+    for k, n in (("alt", 80), ("credit", 40)):
+        v = _text(raw.get(k))[:n]
+        if v:
+            out[k] = v
+    return out
+
+
 def label_for(slide: dict, index: int) -> str:
     """内容页左上角的小标签：`环节 2 · 12 分钟`（时长来自教案里的"约 12 分钟"）。"""
     label = _text(slide.get("label"))
@@ -278,8 +302,13 @@ def to_slots(slide: dict, index: int, total: int, doc_title: str = "") -> tuple[
                       "right": {"heading": _text(right.get("heading")),
                                 "bullets": [_text(x) for x in (right.get("bullets") or []) if _text(x)]}})
     elif layout == "media":
+        pic = slide.get("image") if isinstance(slide.get("image"), dict) else {}
+        src = _text(pic.get("src"))
         slots.update({"title": name, "label": label_for(slide, index),
-                      "caption": _text(slide.get("caption")), "bullets": _items(slide)})
+                      "caption": _text(slide.get("caption")), "bullets": _items(slide),
+                      # 图：**只读** data/uploads 里的文件，现算成 data: URI（预览不落盘）
+                      "image": (slide_image.data_uri(src) if src else ""),
+                      "image_credit": _text(pic.get("credit"))[:40]})
     elif layout == "end":
         slots.update({"title": name or "小结", "label": label_for(slide, index),
                       "bullets": _items(slide), "closing": _text(slide.get("closing"))})
@@ -509,6 +538,9 @@ def clean_slides(slides: list[dict] | None) -> list[dict]:
         slots = _clean_overrides(raw.get("slots"))          # R14：老师拖过/改过的样子
         if slots:
             s["slots"] = slots
+        pic = _clean_image(raw.get("image"))                # R18：这一页的配图（联网取回来的）
+        if pic:
+            s["image"] = pic
         notes = _text(raw.get("notes"))[:2000]              # R16 预留：每一页的备注
         if notes:
             s["notes"] = notes

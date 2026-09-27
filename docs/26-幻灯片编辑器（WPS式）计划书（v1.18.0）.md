@@ -522,3 +522,70 @@ R13 剩余项与 R15 一起做（右栏与快捷键分组时顺路）。→ **�
 | 动画/切换（待定①） | "要注入动画 XML，大约多一轮" | **MIT 现成模块**（转场画廊 + 计时 + sidecar）⇒ 成本降为"接模块 + 与清动画内核共存" |
 | 表格/图表（待定②） | "要在 SVG 单源里新增版式族，约两轮" | 有 `semantic_table.py`（语义表）+ `chart_recall.py` ⇒ **先做表格**更现实 |
 | guizang 的用处 | 只提"数值与校验思路" | 明确它**继续只出两块**：自由层默认外观规则 + 间距/语义色阶梯；并写明**不引 HTML 运行时**的理由 |
+
+### 11.4 影响与依赖台账（2026-09-27 实测）
+
+| 维度 | ppt-master（MIT） | guizang-ppt-skill（AGPL-3.0） |
+|---|---|---|
+| 体积 | **210.6 MB**（`.deps/ppt-master`，不入库：`.gitignore` 的 `.deps/`） | 参考副本 **11.2 MB**（`data/tmp/refs/`，`data/` 不入库，可随时删） |
+| 仓库内的文件 | 0（第三方不入库） | **0**（`git ls-files` 搜 `guizang` 为空；只有 1 篇文档记出处与红线） |
+| 它自己的依赖 | **19+ 项**：PyYAML / python-pptx / XlsxWriter / skia-pathops / uharfbuzz / PyMuPDF / mammoth / markdownify / ebooklib / nbconvert / openpyxl / Pillow / numpy / requests / beautifulsoup4 / **curl_cffi** / **google-genai** / **edge-tts** / flask | 无（不跑它的代码） |
+| 我们实际用到的脚本 | **5 个**：`svg_to_pptx.py`、`svg_quality_checker.py`、`pptx_intake.py`、`beautify_inventory.py`、`pptx_to_svg.py`（+ 计划里要接的 `preset_shape_svg.py` / `image_treat.py` / `pptx_delivery_check.py` / `batch_validate.py`） | 0 |
+| 代码里的调用点 | **11 处**，集中在 `ppt_polish.py` / `slide_deck.py` / `slide_fill.py`（耦合面小、好回退） | 0 |
+| 许可影响 | MIT：可自由使用；**只外部调用、不改它的文件**（`require_skill_integrity()` 会拒跑） | AGPL：**不复制**其模板/脚本/HTML；只引数值与规则并标出处（`docs/22` §2A/§7.1b/§11） |
+| 坏掉的后果 | 未装/坏 → 导出**明确报** `gate:"install"` 或**自动回退旧版式**（结果条写明"已回退"），不静默出错 | 无影响（结构上没有依赖） |
+| 升级策略 | 钉 `481e057e`；升级要单独排一轮（导出 + 审计 + WPS 真机全跑） | 不适用 |
+| 对主线的侵入 | 零：检索 / 答疑 / 教案生成都不依赖它 | 零 |
+
+---
+
+## 12. 联网能力启用（老师 2026-09-27：「启用联网功能，因为计划与 agent 相连」）
+
+### 12.1 为什么先做"取图"这一条
+
+与同事的教案 agent 相连时，配图最自然的形态就是**一个 URL**（他们那边找好或生成好，把地址给我们）。
+所以这一轮把"**取图 → 落盘 → 挂到某一页 → 预览与导出都带图**"整条打通；这条路**不需要任何图源 key**，
+只需要"能出网"。
+
+### 12.2 已经做完的（真实调用链，非设计稿）
+
+| 环节 | 实现 | 实测证据 |
+|---|---|---|
+| skill 开关 | 新增 `web-image`（「联网取图」，**默认开**；关掉 = 整条链路不可用） | `/api/slide/image/providers` 返回 `enabled: true` |
+| 取图 | `POST /api/slide/image/attach {url, index, credit, confirm:true}` | 真 URL → **15,444 字节**落到 `data/uploads/<会话>/…`，记 sha256 |
+| 预览 | `to_slots` 把图读成 `data:` URI 内联（**只读**，预览仍不落盘） | 预览 SVG 里 `<image href="data:image/png;base64,…">` + 出处画在图上 |
+| 导出 | 同一份 SVG → ppt-master | 产物里真有 `ppt/media/image_22eb1e51c92f3c01.png`；导出六条硬验收全过 |
+| 卸图 | `POST /api/slide/image/attach {action:"detach"}` | 页面回到没有图（文件仍留在 uploads） |
+| 面板入口 | 「插入」组：地址 + 出处 + 「取图并挂到本页」/「卸下图」+ 状态行 | 面板检查 205/205（含"非 http(s)/空地址当场拦下""内网地址被拒且版式还原"） |
+
+**安全与红线**（都落在代码里，不靠自觉）：
+
+* **只写 `data/uploads/`**：`content/plans/` 一个字不写、模板库不碰（单测断言目录快照不变）；
+* **只认公网 http/https**：`127.0.0.1 / localhost / 10.x / 192.168.x / file: / ftp:` 一律拒（SSRF 防护，有负样本）；
+* **类型白名单 + 单张 ≤10 MB**（png/jpg/webp/gif；按文件头兜底识别）；
+* **预览/渲染链路仍然不联网**：渲染只读 uploads 里的文件（D13 只放开"取图"这一步）；
+* **出处随图显示**（CC 图源的硬要求），并写进 `slides[i].image.credit`；
+* **过权限闸门**：取图是落盘 + 出网动作，`confirm:true` 才执行。
+
+### 12.3 还没通的（如实报，不假装）
+
+| 能力 | 状态 | 缺什么 |
+|---|---|---|
+| 免 key 搜图（openverse / wikimedia） | **本机连不上**（实测：连接超时 / TLS 握手超时） | 网络可达性；换网络/代理再说 |
+| 要 key 搜图（Pexels / Pixabay） | 能连、**没 key** | `.env` 里填 `PEXELS_API_KEY` / `PIXABAY_API_KEY`（都免费，约 1 分钟申请） |
+| AI 生成配图（`image_gen.py`） | 未接 | 国内厂商 key 之一：`qwen`(通义万相) / `zhipu` / `volcengine` / `tencent` / `modelscope` —— 生成图**无版权风险、风格统一**，比搜图更适合课件 |
+
+> 面板上的状态行就是照这张表显示的：**能用的说能用，缺什么说缺什么**，并提示"让同事的 agent 直接给 URL"。
+
+### 12.4 给同事 agent 的用法（`docs/24` 同步）
+
+```jsonc
+// 1) 他们那边给内容 + 图地址
+{ "lesson": { "title": "3.3 幂函数", "slides": [ { "name": "图象与性质", "bullets": ["…"],
+              "layout": "media", "image_url": "https://…/figure.png", "image_credit": "来源：…" } ] },
+  "template_id": "…", "confirm": true }
+// 2) 我们这边：POST /api/slide/image/attach {url, index, credit, confirm:true}
+//    → 图落到 data/uploads/ → 挂到第 index 页（自动切「图文」版式）→ 再 POST /api/slide/deck 出稿
+```
+
+**待老师拍板的两件**：① 要不要现在配 Pexels/Pixabay key（搜图）；② 要不要接国内生成图 key（AI 配图）。

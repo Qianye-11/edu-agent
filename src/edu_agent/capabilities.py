@@ -168,6 +168,14 @@ SKILL_SPECS: tuple[SkillSpec, ...] = (
               desc="在右侧面板里读入已有 .pptx：体检（页数/字体/字号/密度）、统一字体与字号层级、清理动画，"
                    "并在导出后逐页校验内容没被改动",
               category="文档", builtin=True, default_on=False),
+    # 2026-09-27（老师：「启用联网功能，因为计划与 agent 相连」）：联网取图。
+    # 它做的是"把一个公网图片 URL 取回 data/uploads/ 并挂到某一页"——同事的教案 agent 给 URL，
+    # 我们取图/内联/导出带图；**不需要任何图源 key**。搜索类（openverse/pexels…）缺 key 时如实报。
+    # 默认开：老师明确要求启用；关掉它 = 图标/取图入口整体不可用（预览与导出不受影响）。
+    SkillSpec(id="web-image", name="联网取图", icon="N",
+              desc="允许把公网图片 URL 取回本地（data/uploads/）并挂到幻灯片某一页；"
+                   "同事的 agent 可以直接给图 URL。只认 http/https 公网地址，拒内网，单张 ≤10MB",
+              category="素材", builtin=True, default_on=True),
 )
 
 _KIND_SPECS: dict[str, dict[str, McpSpec | SkillSpec]] = {

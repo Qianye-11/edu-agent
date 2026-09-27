@@ -29,7 +29,7 @@ BASE = "http://127.0.0.1:5174/"
 #    死循环 → Edge 一直不结束（踩过：整个截图进程 5 分钟超时）
 SHOT_JS = """
 <script>(function(){
-  var task = %(task)s, busy = false, n = 0, pick = %(pick)s, show = %(show)s;
+  var task = %(task)s, busy = false, n = 0, pick = %(pick)s, show = %(show)s, group = %(group)s;
   function step(){
     if(busy) return; busy = true;
     try{
@@ -58,6 +58,12 @@ SHOT_JS = """
           if(b) b.click();
         }
       }
+      /* R18：切到指定工具分组再拍（如 --group=insert 看"联网取图"）。
+         同样必须判断目标态，否则 observer 会自激循环。 */
+      if(task === 'slides' && group){
+        var tab = document.querySelector('#wzDocPane .dp-tt[data-tool="' + group + '"]');
+        if(tab && !tab.classList.contains('on')) tab.click();
+      }
       /* R17：全屏放映层（走老师那条路：按 F5）。同样要判断目标态，否则循环。 */
       if(task === 'slides' && show && !document.getElementById('dpShow')){
         var pg = document.querySelector('#wzDocPane .dp-canvas svg');
@@ -80,6 +86,7 @@ def main() -> int:
     pick = next((a.split("=", 1)[1] for a in args if a.startswith("--pick=")), "block:0")
     size = next((a.split("=", 1)[1] for a in args if a.startswith("--size=")), "1600,1100")
     show = "--show" in args                      # 幻灯片页签：按 F5 进放映再拍（R17）
+    group = next((a.split("=", 1)[1] for a in args if a.startswith("--group=")), "")
     args = [a for a in args if not a.startswith("--")]
     tabs = [t for t in args if t in ("plan", "doc", "md", "slides")] or \
            ["plan", "doc", "md", "slides"]
@@ -108,12 +115,14 @@ def main() -> int:
         doc_html = html.replace("<head>", "<head>" + head, 1) if head else html
         page.write_text(doc_html[:doc_html.rfind("</body>")] +
                         (SHOT_JS % {"task": "'%s'" % tab, "pick": "'%s'" % pick,
-                                    "show": "true" if show else "false"}) +
+                                    "show": "true" if show else "false",
+                                    "group": "'%s'" % group}) +
                         doc_html[doc_html.rfind("</body>"):],
                         encoding="utf-8")
-        png = OUT / ("wz_%s%s%s%s.png" % (tab, "-sel" if (tab == "slides" and pick and not show) else "",
-                                          "-show" if (tab == "slides" and show) else "",
-                                          "" if size == "1600,1100" else "-tall"))
+        png = OUT / ("wz_%s%s%s%s%s.png" % (tab, "-sel" if (tab == "slides" and pick and not show) else "",
+                                           "-show" if (tab == "slides" and show) else "",
+                                           ("-" + group) if (tab == "slides" and group) else "",
+                                           "" if size == "1600,1100" else "-tall"))
         r = subprocess.run([EDGE, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
                             "--force-device-scale-factor=1", "--window-size=" + size,
                             "--virtual-time-budget=12000", "--screenshot=" + str(png),

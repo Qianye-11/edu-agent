@@ -88,6 +88,7 @@ function makeDom(opts) {
   const fills = [];
   const deletes = [];
   const slots = [];
+  const images = [];
   /* R14：桩要像真服务端那样把 `patch`（拖动/改大小/层级/删除）应用到盒子上 ——
      真服务端在 ppt_svg.Canvas.box 里套覆盖，预览才会跟着动；桩不套就成了"假链路"（测不出回归）。 */
   const slotPatch = {};
@@ -254,6 +255,35 @@ function makeDom(opts) {
           return new Response(JSON.stringify({ ok: true, moved_to: 'content/ppt_templates/_trash/学校模板-stub' }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (p === '/api/slide/image/providers') {
+          return new Response(JSON.stringify({
+            ok: true, enabled: !o.imgOff, usable: o.imgNoSource ? [] : ['pexels'],
+            providers: [
+              { id: 'openverse', name: 'Openverse', key_env: '', has_key: true, reachable: false, usable: false, note: '本机连不上' },
+              { id: 'pexels', name: 'Pexels', key_env: 'PEXELS_API_KEY', has_key: true, reachable: true, usable: true, note: '可用' },
+            ],
+            hint: o.imgNoSource ? '现在一个图源都用不了：…要么让同事的 agent 直接把图 URL 给你' : '可用的图源：pexels',
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (p === '/api/slide/image/attach') {
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          images.push(b);
+          /* 桩也照真服务端的规矩：本机/内网地址一律拒（SSRF 防护），好让失败路径也被测到 */
+          if (o.imgFail || /127\.0\.0\.1|localhost/.test(String(b.url || ''))) {
+            return new Response(JSON.stringify({ ok: false,
+              error: '这个地址不可用（本机/内网/解析不了）：127.0.0.1' }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
+          const out = (b.slides || DOC_STUB.slides).map((s, i) => (i === b.index
+            ? (b.action === 'detach' ? (() => { const c = { ...s }; delete c.image; return c; })()
+                                     : { ...s, layout: 'media', image: { src: 'stub/a.png', credit: b.credit || '来源：x' } })
+            : s));
+          return new Response(JSON.stringify({ ok: true, action: b.action || 'attach', index: b.index,
+            image: (out[b.index] || {}).image || null, slides: out, bytes: 12345, sha256: 'stub',
+            detail: '已把这张图挂到第 ' + (b.index + 1) + ' 页（12 KB，存在 data/uploads/）',
+            session_id: 'stub' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/slot') {
           let b = {};
           try { b = JSON.parse(op.body); } catch (e) {}
@@ -290,7 +320,7 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots, images };
 }
 
 async function openDocPanel(doc) {
@@ -359,7 +389,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
   {
-    const { w, doc, errors, saves, renderCalls, slots, exports } = makeDom({ withDoc: true });
+    const { w, doc, errors, saves, renderCalls, slots, exports, images } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -546,18 +576,71 @@ async function openDocPanel(doc) {
         Array.from(doc.querySelectorAll('#wzDocPane .dp-tt')).map((b) => txt(b)).join(',') ===
         '开始,插入,设计,放映',
         Array.from(doc.querySelectorAll('#wzDocPane .dp-tt')).map((b) => txt(b)).join('/'));
-      check('没做的组标了 data-soon（不放假按钮）',
-        !!doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"][data-soon]') &&
-        !doc.querySelector('#wzDocPane .dp-tt[data-tool="show"][data-soon]'),
-        '插入=' + !!doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"][data-soon]') +
-        ' 放映=' + !!doc.querySelector('#wzDocPane .dp-tt[data-tool="show"][data-soon]'));
-      doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click(); await sleep(200);
-      check('点「插入」不切换、只说明第几轮做',
-        doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').classList.contains('on'));
+      check('四组工具都能点（没做的写在组里，不放假按钮）',
+        !doc.querySelector('#wzDocPane .dp-tt[data-soon]'),
+        Array.from(doc.querySelectorAll('#wzDocPane .dp-tt')).map((b) => txt(b)).join('/'));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click(); await sleep(300);
+      check('点「插入」能切过去（里面有联网取图；文本框/形状写明 R21 再加）',
+        doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').classList.contains('on') &&
+        /R21/.test(txt(doc.querySelector('#wzDocPane .dp-toolgroup[data-group="insert"]'))),
+        txt(doc.querySelector('#wzDocPane .dp-toolgroup[data-group="insert"]')).slice(0, 50));
       doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);
       check('「设计」组里有网格/适应窗口/放大缩小',
         !!doc.getElementById('dpGrid2') && !!doc.getElementById('dpZoomFit2') &&
         !!doc.getElementById('dpZoomIn') && !!doc.getElementById('dpZoomOut'));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(400);
+
+      /* R18 前置：联网取图（同事的 agent 给 URL 那条路） */
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click(); await sleep(600);
+      check('「插入」组有联网取图的输入与按钮',
+        !!doc.getElementById('dpImgUrl') && !!doc.getElementById('dpImgCredit') &&
+        !!doc.getElementById('dpImgGet') && !!doc.getElementById('dpImgDel'),
+        ['dpImgUrl', 'dpImgCredit', 'dpImgGet', 'dpImgDel']
+          .filter((id) => !doc.getElementById(id)).join(',') || 'all');
+      check('联网状态行说清了图源情况（不假装能搜）',
+        /取图可用|联网图源可用|是关的/.test(txt(doc.getElementById('dpImgState'))),
+        txt(doc.getElementById('dpImgState')));
+      const nImg0 = images.length;
+      const toast = () => txt(doc.getElementById('edutoast'));
+      doc.getElementById('dpImgUrl').value = 'file:///C:/x.png';
+      doc.getElementById('dpImgGet').click(); await sleep(250);
+      check('非 http(s) 地址当场拦下（不发请求）',
+        images.length === nImg0 && /http\/https/.test(toast()), toast());
+      doc.getElementById('dpImgUrl').value = '';
+      doc.getElementById('dpImgGet').click(); await sleep(250);
+      check('空地址也当场拦下（不发请求）', images.length === nImg0, '请求数 ' + (images.length - nImg0));
+      /* 本机/内网地址：客户端管不了，由服务端拒（SSRF 防护）—— 失败要把版式还原，别留空图文页 */
+      doc.getElementById('dpImgUrl').value = 'http://127.0.0.1/x.png';
+      doc.getElementById('dpImgGet').click();
+      for (let i = 0; i < 12 && images.length <= nImg0; i++) await sleep(250);
+      await sleep(400);
+      check('本机/内网地址被拒，并且如实报错、版式还原',
+        images.length > nImg0 && /不可用|内网/.test(toast()) &&
+        txt(doc.getElementById('dpLayout')) !== '图文',
+        JSON.stringify(toast()) + ' · 版式=' + txt(doc.getElementById('dpLayout')));
+      doc.getElementById('dpImgUrl').value = 'https://example.com/figure.png';
+      doc.getElementById('dpImgCredit').value = '来源：同事的 agent';
+      doc.getElementById('dpImgGet').click();
+      for (let i = 0; i < 12 && images.length <= nImg0; i++) await sleep(250);
+      const got = images[images.length - 1] || {};
+      const pageNow = parseInt((txt(doc.querySelector('#wzDocPane #dpPgBar span')).match(/第\s*(\d+)/) || [])[1], 10) - 1;
+      check('取图请求带上了地址/出处/页码与整册数据',
+        got.url === 'https://example.com/figure.png' && got.credit === '来源：同事的 agent' &&
+        got.index === pageNow && Array.isArray(got.slides),
+        JSON.stringify({ url: got.url, credit: got.credit, index: got.index, pageNow,
+                         pages: (got.slides || []).length }));
+      check('挂图前先把这一页切成图文版式（图才有位置）',
+        !!got.slides && (got.slides[got.index] || {}).layout === 'media',
+        JSON.stringify(((got.slides || [])[got.index] || {}).layout));
+      await sleep(400);
+      check('状态行显示本页有图与出处',
+        /本页有图/.test(txt(doc.getElementById('dpImgState'))), txt(doc.getElementById('dpImgState')));
+      const nImg1 = images.length;
+      doc.getElementById('dpImgDel').click();
+      for (let i = 0; i < 12 && images.length <= nImg1; i++) await sleep(250);
+      check('「卸下图」发的是 detach',
+        (images[images.length - 1] || {}).action === 'detach',
+        JSON.stringify(images[images.length - 1] || {}));
       doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(400);
 
       /* 右栏：选中才出现，随选中切换 */

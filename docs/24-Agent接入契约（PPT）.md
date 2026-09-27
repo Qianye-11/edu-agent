@@ -117,8 +117,40 @@
 
 ---
 
-## 5. 响应与错误码
+## 5. 配图：给我一个图片 URL 就行（2026-09-27 新增）
 
+配图不用你下载、也不用你管文件放哪 —— **把公网图片地址给我们**，我们取回来挂到那一页，
+之后出 pptx 时图会内联进去（WPS 里能看到真图）。
+
+**玩法一（推荐，随内容一起给）**：`POST /api/slide/deck` 的 `lesson.slides[]` 里加两个键：
+
+| 键 | 含义 |
+|---|---|
+| `image_url` | 公网图片地址（`http` / `https`） |
+| `image_credit` | 出处（≤40 字，会画在图上；CC 图源建议必给） |
+
+**玩法二（逐页细调）**：`POST /api/slide/image/attach`
+
+```jsonc
+{ "session_id": "…", "index": 2, "url": "https://…/figure.png",
+  "credit": "来源：Wikimedia", "confirm": true }
+// → { ok, image:{src,credit}, slides:[…], detail:"已把这张图挂到第 3 页（12 KB，存在 data/uploads/）" }
+// 卸下来：{"index": 2, "action": "detach"}
+```
+
+**规矩（我们这边兜着，但你也要知道）**：
+
+* 只认 **公网 http/https**：`127.0.0.1` / `localhost` / `10.x` / `192.168.x` / `file:` / `ftp:` **一律拒**（SSRF 防护）；
+* 单张 **≤ 10 MB**，类型 **png/jpg/webp/gif**（按文件头兜底识别）；
+* 图落 `data/uploads/<会话>/`（**不写 `content/plans/`**、不进模板库）；
+* 目标页会自动切成「图文」版式（`media`）—— 只有那种版式有图位；
+* 取图要 `confirm: true`（落盘 + 出网动作，过权限闸门）；能力开关是 skill **`web-image`**（默认开）。
+
+> 如果你那边有更合适的图源（自己的图床、生成的图），直接给 URL 即可 —— 我们**不要求**你必须用某个图库。
+
+---
+
+## 6. 响应与错误码
 成功：`{ok: true, schema, filename, outDir, file, pages, checks[], adjustments[], download_url}`
 
 | 情况 | HTTP | body |
@@ -134,7 +166,7 @@
 
 ---
 
-## 6. 变更记录
+## 7. 变更记录
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
@@ -144,10 +176,11 @@
 | — | 2026-09-27 | 新增编辑器用的读端：`POST /api/slide/render` 的 `annotate: true` → 响应多一个 `boxes`（每页 `[{slot,kind,x,y,w,h,size,align}]`，1280×720 设计像素）。**导出路径不传它**，所以导出的 SVG 不变 |
 | — | 2026-09-27 | R14：`POST /api/slide/slot` 新增可选 `patch`（`{dx,dy,dw,dh,size,color,align,lh,z,hidden}`，落进 `slides[i].slots[槽位]`）；`text` 变成可选（**不给 = 只改样子、不改字**；给 `""` = 清空那一格）。`boxes[]` 在老师调过层级时多一个 `z` |
 | — | 2026-09-27 | R15：`mapping[].fills[]` 追加样式键 `size/font/color/align/lh/bold/italic`；`POST /api/slide/render` 的响应追加 `fonts`（右栏字体清单，主题栈在前）与 `canvas` 的 `cols/gutter/content_w`（网格与吸附用）。**`0`/`""` 的语义**：`dx:0` = 回版式原位、`size:0` = 取消字号覆盖、`font:""` = 跟随主题（服务端从合并结果里去掉这些键）。代码审计新增两条 **warn**（不阻断）：`font-scale-off`（字号不在设计阶梯）、`font-family-off`（非主题字体） |
+| — | 2026-09-27 | **R18 前置（联网）**：新增 §5「配图：给我一个图片 URL 就行」；`POST /api/slide/image/attach`（`url`/`index`/`credit`/`action:"detach"`，需 `confirm:true`）；`lesson.slides[]` 支持 `image_url`/`image_credit`。skill `web-image`（默认开）。规矩：只认公网 http/https（拒内网）、≤10MB、png/jpg/webp/gif、落 `data/uploads/`。`GET /api/slide/image/providers` 报图源可用性（免 key 的两家本机连不上、Pexels/Pixabay 缺 key，都如实说） |
 
 ---
 
-## 7. 最小示例（Python）
+## 8. 最小示例（Python）
 
 ```python
 import httpx
