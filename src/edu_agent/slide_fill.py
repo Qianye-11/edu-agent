@@ -64,6 +64,9 @@ def _fit_text(text: str, cap: int) -> tuple[str, bool]:
     1. 去掉成对括号里的补充说明（（…）/(…)）；
     2. 按「，、；」切分，从**末尾**逐段去掉，直到放得下；
     3. 仍放不下才硬截到容量上限（并交给调用方记进 adjustments，属于最后手段）。
+
+    注意：现在容量是按"允许缩到的最小字号"算的，所以走到第 3 步很少见；
+    **砍掉一半以上就算"太过于精简"**，调用方应当改成换一页放（`LOSS_LIMIT`）。
     """
     s = str(text or "").strip()
     if cap <= 0 or len(s) <= cap:
@@ -90,32 +93,108 @@ def _fit_text(text: str, cap: int) -> tuple[str, bool]:
     return trimmed[:cap], True
 
 
-def _paginate(items: list[str], n_slots: int, caps: list[int], out: dict) -> list[list[str]]:
-    """把条目按容量分页：每页最多 `n_slots` 条，每条不超过对应槽的容量。
+#: 压缩后剩下的字数低于原文这个比例 → 认为"太过于精简"，宁可换一页放（老师说不要容量不足）
+LOSS_LIMIT = 0.6
 
-    **不允许"容量不足"**：一条放不下就先把它的压缩到放得下（记 `trim`），页满了就另起一页（记 `new-page`）。
-    返回"每页的条目列表"（长度 ≥ 1）；`out["adjustments"]` 里记每一步，便于复核。
+
+def _too_lossy(text: str, fitted: str) -> bool:
+    return bool(text) and len(fitted) < len(text) * LOSS_LIMIT
+
+
+def _paginate(items: list[str], n_slots: int, caps: list[int], out: dict) -> list[list[str]]:
+    """（旧口径，保留给外部调用）把条目按容量分页：每页最多 `n_slots` 条，每条不超过对应槽的容量。"""
+    cap_pages = [list(caps) for _ in range(max(1, n_slots // max(1, len(caps)) + 1))] if caps else [[]]
+    return _paginate_pages(items, cap_pages or [[]], out)
+
+
+def _paginate_pages(items: list[str], cap_pages: list[list[int]], out: dict) -> list[list[str]]:
+    """把条目分页到**指定的若干页**上：第 i 页用 `cap_pages[i]` 的槽容量，用完了循环用最后一份。
+
+    为什么要按"每页自己的槽"分（踩过）：老实现拿**模板第一张内容页**（常常是目录页，3 个 20 字的框）
+    的容量去分**所有**页 —— 于是讲义里 40 字的一条被压成 3 个字，页数从 10 页涨到 19 页，
+    老师看到的就是"正文没填进去 + 一堆空白页"。
     """
     pages: list[list[str]] = [[]]
-    slot_idx = 0
+    if not cap_pages or not any(cap_pages[0]):
+        return [list(items)] if items else [[]]
+    cur = [c for c in cap_pages[0] if c > 0]
+    slot = 0
     for raw in items:
         text = str(raw or "").strip()
         if not text:
             continue
-        if slot_idx >= n_slots:                      # 本页槽用尽 → 另起一页
+        if slot >= len(cur):                          # 本页槽用尽 → 另起一页
             pages.append([])
-            slot_idx = 0
+            slot = 0
+            nxt = len(pages) - 1
+            cur = [c for c in (cap_pages[nxt] if nxt < len(cap_pages) else cap_pages[-1]) if c > 0]
             out.setdefault("adjustments", []).append(
                 {"action": "new-page", "why": "本页正文槽已用尽", "text": text[:20]})
-        cap = caps[slot_idx] if slot_idx < len(caps) else 0
+        cap = max(cur) if cur else 0                  # 落位由 _page_fill 按"最合适的框"决定，这里只判放不放得下
         fitted, changed = _fit_text(text, cap)
+        if changed and _too_lossy(text, fitted):      # 砍一半以上 → 宁可换一页放整条
+            pages.append([])
+            slot = 0
+            nxt = len(pages) - 1
+            cur = [c for c in (cap_pages[nxt] if nxt < len(cap_pages) else cap_pages[-1]) if c > 0]
+            out.setdefault("adjustments", []).append(
+                {"action": "new-page", "why": "这一条本页放不下（不砍字数）", "text": text[:20]})
+            cap = max(cur) if cur else 0
+            fitted, changed = _fit_text(text, cap)
+            if changed and _too_lossy(text, fitted):  # 换页也放不下（模板的框就这么大）→ 只能中度压缩
+                out.setdefault("adjustments", []).append(
+                    {"action": "too-long", "cap": cap, "before": len(text), "after": len(fitted),
+                     "text": text[:24]})
         if changed:
             out.setdefault("adjustments", []).append(
                 {"action": "trim", "cap": cap, "before": len(text), "after": len(fitted),
                  "text": fitted[:24]})
         pages[-1].append(fitted)
-        slot_idx += 1
+        slot += 1
     return [p for p in pages if p] or [[]]
+
+
+def _title_sample(page: dict) -> str:
+    for s in page.get("slots") or []:
+        if (s.get("role") or "") == "title":
+            return str(s.get("sample") or "")
+    return ""
+
+
+def _looks_like_cover(page: dict) -> bool:
+    """设计稿模板的版式名往往是空的（`layout=""`），靠名字认不出封面 —— 用结构认。
+
+    封面的样子：标题框是**空的**（设计师留白，等老师写），而且几乎没有正文框。
+    """
+    if len(_body_caps(page)) > 1:
+        return False
+    head = _title_sample(page).strip()
+    big = [s for s in (page.get("slots") or []) if (s.get("role") or "") == "title"]
+    return not head or any(int(s.get("capacity") or 0) >= 60 for s in big)
+
+
+def _looks_like_end(page: dict) -> bool:
+    """结尾页：标题/正文里带"谢谢、感谢、再见"这类话（设计稿模板只能这么认）。"""
+    text = " ".join([_title_sample(page)] + [str(s.get("sample") or "")
+                                             for s in (page.get("slots") or [])])
+    return _is_role(text, ("谢谢", "感谢", "再见", "thank", "the end"))
+
+
+def _body_caps(page: dict) -> list[int]:
+    """一页模板的正文槽容量（按阅读顺序）。"""
+    return [int(s.get("capacity") or 0) for s in (page.get("slots") or [])
+            if (s.get("role") or "") == "body" and int(s.get("capacity") or 0) > 0]
+
+
+def _best_donor(content_pages: list[dict]) -> dict | None:
+    """挑"最能装字"的内容页当续页母版（装不下的条要复制它）。
+
+    为什么不固定用第一张（踩过）：模板第一张内容页常常是目录页（3 个 20 字的框），
+    拿它当母版 → 续页只能装 3 条短句，页数暴涨。
+    """
+    if not content_pages:
+        return None
+    return max(content_pages, key=lambda p: sum(_body_caps(p)))
 
 
 def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
@@ -132,6 +211,10 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
 
     cover_pages = [p for p in pages if _is_role(p.get("layout", ""), _COVER_HINTS)]
     end_pages = [p for p in pages if _is_role(p.get("layout", ""), _END_HINTS)]
+    if not cover_pages and pages and _looks_like_cover(pages[0]):      # 版式名是空的 → 按结构认
+        cover_pages = [pages[0]]
+    if not end_pages:
+        end_pages = [p for p in pages if p not in cover_pages and _looks_like_end(p)][:1]
     content_pages = [p for p in pages
                      if p not in cover_pages and p not in end_pages]
 
@@ -155,13 +238,13 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
             else:
                 out["warnings"].append("模板一页都没有，无法填充")
 
-    # 2) 内容页：逐页顺序对应；一条放不下就压缩、一页装满就另起一页（复制模板的内容页）
-    donor = content_pages[0] if content_pages else (cover_pages[0] if cover_pages else pages[0])
-    body_caps = [int(s.get("capacity") or 0) for s in (donor.get("slots") or [])
-                 if (s.get("role") or "") == "body"]
+    # 2) 内容页：逐页顺序对应；**按这一页自己的正文槽容量**分页，放不下才另起一页（复制模板的内容页）
+    donor = _best_donor(content_pages) or (cover_pages[0] if cover_pages else pages[0])
+    donor_caps = _body_caps(donor)
     for k, (idx, s) in enumerate(body_slides):
         items = [b["text"] for b in (slide_deck._blocks(s) or [])] or slide_deck._bullets(s)  # noqa: SLF001
-        groups = _paginate(items, max(1, len(body_caps)), body_caps, out)
+        target = content_pages[k] if k < len(content_pages) else donor
+        groups = _paginate_pages(items, [_body_caps(target), donor_caps], out)
         for gi, group in enumerate(groups):
             if k < len(content_pages) and gi == 0:
                 tpl_page, copied = content_pages[k], False
@@ -189,6 +272,47 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
         out["warnings"].append(f"会话比模板多 → 复制了模板自己的内容页 {out['policy']['copied']} 张"
                                f"（母版/版式继承不变）")
     return out
+
+
+def _slot_rank(slot: dict) -> tuple[float, float, float]:
+    """排框的优先级：**面积大的先**，并列时靠上、靠左的先（阅读顺序）。"""
+    geo = slot.get("geo") or {}
+    area = float(geo.get("w") or 0) * float(geo.get("h") or 0)
+    return (-area, float(geo.get("y") or 0), float(geo.get("x") or 0))
+
+
+def _assign_body(body_slots: list[dict], texts: list[str], out: dict,
+                 tpl_page: dict) -> list[tuple[dict, str]]:
+    """把每条正文放进**最合适的框**：装得下它的框里挑**最大**的那个（并列取靠上靠左）；没一个装得下就用容量最大的。
+
+    为什么不是"一条一个框按顺序"（踩过）：卡片式模板一页有 4 组「小标题框 + 正文框」
+    （小标题框容量 15、正文框容量 144），按顺序填会把整段正文塞进小标题框，
+    再被压成十几个字 —— 老师看到的就是"乱填"+"正文没填进去"。
+    为什么不是"挑刚好装得下的最小框"（也踩过）：游戏页上有个 121×130 的小框压在「圆」图形底下，
+    按"最小且装得下"选就会把整段话塞到图形上，糊成一团。
+    空着的正文框**清空**（模板示例文字属于内容，留着就和我们的混在一起了）。
+    """
+    pairs: list[tuple[dict, str]] = []
+    free = list(body_slots)
+    for text in texts:
+        fit = [s for s in free if int(s.get("capacity") or 0) >= len(text)]
+        pool = fit or free
+        if not pool:
+            break
+        slot = min(pool, key=lambda s: _slot_rank(s)) if fit else \
+            max(pool, key=lambda s: int(s.get("capacity") or 0))
+        free.remove(slot)
+        pairs.append((slot, text))
+    left = len(texts) - len(pairs)
+    if left > 0:
+        if body_slots:
+            out["warnings"].append(f"第 {tpl_page.get('index', 0) + 1} 页模板只有 {len(body_slots)} 个正文框，"
+                                   f"{left} 条没排下（已尽量换页，请确认）")
+        else:
+            out["warnings"].append(f"第 {tpl_page.get('index', 0) + 1} 页模板没有可用正文框 → {len(texts)} 条没填进去"
+                                   f"（内容没删，请手动确认）")
+    pairs.extend((slot, "") for slot in free)          # 没填的框清空模板示例文字
+    return pairs
 
 
 def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -> dict:
@@ -221,36 +345,31 @@ def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -
                 text = fitted
         fills.append({"role": role, "capacity": cap, "text": text, "clear": bool(clear),
                       "shape_index": slot.get("shape_index"),
+                      "size_px": slot.get("size_px") or 0,
+                      "design_capacity": int(slot.get("design_capacity") or 0),
                       "sample": slot.get("sample") or "", "geo": slot.get("geo") or {}})
 
-    # ① 标题：第一个标题槽；副标题/元信息并进标题（模板没有更多槽时，别硬造）
+    # ① 标题：第一个标题槽；副标题/元信息**并进正文槽**（模板没有更多槽时，别硬造、也别丢字）
     title_text = title or sub or meta
     if title_slots:
         emit(title_slots[0], title_text)
         for extra in title_slots[1:]:
             emit(extra, "", clear=True)
+        for extra_text in ([sub] if sub and title else []) + ([meta] if meta and title else []):
+            if body_slots:
+                body_texts.append(extra_text)
+            else:
+                out["warnings"].append(f"第 {tpl_page.get('index', 0) + 1} 页模板没有多余文本框，"
+                                       f"副标题「{extra_text[:16]}」没地方放（没丢，只是没显示）")
     elif body_slots:                       # 没有标题槽：正文第一条当标题（并把它从正文里去掉）
         first = body_texts.pop(0) if body_texts else (title or sub or meta)
         emit(body_slots[0], first)
         body_slots = body_slots[1:]
 
-    # ② 正文：每个正文槽装一条（按阅读顺序）；多出来的条目并进最后一个槽，槽不够就提示
-    for k, slot in enumerate(body_slots):
-        if k < len(body_texts):
-            emit(slot, body_texts[k])
-        else:
-            emit(slot, "", clear=True)     # 模板示例文字属于"内容"，没填就清掉，别和我们的混在一起
-    if len(body_texts) > len(body_slots):
-        rest = body_texts[len(body_slots):]
-        if body_slots:
-            last = fills[-1] if fills else None
-            if last is not None and last.get("role") == "body":
-                last["text"] = "\n".join([last["text"]] + rest) if last["text"] else "\n".join(rest)
-                out["warnings"].append(f"第 {tpl_page.get('index', 0) + 1} 页模板只有 {len(body_slots)} 个正文框，"
-                                       f"多出的 {len(rest)} 条并进了最后一个框（建议拆页）")
-        else:
-            out["warnings"].append(f"第 {tpl_page.get('index', 0) + 1} 页模板没有可用正文框 → {len(body_texts)} 条没填进去"
-                                   f"（内容没删，请手动确认）")
+    # ② 正文：每条挑"装得下它、又最小"的那个框（best-fit），**按阅读顺序**用框
+    rest = _assign_body(body_slots, body_texts, out, tpl_page)
+    for slot, value in rest:
+        emit(slot, value, clear=(value == ""))
 
     if minutes:
         out.setdefault("notes", []).append(f"第 {tpl_page.get('index', 0) + 1} 页时长 {minutes} 分钟"
@@ -299,15 +418,35 @@ def preview_pages(pptx: Path, job: Path, *, limit: int = 12) -> list[str]:
 
         def _inline(m: "_re.Match[str]") -> str:
             rel = m.group(2)
-            img = (f.parent / rel).resolve()
-            try:
-                if not img.is_file() or img.stat().st_size > 2_000_000:
-                    return m.group(0)
-                mime = mimetypes.guess_type(img.name)[0] or "image/png"
-                b64 = base64.b64encode(img.read_bytes()).decode("ascii")
-                return f'{m.group(1)}="data:{mime};base64,{b64}"'
-            except OSError:
-                return m.group(0)
+            # 图片在 <out>/images/ 下（不是 svg/ 或 svg-flat/ 旁边）——踩过：算错相对目录 → 一个都没内联 → 预览没背景
+            cands = [(f.parent / rel).resolve(), (out_dir / rel).resolve(),
+                     (out_dir / Path(rel).name).resolve(), (out_dir / "images" / Path(rel).name).resolve()]
+            for img in cands:
+                try:
+                    if not img.is_file():
+                        continue
+                    raw = img.read_bytes()
+                    mime = mimetypes.guess_type(img.name)[0] or "image/png"
+                    if len(raw) > 400_000:          # 老师的设计稿底图常有 10MB+ → **为预览压小**再内联
+                        try:
+                            import io as _io
+
+                            from PIL import Image
+
+                            im = Image.open(_io.BytesIO(raw)).convert("RGB")
+                            if im.width > 1280:
+                                im = im.resize((1280, round(im.height * 1280 / im.width)))
+                            buf = _io.BytesIO()
+                            im.save(buf, format="JPEG", quality=80, optimize=True)
+                            raw, mime = buf.getvalue(), "image/jpeg"
+                        except Exception:  # noqa: BLE001 压不了就用原图（真拿不到就跳过）
+                            if len(raw) > 8_000_000:
+                                continue
+                    b64 = base64.b64encode(raw).decode("ascii")
+                    return f'{m.group(1)}="data:{mime};base64,{b64}"'
+                except OSError:
+                    continue
+            return m.group(0)
 
         svg = _re.sub(r'(xlink:href|href)="((?!data:|https?:|#)[^"]+)"', _inline, svg)
         pages.append(svg)
@@ -389,34 +528,31 @@ def _apply(prs, the_plan: dict, want: list[str]) -> None:
     slides = list(prs.slides)
     n0 = len(sld_id_lst)
 
-    # 1) 先写"用模板现有页"的那些（按 template_index 落位）
-    for page in fills:
-        if page.get("copied"):
-            continue
-        ti = page.get("template_index")
-        if ti is None or ti >= len(slides):
-            continue
-        _fill_slide(slides[ti], page, want)
-
-    # 2) 再补"会话比模板多"的页：从模板自己的内容页（donor）复制，只复制文本类形状
+    # 1) **先克隆续页**（母版必须是"还没被填过"的那张，踩过：先填原页再克隆 → 克隆页带着上一页的文字）
     copied_pages = [p for p in fills if p.get("copied")]
     donor_idx = next((p.get("template_index") for p in copied_pages), None)
     donor = slides[donor_idx] if donor_idx is not None and donor_idx < len(slides) else \
         (slides[-1] if slides else None)
     copy_elem: dict[int, object] = {}
+    clone_of: dict[int, object] = {}         # id(计划页) → 克隆出来的那张（不能塞进计划里：计划要能 JSON 化）
     for k, page in enumerate(copied_pages):
         if donor is None:
             break
-        new = prs.slides.add_slide(donor.slide_layout)
-        for shp in list(new.shapes):                                    # 清掉版式带来的空占位符
-            shp._element.getparent().remove(shp._element)               # noqa: SLF001
-        for shp in donor.shapes:
-            if getattr(shp, "has_text_frame", False):
-                new.shapes._spTree.append(_copy.deepcopy(shp._element))  # noqa: SLF001
-        _fill_slide(new, page, want)
+        new = _clone_slide(prs, donor)
         idx = n0 + k
         if idx < len(sld_id_lst):
             copy_elem[id(page)] = sld_id_lst[idx]
+        clone_of[id(page)] = new
+
+    # 2) 再写文字：用模板现有页的按 template_index 落位，克隆页写进各自的克隆件
+    for page in fills:
+        target = clone_of.get(id(page))
+        if target is None:
+            ti = page.get("template_index")
+            if ti is None or ti >= len(slides):
+                continue
+            target = slides[ti]
+        _fill_slide(target, page, want)
 
     # 3) 最终顺序 = 计划顺序（复制页用刚建的那张），其余模板页删掉
     order = []
@@ -446,6 +582,64 @@ def _apply(prs, the_plan: dict, want: list[str]) -> None:
                 pass
 
 
+def _clone_slide(prs, donor):
+    """**整页克隆**一张幻灯片：底图、图片、装饰形状、页面背景全部照抄，只有文字后面会被换掉。
+
+    为什么必须整页克隆（踩过，老师报的"填充后有空白页、模板背景都没有"）：
+    老实现只深拷贝 `has_text_frame` 的形状 → 续页只剩 3 个文本框、0 张图，
+    底图/版式装饰全丢，成品里那些页看着就是白页。
+    图片是**复用同一份 image part**（`relate_to` 指向原 part），所以 40MB 的设计稿不会翻倍。
+    """
+    import copy as _copy
+
+    from pptx.oxml.ns import qn
+
+    new = prs.slides.add_slide(donor.slide_layout)
+    for shp in list(new.shapes):                       # 清掉 add_slide 从版式带来的空占位符
+        shp._element.getparent().remove(shp._element)
+    spTree = new.shapes._spTree
+    for child in donor.shapes._spTree:                 # 形状树整棵抄（含 <p:pic>、组合、连接线）
+        if child.tag in (qn("p:nvGrpSpPr"), qn("p:grpSpPr")):
+            continue
+        spTree.append(_copy.deepcopy(child))
+    bg = donor._element.cSld.find(qn("p:bg"))          # 页面背景（有的设计稿放在这里）
+    if bg is not None:
+        cSld = new._element.cSld
+        old = cSld.find(qn("p:bg"))
+        if old is not None:
+            cSld.remove(old)
+        cSld.insert(list(cSld).index(spTree), _copy.deepcopy(bg))
+    _remap_rels(donor, new)                            # 图片/媒体的关系 ID 要重新指一遍
+    return new
+
+
+def _remap_rels(donor, new) -> None:
+    """把克隆页里指向母版的 `r:embed`/`r:link`/`r:id` 改写成新页自己的关系 ID。"""
+    from pptx.oxml.ns import qn
+
+    rels = dict(donor.part.rels)
+    rid_map: dict[str, str] = {}
+    for el in new._element.iter():
+        for name, val in list(el.attrib.items()):
+            if not name.startswith("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"):
+                continue
+            rel = rels.get(val)
+            if rel is None:
+                continue
+            if val in rid_map:
+                el.set(name, rid_map[val])
+                continue
+            try:
+                if rel.is_external:
+                    new_rid = new.part.relate_to(rel.target_ref, rel.reltype, is_external=True)
+                else:
+                    new_rid = new.part.relate_to(rel.target_part, rel.reltype)
+            except (KeyError, ValueError, AttributeError):
+                continue
+            rid_map[val] = new_rid
+            el.set(name, new_rid)
+
+
 def _fill_slide(slide, page: dict, want: list[str]) -> None:
     """把一页的填充内容写进这张幻灯片：**按 `shape_index` 精确落位**（槽位分类时记下的位置）。
 
@@ -453,35 +647,37 @@ def _fill_slide(slide, page: dict, want: list[str]) -> None:
     按 index 落位能保证"计划里说要填那个框"和"实际填的就是那个框"，也避免二次猜测带来的漂移。
     `sample` 用来核对没拿错框（模板被改过时退化为按角色找）。
     """
-    text_shapes = [s for s in slide.shapes if getattr(s, "has_text_frame", False)]
+    shapes = list(slide.shapes)
+    used: set[int] = set()                  # 本页已经写过的形状下标（退路不许抢刚写过的框）
     for fill in page["fills"]:
         idx = fill.get("shape_index")
         shape = None
-        if isinstance(idx, int) and 0 <= idx < len(list(slide.shapes)):
-            cand = list(slide.shapes)[idx]
+        if isinstance(idx, int) and 0 <= idx < len(shapes):
+            cand = shapes[idx]
             if getattr(cand, "has_text_frame", False):
                 sample = (cand.text_frame.text or "").strip()[:40]
                 if not fill.get("sample") or sample == fill["sample"] or not sample:
-                    shape = cand
-        if shape is None:                       # 退路：按角色找第一个没用过的
-            used = getattr(_fill_slide, "_used", None)
-            if used is None or used[0] is not slide:
-                used = (slide, set())
-                _fill_slide._used = used          # type: ignore[attr-defined]
-            for k, shp in enumerate(text_shapes):
-                if k not in used[1]:
-                    shape, _ = shp, used[1].add(k)
-                    break
+                    shape, _ = cand, used.add(idx)
+        if shape is None:                       # 退路：按顺序找第一个没用过的文本框
+            for k, shp in enumerate(shapes):
+                if k in used or not getattr(shp, "has_text_frame", False):
+                    continue
+                shape, _ = shp, used.add(k)
+                break
         if shape is None:
             continue
         text = fill.get("text") or ""
         if not text and not fill.get("clear"):
             continue                            # 没内容且不需要清空 → 不动模板的框
-        _write_text(shape, text, want)
+        _write_text(shape, text, want, fill)
 
 
-def _write_text(shape, text: str, want: list[str]) -> None:
-    """写进一个文本框：**保留原有格式**，多行按段落写；一个字都不改内容。"""
+def _write_text(shape, text: str, want: list[str], fill: dict | None = None) -> None:
+    """写进一个文本框：**保留原有格式**，多行按段落写；一个字都不改内容。
+
+    文字比框长时**先把字号缩一点**（最多缩到设计字号的 0.7、不低于 14px），
+    而不是砍字数 —— 砍字数是老师最反感的那种"精简"（容量按缩完的字号算，所以通常不用缩）。
+    """
     tf = shape.text_frame
     lines = [ln for ln in str(text or "").split("\n")] or [""]
     want.extend([ln for ln in lines if ln.strip()])
@@ -492,6 +688,42 @@ def _write_text(shape, text: str, want: list[str]) -> None:
     for ln in lines[1:]:
         p = tf.add_paragraph()
         _set_para_text(p, ln)
+    if fill:
+        _shrink_to_fit(shape, str(text or ""), fill)
+
+
+def _shrink_to_fit(shape, text: str, fill: dict) -> None:
+    """按需缩字号：`design_capacity`（设计字号下的容量）装不下这么多字时，按比例缩一点。"""
+    from pptx.util import Pt
+
+    from . import slide_template as _st
+
+    design = float(fill.get("size_px") or 0) or _st._DEFAULT_SIZE_PX            # noqa: SLF001
+    geo = fill.get("geo") or {}
+    cap_design = int(fill.get("design_capacity") or 0)
+    if not cap_design:
+        cap_design = _st._slot_capacity(None, design, geo, size=design)          # noqa: SLF001
+    need = len(text)
+    if cap_design <= 0 or need <= cap_design or not text:
+        return
+    lo = _st.min_size_for(design)                                                # noqa: SLF001
+    size = design
+    while size > lo and _st._slot_capacity(None, design, geo, size=size) < need:  # noqa: SLF001
+        size = max(lo, size * 0.94)
+        if size <= lo:
+            break
+    factor = size / design if design else 1.0
+    if factor >= 0.995:
+        return
+    try:
+        for para in shape.text_frame.paragraphs:
+            for run in para.runs:
+                if run.font.size:
+                    run.font.size = Pt(max(_st._MIN_FONT_PX, run.font.size.pt * factor))   # noqa: SLF001
+            if para.font.size:
+                para.font.size = Pt(max(_st._MIN_FONT_PX, para.font.size.pt * factor))
+    except (AttributeError, ValueError):
+        pass
 
 
 def _set_para_text(para, text: str) -> None:
@@ -510,8 +742,9 @@ def _set_para_text(para, text: str) -> None:
 
 
 def _verify_fill(pptx: Path, want: list[str], the_plan: dict) -> list[dict]:
-    """两道校验（§10.3）：内容零丢失（阻断）+ 容量自查（提示，不阻断）。"""
+    """三道校验（§10.3）：内容零丢失（阻断）+ 页数 + **续页设计没丢**（阻断）。"""
     from pptx import Presentation
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
 
     prs = Presentation(str(pptx))
     got: list[str] = []
@@ -522,9 +755,30 @@ def _verify_fill(pptx: Path, want: list[str], the_plan: dict) -> list[dict]:
     blob = "\n".join(got)
     missing = [t for t in want if t.strip() and t.strip() not in blob]
     over = [w for w in the_plan.get("warnings") or [] if "容量" in w]
+    product = list(prs.slides)
+    thin: list[str] = []
+    for i, page in enumerate(the_plan["pages"]):
+        if i >= len(product):
+            break
+        src_i = page.get("template_index")
+        if src_i is None or src_i >= len(product):
+            continue
+        want_shapes = len(list(product[src_i].shapes)) if src_i < len(product) else 0
+        if len(list(product[i].shapes)) < want_shapes:
+            thin.append(f"第 {i + 1} 页（模板第 {src_i + 1} 页：{want_shapes} → "
+                        f"{len(list(product[i].shapes))} 个形状）")
+    blank = [i + 1 for i, s in enumerate(product)
+             if not any(getattr(sh, "has_text_frame", False) and (sh.text_frame.text or "").strip()
+                        for sh in s.shapes)
+             and not any(sh.shape_type == MSO_SHAPE_TYPE.PICTURE for sh in s.shapes)]
     return [
         {"name": "内容零丢失", "ok": not missing, "blocking": True,
          "detail": f"拟写入 {len(want)} 串，缺 {len(missing)} 串" + (f"：{missing[:3]}" if missing else "")},
+        {"name": "续页设计没丢", "ok": not thin, "blocking": True,
+         "detail": "每页都保留了模板母版的全部形状（底图/图片/装饰）" if not thin
+                   else "这些页比模板母版少形状（底图会丢）：" + "；".join(thin[:3])},
+        {"name": "没有空白页", "ok": not blank, "blocking": True,
+         "detail": "每页都有文字或图片" if not blank else f"这些页既没文字也没图片：{blank[:5]}"},
         {"name": "页数符合策略", "ok": len(prs.slides._sldIdLst) == len(the_plan["pages"]),   # noqa: SLF001
          "blocking": False,
          "detail": f"产物 {len(prs.slides._sldIdLst)} 页 / 计划 {len(the_plan['pages'])} 页"},

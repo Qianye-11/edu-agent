@@ -240,6 +240,17 @@ def main() -> int:
     plans_after2 = _files(plans)
     check("边界用例也没碰 content/plans", plans_before == plans_after2)
 
+    print("\n[12] 收尾：别把体检模板留在老师的模板库里")
+    tpl_before = {t["id"] for t in (c.get("/api/slide/templates").json().get("imported") or [])}
+    leftover = sorted({tpl_new, fj.get("id") or ""} - {""})
+    for tid in leftover:
+        c.post("/api/slide/template/delete", json={"template_id": tid})
+    tpl_after = {t["id"] for t in (c.get("/api/slide/templates").json().get("imported") or [])}
+    check("体检用过的模板已清掉（不污染老师的选择列表）",
+          not (tpl_after & set(leftover)), f"清理 {len(leftover)} 套；剩余 {len(tpl_after)} 套")
+    check("老师原有的模板一套没少", tpl_before - set(leftover) <= tpl_after,
+          f"原有 {len(tpl_before - set(leftover))} 套")
+
     c.close()
     ok = sum(1 for _, o, _ in RESULTS if o)
     print(f"\n结果：{ok}/{len(RESULTS)} 项通过")

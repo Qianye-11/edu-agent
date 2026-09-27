@@ -212,7 +212,7 @@ def _bg_from_pptx(pptx: Path) -> tuple[str, str]:
             from PIL import Image
 
             im = Image.open(io.BytesIO(pic.image.blob)).convert("RGB").resize((24, 24))
-            px = list(im.getdata())
+            px = list(getattr(im, "get_flattened_data", im.getdata)())
             n = len(px) or 1
             med = tuple(sorted(p[i] for p in px)[n // 2] for i in range(3))
             hexc = "#%02X%02X%02X" % med
@@ -373,20 +373,32 @@ def tokens_from_pptx(pptx: Path, *, name: str = "") -> tuple[dict, list[str]]:
 
 #: 小于这个容量（字）的槽位当成"标签/装饰"，不往里写正文（见 slide_fill 的说明）
 MIN_FILLABLE_CAPACITY = 4
+#: 正文槽的最低容量：装不下一句话的框（「小小探险家」容量 5、图形游戏里的「圆/矩形」容量 1~4）
+#: 一律不算正文 —— 否则正文会被压成 3 个字塞进去（老师看就是"乱填"，踩过）
+MIN_BODY_CAPACITY = 8
+#: 标题槽的最低容量（标题本身就短，所以门槛比正文低）
+MIN_TITLE_CAPACITY = 5
 #: 中文设计标签的判据（又小又短才算）
 _LABEL_MAX_CHARS = 4
 _LABEL_MAX_W = 200.0
 _LABEL_MAX_H = 60.0
+#: 标签的**面积**判据：占整页 ≤4% 且文字很短 → 标签（`矩形` 229×126 这种框又扁又大，
+#: 光看 200×60 拦不住，会被当成正文框填进去 —— 踩过）
+_LABEL_MAX_AREA = 1280 * 720 * 0.04
+#: 标题文字的"短"上限：超过这个字数的是正文段落，不可能当标题
+_TITLE_MAX_CHARS = 14
 
 
 def _is_design_label(text: str, geo: dict) -> bool:
     """设计稿里的固定小标签（「快乐成长」「PART 01」「01」「小小探险家」）—— **绝不替换、绝不清空**。
 
-    判据（踩过一轮才定下来）：
+    判据（踩过两轮才定下来）：
       · 纯西文/数字的短文本（`PART 01`、`01`、`ABC`）基本都是标签 —— 不管框多大；
-      · 中文：只有**又小又短**（≤4 字且框 ≤200×60）才算标签，
+      · 中文：**又小又短**才算标签 —— "小"有两种样子，都要拦：
+          ① 框 ≤200×60（「快乐成长」「探索形状」）；
+          ② 面积 ≤ 整页 4%（图形游戏里的「圆」「矩形」「正方形」「三角形」框是 229×126 这种，
+             只看宽高会漏掉，结果正文被填进图形标签里）。
         否则「写作魔法学院」这种目录条目会被误判成标签。
-    注意"字号最大"**不能**用来找标题：标签往往显式设了字号，内容框反而没设（踩过）。
     """
     t = (text or "").strip()
     if not t:
@@ -394,12 +406,19 @@ def _is_design_label(text: str, geo: dict) -> bool:
     has_cjk = any(ord(ch) > 0x2E80 for ch in t)
     if not has_cjk:
         return len(t) <= 12
-    small = float(geo.get("w") or 0) <= _LABEL_MAX_W and float(geo.get("h") or 0) <= _LABEL_MAX_H
-    return small and len(t) <= _LABEL_MAX_CHARS
+    if len(t) > _LABEL_MAX_CHARS:
+        return False
+    w, h = float(geo.get("w") or 0), float(geo.get("h") or 0)
+    small = w <= _LABEL_MAX_W and h <= _LABEL_MAX_H
+    return small or (w * h <= _LABEL_MAX_AREA)
 
 
-def _slot_capacity(shape, size_px: float, geo: dict | None = None) -> int:
+def _slot_capacity(shape, size_px: float, geo: dict | None = None, *, size: float | None = None) -> int:
     """一个文本框大概能装多少字：行数 × 每行字数（用我们自己的字宽估算）。
+
+    **按"允许缩到的最小字号"算**（`size` 参数；默认就是设计字号的 0.7 倍、不低于 14px）：
+    填充时文字略长会把字号缩一点（人也会这么做），所以容量要按缩完的字号算 ——
+    按设计字号算会把本来放得下的正文压成 3 个字（老师看就是"正文没填进去"，踩过）。
 
     **量不出来就返回 0**（"未知"），不要返回 1 —— 否则每个槽都会被判成"超容量"，
     提示就变成了噪音（踩过：有形状的宽高继承自版式，自己的 xfrm 是空的）。
@@ -410,11 +429,25 @@ def _slot_capacity(shape, size_px: float, geo: dict | None = None) -> int:
     w, h = float(geo.get("w") or 0), float(geo.get("h") or 0)
     if w < 8 or h < 8:
         return 0
-    size_px = float(size_px or 24.0)
+    design = float(size_px or _DEFAULT_SIZE_PX)
+    size_px = float(size if size is not None else min_size_for(design))
     char_w = ppt_svg.char_w("字", size_px) or size_px
     per_line = max(1, int(w // max(1.0, char_w)))
     lines = max(1, int(h // max(1.0, size_px * 1.35)))
     return int(per_line * lines)
+
+
+#: 框里没设字号时的假定字号（跟 `_slot_capacity` 的老口径一致，改它会动所有老模板的容量）
+_DEFAULT_SIZE_PX = 24.0
+#: 允许把字号缩到设计字号的多少倍 / 最小多少 px（低于 14px 投影看不清，就不缩了）
+_MIN_FONT_FACTOR = 0.7
+_MIN_FONT_PX = 14.0
+
+
+def min_size_for(design_px: float) -> float:
+    """这个字号最多允许缩到多少（容量与"能不能放下"都按它算）。"""
+    design = float(design_px or _DEFAULT_SIZE_PX)
+    return max(_MIN_FONT_PX, design * _MIN_FONT_FACTOR)
 
 
 def _geo_px(shape) -> dict:
@@ -460,6 +493,65 @@ def _role_of(shape, index: int, layout_name: str) -> str:
     return "title" if index == 0 else "body"
 
 
+def _is_poster(row: dict) -> bool:
+    """海报式大字（字号 ≥40px，而整个框只装得下十几字）→ 装饰，**不填正文**。
+
+    设计稿常有一句比标题还大的标语（「争当图形小侦探！」「留住美好时光」66.7px、容量 11~12），
+    排版上它和图形是一体的；往里填一条正文，老师看到的就是"乱填"（踩过）。
+    """
+    return float(row.get("size_px") or 0) >= _POSTER_MIN_PX and int(row.get("capacity") or 0) <= _POSTER_MAX_CAP
+
+
+#: 海报式大字的判据（字号 / 容量）
+_POSTER_MIN_PX = 40.0
+_POSTER_MAX_CAP = 15
+
+
+def _pick_title(content: list[dict]) -> dict | None:
+    """标题槽 = **文字短**（≤14 字，空框也算）+ **字号最大**，优先版面顶部那一条。
+
+    有占位符的模板先按占位符语义认（`TITLE`/`CENTER_TITLE`）—— 占位符里常写着"点击此处添加标题"
+    这种长示例文字，光看字数会把它排除掉（踩过）。
+
+    为什么不按"面积最大"（踩过）：内容页上最大的框往往是一整段正文（264×160 的段落比
+    真标题框 400×100 还大一点）→ 标题与正文对调，正文被压成几个字塞进小框、真标题框空着，
+    老师看到的就是"乱"+"正文没填进去"。
+    为什么还要"优先顶部"：有的页面左下角有个字号更大的标语（「争当图形小侦探！」66.7px），
+    真标题反而小一号 —— 标题在版面上总是靠上那一条。
+    为什么"空框也算候选"：封面的大标题框设计时就是空的（没文字也没设字号），只能靠"短"入选。
+    """
+    # 有占位符的模板：标题/副标题占位符的语义**优先于**任何猜测
+    # （踩过：真标题占位符里写着"点击此处添加标题（模板原名）"共 21 字，被"标题要短"的规则排除，
+    #  结果正文框被当成标题）
+    ph_title = [r for r in content
+                if r["placeholder"].startswith(("TITLE", "CENTER_TITLE", "VERTICAL_TITLE"))]
+    if len(ph_title) == 1:
+        return ph_title[0]
+    cands = [r for r in content
+             if r["capacity"] >= MIN_TITLE_CAPACITY and len(r["text"]) <= _TITLE_MAX_CHARS]
+    if not cands:
+        return max(content, key=lambda r: r["geo"]["w"] * r["geo"]["h"]) if content else None
+    # 贴着页面底边的框是页脚/横幅（「争当图形小侦探！」「留住美好时光」），不可能是标题
+    pool = [r for r in cands if _bottom(r) < _FOOTER_Y] or cands
+    pool = [r for r in pool if r["text"]] or pool
+    best = max(pool, key=lambda r: (r["size_px"], r["geo"]["w"] * r["geo"]["h"]))
+    # 顶部那一条只要字号不比全局最大差太多就优先它（底部的标语常常比真标题字号更大）
+    top = [r for r in pool if float(r["geo"]["y"] or 0) <= 720 * 0.3]
+    if top:
+        tb = max(top, key=lambda r: (r["size_px"], r["geo"]["w"] * r["geo"]["h"]))
+        if tb["size_px"] >= best["size_px"] * 0.45:
+            return tb
+    return best
+
+
+#: 框的下边缘超过这里 → 视作页脚/横幅（1280×720 的画布上，页脚都贴着底边）
+_FOOTER_Y = 700.0
+
+
+def _bottom(row: dict) -> float:
+    return float(row["geo"]["y"] or 0) + float(row["geo"]["h"] or 0)
+
+
 def slots_from_pptx(pptx: Path) -> dict:
     """把模板每页的文本框分成 **标题 / 正文 / 装饰** 三类（设计稿里没有"占位符"时的正解）。
 
@@ -470,10 +562,12 @@ def slots_from_pptx(pptx: Path) -> dict:
     规则（确定性、可复核）：
 
     1. 容量 < `MIN_FILLABLE_CAPACITY` 的小框 → 装饰；
-    2. 短文本（≤6 字）+ 小面积（≤200×60）→ 设计标签 → 装饰；
-    3. 其余算**内容槽**：字号最大（并列取面积最大）的当 `title`，其余按阅读顺序（上→下、左→右）当 `body`；
+    2. 短文本（≤4 字）+ 小框（≤200×60 或面积 ≤4% 整页）→ 设计标签 → 装饰；
+    3. 其余算**内容槽**：标题 = **短文本里字号最大**（优先顶部）那个，正文 = 剩下的、
+       容量 ≥ `MIN_BODY_CAPACITY` 的槽（按阅读顺序：上→下、左→右）；
     4. 每个槽记下 `shape_index`（在 `slide.shapes` 里的位置）与 `sample`（当时的文字），
-       填充时按它精确找回那个框，并核对 `sample` 没过期。
+       填充时按它精确找回那个框，并核对 `sample` 没过期；`capacity` 按"允许缩到的最小字号"算，
+       `design_capacity` 按设计字号算（填充时据此决定要不要缩字号）。
 
     读不出来就返回 `{"slides": [], "error": ...}` —— 调用方据此退化成"只用配色"。
     """
@@ -505,18 +599,21 @@ def slots_from_pptx(pptx: Path) -> dict:
                 rows.append({"shape_index": si, "text": text, "geo": geo,
                              "size_px": round(size_px, 1),
                              "capacity": _slot_capacity(shp, size_px, geo),
+                             "design_capacity": _slot_capacity(shp, size_px, geo, size=size_px or _DEFAULT_SIZE_PX),
                              "placeholder": _placeholder_kind(shp)})
             content = [r for r in rows
                        if r["capacity"] >= MIN_FILLABLE_CAPACITY and not _is_design_label(r["text"], r["geo"])]
-            # 标题 = **面积最大**的内容槽（不能用字号：标签常显式设字号、内容框反而没设 —— 踩过）
-            content.sort(key=lambda r: -(r["geo"]["w"] * r["geo"]["h"]))
-            title_row = content[0] if content else None
-            body_rows = sorted([r for r in content[1:]], key=lambda r: (r["geo"]["y"], r["geo"]["x"]))
+            title_row = _pick_title(content)
+            body_rows = sorted([r for r in content
+                                if r is not title_row and r["capacity"] >= MIN_BODY_CAPACITY
+                                and not _is_poster(r)],
+                               key=lambda r: (r["geo"]["y"], r["geo"]["x"]))
             slots = []
             for r in rows:
                 role = ("title" if r is title_row else ("body" if r in body_rows else "decoration"))
                 slots.append({"role": role, "shape_index": r["shape_index"],
-                              "capacity": r["capacity"], "size_px": r["size_px"], "geo": r["geo"],
+                              "capacity": r["capacity"], "design_capacity": r.get("design_capacity", r["capacity"]),
+                              "size_px": r["size_px"], "geo": r["geo"],
                               "sample": r["text"][:40], "placeholder": r["placeholder"]})
             align = load_align(pptx.parent.name)          # 老师在面板里标过的角色优先
             sig = _apply_align(slots, align)
