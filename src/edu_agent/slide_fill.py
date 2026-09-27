@@ -756,17 +756,24 @@ def _verify_fill(pptx: Path, want: list[str], the_plan: dict) -> list[dict]:
     missing = [t for t in want if t.strip() and t.strip() not in blob]
     over = [w for w in the_plan.get("warnings") or [] if "容量" in w]
     product = list(prs.slides)
+    # 母版形状数要**从模板文件**读：产物里的页已经被重排/删过了，
+    # 拿 product[template_index] 去比是在比两张不同的页（踩过：假失败）。
+    src_counts: list[int] = []
+    try:
+        tpl_path = st.root() / st._slug(str(the_plan.get("template_id") or "")) / "template.pptx"   # noqa: SLF001
+        if tpl_path.is_file():
+            src_counts = [len(list(s.shapes)) for s in Presentation(str(tpl_path)).slides]
+    except Exception:  # noqa: BLE001 读不到模板就不做这条检查（不给假警报）
+        src_counts = []
     thin: list[str] = []
-    for i, page in enumerate(the_plan["pages"]):
-        if i >= len(product):
-            break
-        src_i = page.get("template_index")
-        if src_i is None or src_i >= len(product):
-            continue
-        want_shapes = len(list(product[src_i].shapes)) if src_i < len(product) else 0
-        if len(list(product[i].shapes)) < want_shapes:
-            thin.append(f"第 {i + 1} 页（模板第 {src_i + 1} 页：{want_shapes} → "
-                        f"{len(list(product[i].shapes))} 个形状）")
+    if src_counts:
+        for i, page in enumerate(the_plan["pages"]):
+            src_i = page.get("template_index")
+            if i >= len(product) or src_i is None or src_i >= len(src_counts):
+                continue
+            if len(list(product[i].shapes)) < src_counts[src_i]:
+                thin.append(f"第 {i + 1} 页（母版第 {src_i + 1} 页：{src_counts[src_i]} → "
+                            f"{len(list(product[i].shapes))} 个形状）")
     blank = [i + 1 for i, s in enumerate(product)
              if not any(getattr(sh, "has_text_frame", False) and (sh.text_frame.text or "").strip()
                         for sh in s.shapes)
