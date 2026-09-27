@@ -1059,6 +1059,18 @@ class SlideRenderReq(BaseModel):
     title: str = ""
     markdown: str = ""               # 没给 slides 时的兜底来源
     session_id: str = ""
+    annotate: bool = False           # True = 给文字槽打 data-slot 并回 boxes（**页内编辑用**；导出不传）
+
+
+class SlideSlotReq(BaseModel):
+    """页内编辑一格：改哪个槽、改成什么（槽位命名见 `slide_deck.apply_slot`）。"""
+
+    session_id: str = ""
+    index: int = 0                   # 第几页（0 起）
+    slot: str = ""                   # 如 title / block:1 / left:bullet:0
+    text: str = ""
+    slides: list[dict] | None = None  # 不给就取会话里那份
+    title: str = ""
 
 
 class SlideSaveReq(BaseModel):
@@ -1254,12 +1266,51 @@ def api_slide_render(body: SlideRenderReq):
             from edu_agent import slide_template
 
             tokens = slide_template.theme_for(body.template_id)
-        out = slide_deck.build_deck(body.theme_id, slides, title=title, tokens=tokens)
+        out = slide_deck.build_deck(body.theme_id, slides, title=title, tokens=tokens,
+                                    annotate=bool(body.annotate))
     except (FileNotFoundError, ValueError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     out["enabled"] = True
     out["note"] = "内存渲染：这份 SVG 就是导出要转换的那一份（同一份源）"
     return out
+
+
+@app.post("/api/slide/slot")
+def api_slide_slot(body: SlideSlotReq):
+    """**页内编辑一格**：`{index, slot, text}` → 落进会话里那份 slides，返回收干净的整册。
+
+    为什么不让前端自己改字段：槽位→字段的映射只在 `slide_deck.apply_slot` 里维护一份
+    （两边各写一套迟早漂；改字段名时 Python 单测会红，前端只认 slot 字符串）。
+    这里**不落盘**：写会话库与 `/api/slide/save` 是同一条路。
+    """
+    from edu_agent import slide_deck as _deck
+
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not slides:
+        slides = [s for s in (_store.get_session_doc(sid).get("slides") or []) if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可改的幻灯片（先有教案内容）"}, status_code=400)
+    idx = int(body.index if isinstance(body.index, int) else -1)
+    if not (0 <= idx < len(slides)):
+        return JSONResponse({"ok": False, "error": f"页号越界：第 {idx + 1} 页（共 {len(slides)} 页）"},
+                            status_code=400)
+    res = _deck.apply_slot(slides[idx], str(body.slot or ""), str(body.text or ""))
+    if not res.get("ok"):
+        return JSONResponse(res, status_code=400)
+    cleaned = _deck.clean_slides(slides)
+    # ⚠️ 读-改-写：`set_session_doc` 是**整份替换**，直接塞 {"slides":…} 会把 title / markdown /
+    #    md_sig / slides_edited 一起抹掉（"正文改过没"的判断就废了）。
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    title = str(body.title or "").strip()
+    if title:
+        cur["title"] = title
+    _store.set_session_doc(sid, cur)
+    warnings = _deck.length_warnings(cleaned)
+    return {"ok": True, "slot": res.get("slot"), "index": idx, "slides": cleaned,
+            "pages": len(cleaned), "warnings": warnings, "session_id": sid}
 
 
 def _plan_blocks(md: str) -> list[dict]:

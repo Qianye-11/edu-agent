@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>教育 Agent · UnderstandAnything</title>
-<style>
-:root{
+<style>:root{
   --ink-900:#1a1a1b; --ink-800:#27272a; --ink-700:#3f3f46; --ink-600:#52525b; --ink-500:#64646e; --ink-400:#71717a;
   --line:#ececec; --line-strong:#d9d9d9;
   --bg:#ffffff; --bg-soft:#fafafa; --bg-hover:#f4f4f4; --bg-active:#f1f1f0;
@@ -26,7 +25,6 @@ button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 button:disabled{cursor:not-allowed!important;opacity:.48}
 svg{display:block}
 .hidden{display:none!important}
-
 /* ===== Window frame / top tabs ===== */
 .win{display:flex;flex-direction:column;height:100vh}
 .titlebar{display:flex;align-items:center;gap:2px;padding:6px 10px 0;background:#fff;position:relative}
@@ -40,7 +38,6 @@ svg{display:block}
 .wctl:hover{background:var(--bg-hover)}
 .wctl.close:hover{background:#e5484d;color:#fff}
 .wctl svg{width:14px;height:14px}
-
 /* ===== Shell ===== */
 .shell{display:flex;flex:1;min-height:0;background:var(--bg)}
 .sidebar{width:252px;flex:none;background:var(--bg);border-right:.5px solid var(--line);display:flex;flex-direction:column;min-height:0}
@@ -99,7 +96,6 @@ svg{display:block}
 .sb-btn:hover{background:var(--bg-hover)}
 .sb-btn.active{color:var(--ink-900)}
 .sb-btn svg{width:17px;height:17px}
-
 /* ===== Main ===== */
 .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative;background:var(--bg)}
 .main-head{display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:.5px solid var(--line)}
@@ -116,12 +112,10 @@ svg{display:block}
 .ai-chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:var(--r-pill);border:.5px solid var(--line);font-size:12px;color:var(--ink-600)}
 .ai-chip b{font-weight:600}
 .ai-chip .arrow{width:11px;height:11px;color:var(--ink-500)}
-
 /* ===== Scroll region ===== */
 .scroll{flex:1;min-height:0;overflow-y:auto}
 .view{display:none;height:100%}
 .view.active{display:flex;flex-direction:column}
-
 /* ===== Home / greeting / input ===== */
 .home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 48px 120px;text-align:center}
 .home-mark{width:64px;height:64px;margin-bottom:28px}
@@ -150,7 +144,6 @@ svg{display:block}
 .home-chips{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;justify-content:center}
 .hchip{height:30px;padding:0 14px;border-radius:var(--r-pill);background:var(--bg-soft);border:.5px solid var(--line);font-size:13px;color:var(--ink-600)}
 .hchip:hover{background:var(--bg-hover)}
-
 /* ===== Import card / skill market cards ===== */
 .mk-head{padding:22px 34px 0}
 .mk-title{font-size:26px;font-weight:600;letter-spacing:-.02em}
@@ -179,7 +172,6 @@ svg{display:block}
 .skill-card .sc-desc{font-size:12.5px;color:var(--ink-500);margin-top:10px;line-height:1.55;text-align:left}
 .check-orb{position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:var(--r-pill);background:var(--green-500);color:#fff;display:flex;align-items:center;justify-content:center}
 .check-orb svg{width:12px;height:12px}
-
 /* ===== Skill detail ===== */
 .sd{padding:26px 48px 50px}
 .sd-back{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;font-size:13px;color:var(--ink-600);margin-bottom:20px}
@@ -205,7 +197,6 @@ svg{display:block}
 .sd-row .r-name{font-size:13.5px;font-weight:500}
 .sd-row .r-desc{font-size:12px;color:var(--ink-500);margin-top:2px}
 .sd-row .r-tag{font-size:12px;color:var(--ink-600);background:var(--bg-soft);border:.5px solid var(--line);padding:4px 10px;border-radius:var(--r-pill)}
-
 /* ===== Generic list rows (textbook / API / table) ===== */
 .row-card{border:.5px solid var(--line);border-radius:var(--r-md);overflow:hidden}
 .lrow{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:.5px solid var(--line)}
@@ -237,7 +228,6 @@ svg{display:block}
 .ghost-btn{height:32px;padding:0 12px;border-radius:var(--r-sm);border:none;background:var(--bg-soft);color:var(--ink-700);font-size:13px;display:inline-flex;align-items:center;gap:5px}
 .ghost-btn:hover{background:var(--bg-hover)}
 .ghost-btn svg{width:14px;height:14px}
-
 /* ===== Section title rows ===== */
 .view-sec{padding:22px 34px 0}
 /* ===== 教案 × PPT 可视化编排工作台 ===== */
@@ -312,7 +302,6 @@ svg{display:block}
 .dz-slide .n{font-size:10.5px;color:var(--ink-400)}
 .dz-slide .t{font-size:12.5px;font-weight:600;margin-top:2px;color:var(--ink-800)}
 .dz-slide .body ul{margin:6px 0 0 14px;padding:0;font-size:11.5px;color:var(--ink-600);line-height:1.5}
-
 /* ===== 教育能力分组伸缩（2026-09-10）===== */
 #eduCapHead{cursor:pointer;user-select:none}
 #eduCapNav{overflow:hidden;max-height:340px;opacity:1;transition:max-height .18s ease,opacity .18s ease}
@@ -321,20 +310,18 @@ svg{display:block}
 #eduCapToggle.collapsed svg{transform:rotate(-90deg)}
 /* ===== 教案 × PPT 可视化编排工作台 ===== */
 /* ===== 模板工作台（导入自有教案模板 -> 全量编辑） ===== */
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden
 .view-h1{font-size:24px;font-weight:600;letter-spacing:-.02em}
 .view-sub{font-size:13px;color:var(--ink-500);margin-top:6px}
 .sec-h{margin-top:26px}
 .sec-h h3{font-size:15px;font-weight:600}
 .sec-h p{font-size:12.5px;color:var(--ink-500);margin-top:3px}
-
 /* ===== Toggle switch ===== */
 .switch{width:46px;height:26px;border-radius:var(--r-pill);background:var(--line-strong);position:relative;border:none;transition:background .18s;flex:none}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:var(--r-pill);background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .18s}
 .switch.on{background:var(--orange)}
 .switch.on::after{transform:translateX(20px)}
 .switch.blue.on{background:var(--blue)}
-
 /* ===== Settings sections ===== */
 .set-body{padding:22px 40px 60px;max-width:860px}
 .set-body .close-x{position:absolute;top:18px;right:22px}
@@ -373,9 +360,9 @@ svg{display:block}
 .gdot{width:8px;height:8px;border-radius:var(--r-pill);background:#fff;border:2px solid var(--blue);flex:none}
 .gdot.gray{border-color:var(--ink-400)}
 .tag-pill{font-size:11px;background:var(--bg-hover);border:.5px solid var(--line);padding:2px 8px;border-radius:var(--r-pill);color:var(--ink-600)}
-.diff-pos{color:var(--green)} .diff-neg{color:var(--red)}
+.diff-pos{color:var(--green)}
+.diff-neg{color:var(--red)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--ink-500)}
-
 /* ===== Popover / modal ===== */
 .pop{position:absolute;background:#fff;border:.5px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-md);z-index:60;overflow:hidden}
 .pop-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:.5px solid var(--line)}
@@ -405,7 +392,6 @@ svg{display:block}
 .m-check{display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:13px;color:var(--ink-700)}
 .m-check .ck{display:flex;align-items:center;gap:8px}
 .m-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:22px}
-
 /* ===== Side panel (right quadrant) ===== */
 .sidepanel{width:300px;flex:none;border-left:.5px solid var(--line);background:var(--bg);display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:18px 16px;min-height:0}
 .sp-title{font-size:15px;font-weight:600}
@@ -433,168 +419,147 @@ svg{display:block}
 .sp-kv .v{color:var(--ink-900);font-weight:500;text-align:right;word-break:break-all}
 .sp-empty{color:var(--ink-400);font-size:12.5px;text-align:center;padding:24px 10px;line-height:1.7}
 .sp-act{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-
 /* small buttons inside content */
 .icon-ghost{width:28px;height:28px;border-radius:var(--r-sm);border:none;background:transparent;color:var(--ink-500);display:inline-flex;align-items:center;justify-content:center}
 .icon-ghost:hover{background:var(--bg-hover);color:var(--ink-900)}
 .icon-ghost svg{width:15px;height:15px}
-
-    /* 文档 Tab（类 Word 排版）：基础排版，高级 Word 样式降级 */
+/* 文档 Tab（类 Word 排版）：基础排版，高级 Word 样式降级 */
     .dp-word{font-size:14px;line-height:1.9;color:#1a1a1b}
-    .dp-word h1{font-size:19px;margin:14px 0 8px;font-weight:700}
-    .dp-word h2{font-size:16px;margin:14px 0 6px;font-weight:600}
-    .dp-word h3{font-size:14px;margin:12px 0 4px;font-weight:600}
-    .dp-word p{margin:6px 0;text-indent:0}
-    .dp-word ul,.dp-word ol{margin:6px 0 6px 22px;padding:0}
-    .dp-word table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}
-    .dp-word th,.dp-word td{border:.5px solid var(--line-strong);padding:5px 8px;vertical-align:top}
-    .dp-word th{background:var(--bg-soft);font-weight:600}
-    .dp-word img{max-width:100%}
-
-    .sidepanel.dp-drag,.sidepanel.dp-drag *{cursor:col-resize;user-select:none}
-
-    /* ---- 上面那排按钮：文档视图里改成紧凑一排，且可一键收起（把高度让给文档） ---- */
+.dp-word h1{font-size:19px;margin:14px 0 8px;font-weight:700}
+.dp-word h2{font-size:16px;margin:14px 0 6px;font-weight:600}
+.dp-word h3{font-size:14px;margin:12px 0 4px;font-weight:600}
+.dp-word p{margin:6px 0;text-indent:0}
+.dp-word ul,.dp-word ol{margin:6px 0 6px 22px;padding:0}
+.dp-word table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}
+.dp-word th,.dp-word td{border:.5px solid var(--line-strong);padding:5px 8px;vertical-align:top}
+.dp-word th{background:var(--bg-soft);font-weight:600}
+.dp-word img{max-width:100%}
+.sidepanel.dp-drag,.sidepanel.dp-drag *{cursor:col-resize;user-select:none}
+/* ---- 上面那排按钮：文档视图里改成紧凑一排，且可一键收起（把高度让给文档） ---- */
     .sp-quad-toggle{flex:none;height:24px;padding:0 9px;font-size:11.5px;font-family:var(--font);cursor:pointer;
       border:.5px solid var(--line-strong);background:var(--bg);color:var(--ink-600);border-radius:7px}
-    .sp-quad-toggle:hover{background:var(--bg-soft);color:var(--ink-900)}
-    /* 收起后：按钮区只留一行提示 */
+.sp-quad-toggle:hover{background:var(--bg-soft);color:var(--ink-900)}
+/* 收起后：按钮区只留一行提示 */
     #sidePanel.sp-quad-collapsed .quad{display:none}
-    .sidepanel.sp-quad-collapsed{padding-bottom:12px}
-    .sp-quad-folded{display:none;font-size:12px;color:var(--ink-500);margin:6px 0 2px}
-    #sidePanel.sp-quad-collapsed .sp-quad-folded{display:block}
-    /* ===== 文档预览（R9 起住在「教案中心 → 教案工作台」，不再是右侧面板的一个视图）===== */
+.sidepanel.sp-quad-collapsed{padding-bottom:12px}
+.sp-quad-folded{display:none;font-size:12px;color:var(--ink-500);margin:6px 0 2px}
+#sidePanel.sp-quad-collapsed .sp-quad-folded{display:block}
+/* ===== 文档预览（R9 起住在「教案中心 → 教案工作台」，不再是右侧面板的一个视图）===== */
     /* 编辑工具栏（文档页签）：改完同步到 Markdown / 幻灯片 / 导出 */
     .dp-fmt{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 12px;border-bottom:.5px solid var(--line);flex:none}
-    .dp-fmt button{height:26px;min-width:30px;padding:0 8px;font-size:12px;border:.5px solid var(--line-strong);
+.dp-fmt button{height:26px;min-width:30px;padding:0 8px;font-size:12px;border:.5px solid var(--line-strong);
       background:var(--bg);border-radius:7px;cursor:pointer;color:var(--ink-700);font-family:var(--font)}
-    .dp-fmt button:hover{background:var(--bg-soft)}
-    .dp-fmt button.on{background:var(--blue);border-color:var(--blue);color:#fff}
-    .dp-fmt-tip{font-size:11.5px;color:var(--ink-400);margin-left:2px}
-    /* 可编辑的文档正文：聚焦时给个淡边框，别让人猜"能不能改" */
+.dp-fmt button:hover{background:var(--bg-soft)}
+.dp-fmt button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.dp-fmt-tip{font-size:11.5px;color:var(--ink-400);margin-left:2px}
+/* 可编辑的文档正文：聚焦时给个淡边框，别让人猜"能不能改" */
     .dp-word[contenteditable="true"]{outline:none;border-radius:8px;padding:10px 12px;margin:-10px -12px}
-    .dp-word[contenteditable="true"]:hover{background:rgba(0,0,0,.015)}
-    .dp-word[contenteditable="true"]:focus{background:rgba(0,0,0,.02);box-shadow:inset 0 0 0 1.5px var(--blue)}
-    .dp-mdta{width:100%;min-height:420px;border:.5px solid var(--line);border-radius:8px;padding:10px 12px;
+.dp-word[contenteditable="true"]:hover{background:rgba(0,0,0,.015)}
+.dp-word[contenteditable="true"]:focus{background:rgba(0,0,0,.02);box-shadow:inset 0 0 0 1.5px var(--blue)}
+.dp-mdta{width:100%;min-height:420px;border:.5px solid var(--line);border-radius:8px;padding:10px 12px;
       font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.7;color:var(--ink-800);
       background:var(--bg-soft);resize:vertical}
-    /* 幻灯片页签里的「PPT 优化」区：体检报告 + 动作勾选 + 一键优化 */
+/* 幻灯片页签里的「PPT 优化」区：体检报告 + 动作勾选 + 一键优化 */
     .ppt-box{border:.5px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--bg-soft)}
-    .ppt-hd{display:flex;align-items:center;gap:8px;font-size:13px}
-    .ppt-state{font-size:11.5px;color:var(--ink-500)}
-    .ppt-state.ok{color:#16a34a}
-    .ppt-rep{margin:8px 0 6px;font-size:12px}
-    .ppt-rep .row{display:flex;gap:8px;padding:3px 0;border-bottom:.5px dashed var(--line)}
-    .ppt-rep .row span{color:var(--ink-500);flex:none;width:64px}
-    .ppt-rep .row b{color:var(--ink-800);font-weight:500}
-    .ppt-acts{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0;font-size:12px;color:var(--ink-700)}
-    .ppt-acts label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
-    .ppt-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .ppt-tip{font-size:11.5px;color:var(--ink-400)}
-    /* 幻灯片：面板内的 16:9 预览台（不再开新窗口）。
+.ppt-hd{display:flex;align-items:center;gap:8px;font-size:13px}
+.ppt-state{font-size:11.5px;color:var(--ink-500)}
+.ppt-state.ok{color:#16a34a}
+.ppt-rep{margin:8px 0 6px;font-size:12px}
+.ppt-rep .row{display:flex;gap:8px;padding:3px 0;border-bottom:.5px dashed var(--line)}
+.ppt-rep .row span{color:var(--ink-500);flex:none;width:64px}
+.ppt-rep .row b{color:var(--ink-800);font-weight:500}
+.ppt-acts{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0;font-size:12px;color:var(--ink-700)}
+.ppt-acts label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.ppt-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ppt-tip{font-size:11.5px;color:var(--ink-400)}
+/* 幻灯片：面板内的 16:9 预览台（不再开新窗口）。
        预览台内部是**固定的 1280×720 设计坐标**，由 JS 按面板宽度做等比缩放（--sl-scale）——
        这样"面板里看到的"与"导出 pptx 的"是同一份坐标，不会随面板宽窄变形。 */
     .dp-slhead{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:12.5px;color:var(--ink-500)}
-    .dp-slhead select{height:26px;padding:0 6px;font-size:12.5px;border:.5px solid var(--line-strong);
+.dp-slhead select{height:26px;padding:0 6px;font-size:12.5px;border:.5px solid var(--line-strong);
       border-radius:6px;background:var(--bg);color:var(--ink-800);cursor:pointer}
-    .dp-slhead .dp-slstat{margin-left:auto;font-size:11.5px;color:var(--ink-400);white-space:nowrap}
-    .dp-slidewrap{position:relative;width:100%;overflow:hidden;border:.5px solid var(--line);
+.dp-slhead .dp-slstat{margin-left:auto;font-size:11.5px;color:var(--ink-400);white-space:nowrap}
+.dp-slidewrap{position:relative;width:100%;overflow:hidden;border:.5px solid var(--line);
       border-radius:8px;background:var(--bg-soft);margin-bottom:12px}
-    .dp-canvas{position:absolute;top:0;left:0;width:1280px;height:720px;transform-origin:top left}
-    .dp-canvas>svg{display:block;width:1280px;height:720px}
-    .dp-plain{width:1280px;height:720px;box-sizing:border-box;padding:72px;background:#fff;color:#1a1a1b;
+.dp-canvas{position:absolute;top:0;left:0;width:1280px;height:720px;transform-origin:top left}
+.dp-canvas>svg{display:block;width:1280px;height:720px}
+.dp-plain{width:1280px;height:720px;box-sizing:border-box;padding:72px;background:#fff;color:#1a1a1b;
       font-size:24px;line-height:1.5}
-    .dp-plain h4{margin:0 0 24px;font-size:44px}
-    .dp-plain ul{margin:0 0 0 24px;padding:0}
-    .dp-warn{margin:0 0 8px;font-size:11.5px;color:#8A5A00}
-    /* 每页卡片底部的小工具栏 + 就地编辑器（M4a：改字/增删/换版式/排序） */
-    .dp-cardbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;
-      padding-top:6px;border-top:.5px dashed var(--line)}
-    .dp-cardbar button{height:22px;padding:0 7px;font-size:11.5px;border:.5px solid var(--line-strong);
-      background:var(--bg);border-radius:6px;cursor:pointer;color:var(--ink-700)}
-    .dp-cardbar button:hover{border-color:var(--blue);color:var(--blue)}
-    .dp-cardbar select{height:22px;font-size:11.5px;border:.5px solid var(--line-strong);border-radius:6px;
-      background:var(--bg);color:var(--ink-700);cursor:pointer}
-    .dp-edit{margin-top:8px;padding:8px 9px;border:.5px solid var(--line-strong);border-radius:8px;background:var(--bg)}
-    .dp-edit label{display:block;font-size:11px;color:var(--ink-400);margin:6px 0 2px}
-    .dp-edit input[type=text],.dp-edit textarea{width:100%;box-sizing:border-box;font-size:12.5px;
+.dp-plain h4{margin:0 0 24px;font-size:44px}
+.dp-plain ul{margin:0 0 0 24px;padding:0}
+.dp-warn{margin:0 0 8px;font-size:11.5px;color:#8A5A00}
+.dp-edit{margin-top:8px;padding:8px 9px;border:.5px solid var(--line-strong);border-radius:8px;background:var(--bg)}
+.dp-edit label{display:block;font-size:11px;color:var(--ink-400);margin:6px 0 2px}
+.dp-edit input[type=text],.dp-edit textarea{width:100%;box-sizing:border-box;font-size:12.5px;
       border:.5px solid var(--line-strong);border-radius:6px;padding:4px 6px;background:var(--bg);color:var(--ink-800);
       font-family:inherit}
-    .dp-edit textarea{min-height:38px;resize:vertical;line-height:1.5}
-    .dp-blk{border-top:.5px dashed var(--line);padding-top:6px;margin-top:6px}
-    .dp-blk .row{display:flex;gap:6px;align-items:center;margin-top:3px}
-    .dp-blk .row .dp-cnt{margin-left:auto;font-size:11px;color:var(--ink-400);white-space:nowrap}
-    .dp-blk .row .dp-cnt.dp-over{color:#B45309;font-weight:600}
-    .dp-edit .acts{display:flex;gap:6px;align-items:center;margin-top:8px}
-    .dp-slide{cursor:pointer}
-    .dp-slide.dp-cur{box-shadow:0 0 0 1.5px var(--blue)}
-    .dp-pagebar{display:flex;gap:6px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--ink-500)}
-    .dp-pagebar button{height:24px;padding:0 9px;font-size:12px;border:.5px solid var(--line-strong);background:var(--bg);
+.dp-edit textarea{min-height:38px;resize:vertical;line-height:1.5}
+.dp-blk{border-top:.5px dashed var(--line);padding-top:6px;margin-top:6px}
+.dp-blk .row{display:flex;gap:6px;align-items:center;margin-top:3px}
+.dp-blk .row .dp-cnt{margin-left:auto;font-size:11px;color:var(--ink-400);white-space:nowrap}
+.dp-blk .row .dp-cnt.dp-over{color:#B45309;font-weight:600}
+.dp-edit .acts{display:flex;gap:6px;align-items:center;margin-top:8px}
+.dp-pagebar{display:flex;gap:6px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--ink-500)}
+.dp-pagebar button{height:24px;padding:0 9px;font-size:12px;border:.5px solid var(--line-strong);background:var(--bg);
       border-radius:6px;cursor:pointer;color:var(--ink-700)}
-    .dp-hd{display:flex;gap:6px;align-items:center;padding:9px 10px 9px 14px;border-bottom:.5px solid var(--line);flex:none}
-    .dp-title{font-size:13.5px;font-weight:600;color:var(--ink-800);max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .dp-stat{font-size:11.5px;color:var(--ink-400);white-space:nowrap}
-    .dp-mini{height:28px;padding:0 10px;font-size:12px}
-    .dp-x{border:none;background:none;font-size:20px;line-height:1;color:var(--ink-400);cursor:pointer;padding:0 4px}
-    .dp-x:hover{color:var(--ink-900)}
-    .dp-tabs{display:flex;gap:2px;align-items:center;padding:7px 10px 0;flex:none;border-bottom:.5px solid var(--line)}
-    .dp-tab{border:none;background:none;font-size:12.5px;color:var(--ink-500);padding:6px 10px;border-radius:8px 8px 0 0;cursor:pointer}
-    .dp-tab.dp-on{background:var(--bg-soft);color:var(--ink-900);font-weight:600}
-    .dp-note{font-size:11px;color:var(--ink-400);padding:0 4px 6px}
-    .dp-bd{flex:1;overflow-y:auto;padding:14px 16px 20px;min-height:0;font-size:13.5px;line-height:1.75;color:var(--ink-800)}
-    .dp-bd h1{font-size:19px;margin:2px 0 10px}
-    .dp-bd h2{font-size:15px;margin:16px 0 6px}
-    .dp-bd h3{font-size:13.5px;margin:12px 0 4px}
-    .dp-bd ul{margin:6px 0 6px 20px;padding:0}
-    .dp-bd pre{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;margin:0;color:var(--ink-700)}
-    .dp-ft{flex:none;padding:7px 12px;border-top:.5px solid var(--line);font-size:12px;color:var(--ink-500);min-height:0}
-    .dp-ft:empty{display:none}
-    .dp-slide{border:.5px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--bg-soft)}
-    .dp-slide .n{font-size:11px;color:var(--ink-400)}
-    .dp-slide h4{margin:3px 0 6px;font-size:13.5px}
-    .dp-slide ul{margin:2px 0 0 18px;padding:0;font-size:12.5px}
-    .dp-empty{color:var(--ink-400);font-size:12.5px}
-    .dp-rows{display:flex;flex-direction:column;gap:6px}
-    .dp-row{display:flex;gap:8px;align-items:baseline;font-size:12.5px;border-bottom:.5px dashed var(--line);padding-bottom:5px}
-    .dp-row .m{color:var(--ink-400);font-size:11.5px}
-    /* 面板停靠后由 .shell 的 flex 自动让位，不再需要给会话/教案中心补右内边距 */
+.dp-hd{display:flex;gap:6px;align-items:center;padding:9px 10px 9px 14px;border-bottom:.5px solid var(--line);flex:none}
+.dp-title{font-size:13.5px;font-weight:600;color:var(--ink-800);max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dp-stat{font-size:11.5px;color:var(--ink-400);white-space:nowrap}
+.dp-mini{height:28px;padding:0 10px;font-size:12px}
+.dp-x{border:none;background:none;font-size:20px;line-height:1;color:var(--ink-400);cursor:pointer;padding:0 4px}
+.dp-x:hover{color:var(--ink-900)}
+.dp-tabs{display:flex;gap:2px;align-items:center;padding:7px 10px 0;flex:none;border-bottom:.5px solid var(--line)}
+.dp-tab{border:none;background:none;font-size:12.5px;color:var(--ink-500);padding:6px 10px;border-radius:8px 8px 0 0;cursor:pointer}
+.dp-tab.dp-on{background:var(--bg-soft);color:var(--ink-900);font-weight:600}
+.dp-note{font-size:11px;color:var(--ink-400);padding:0 4px 6px}
+.dp-bd{flex:1;overflow-y:auto;padding:14px 16px 20px;min-height:0;font-size:13.5px;line-height:1.75;color:var(--ink-800)}
+.dp-bd h1{font-size:19px;margin:2px 0 10px}
+.dp-bd h2{font-size:15px;margin:16px 0 6px}
+.dp-bd h3{font-size:13.5px;margin:12px 0 4px}
+.dp-bd ul{margin:6px 0 6px 20px;padding:0}
+.dp-bd pre{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;margin:0;color:var(--ink-700)}
+.dp-ft{flex:none;padding:7px 12px;border-top:.5px solid var(--line);font-size:12px;color:var(--ink-500);min-height:0}
+.dp-ft:empty{display:none}
+.dp-empty{color:var(--ink-400);font-size:12.5px}
+.dp-rows{display:flex;flex-direction:column;gap:6px}
+.dp-row{display:flex;gap:8px;align-items:baseline;font-size:12.5px;border-bottom:.5px dashed var(--line);padding-bottom:5px}
+.dp-row .m{color:var(--ink-400);font-size:11.5px}
+/* 面板停靠后由 .shell 的 flex 自动让位，不再需要给会话/教案中心补右内边距 */
     body.dp-open #view-chat #chatMsgBox,
     body.dp-open #view-chat .home,
     body.dp-open #view-design{padding-right:0}
-    /* 下载：一个按钮 + 悬停菜单（hover 即弹出；点击也能开，兼容触屏） */
+/* 下载：一个按钮 + 悬停菜单（hover 即弹出；点击也能开，兼容触屏） */
     .dp-dl{position:relative;display:inline-flex}
-    .dp-menu{display:none;position:absolute;right:0;top:calc(100% + 5px);min-width:216px;z-index:70;
+.dp-menu{display:none;position:absolute;right:0;top:calc(100% + 5px);min-width:216px;z-index:70;
       background:var(--bg);border:.5px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-md);padding:4px}
-    .dp-dl:hover .dp-menu,.dp-dl.open .dp-menu{display:block}
-    .dp-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;
+.dp-dl:hover .dp-menu,.dp-dl.open .dp-menu{display:block}
+.dp-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;
       border:none;background:none;text-align:left;padding:7px 10px;border-radius:7px;cursor:pointer;
       font-family:var(--font);font-size:12.5px;color:var(--ink-800)}
-    .dp-menu button:hover{background:var(--bg-hover)}
-    .dp-menu button b{font-weight:600}
-    .dp-menu button span{font-size:11px;color:var(--ink-400)}
-    .dp-menu button:disabled,.dp-menu button.dp-off{opacity:.45}
-    .dp-menu button:disabled{cursor:not-allowed}
-    .dp-menu button.dp-off{opacity:.5}
-    .dp-menu button:disabled:hover,.dp-menu button.dp-off:hover{background:none}
-    /* 面板本身不裁剪，否则悬停菜单会被切掉（停靠态没有圆角，滚动区也不用圆角） */
+.dp-menu button:hover{background:var(--bg-hover)}
+.dp-menu button b{font-weight:600}
+.dp-menu button span{font-size:11px;color:var(--ink-400)}
+.dp-menu button:disabled,.dp-menu button.dp-off{opacity:.45}
+.dp-menu button:disabled{cursor:not-allowed}
+.dp-menu button.dp-off{opacity:.5}
+.dp-menu button:disabled:hover,.dp-menu button.dp-off:hover{background:none}
+/* 面板本身不裁剪，否则悬停菜单会被切掉（停靠态没有圆角，滚动区也不用圆角） */
     .dp-bd{border-radius:0}
-
-    /* 暗色主题：变量驱动，补齐少量仍使用固定白色背景的旧组件。 */
+/* 暗色主题：变量驱动，补齐少量仍使用固定白色背景的旧组件。 */
     body.theme-dark{
       --ink-900:#f4f4f5;--ink-800:#e4e4e7;--ink-700:#d4d4d8;--ink-600:#b4b4bd;
       --ink-500:#a1a1aa;--ink-400:#a1a1aa;--line:#34343a;--line-strong:#4a4a53;
       --bg:#18181b;--bg-soft:#202024;--bg-hover:#2a2a30;--bg-active:#303038;
       --blue-soft:#172554;--green-soft:#143321;color-scheme:dark
     }
-    body.theme-dark .titlebar,body.theme-dark .skill-card,body.theme-dark .drop-pill,
+body.theme-dark .titlebar,body.theme-dark .skill-card,body.theme-dark .drop-pill,
     body.theme-dark .icon-pill,body.theme-dark .modal,body.theme-dark .pop,
     body.theme-dark .dz-slide,body.theme-dark .newapi .plus-orb{background:var(--bg);color:var(--ink-900)}
-    body.theme-dark .role-seg button.active{background:#f4f4f5;color:#18181b}
-    body.theme-dark .avt{color:#fff}
-
-    /* 会话菜单不再只依赖鼠标 hover，键盘聚焦和触屏都能到达。 */
+body.theme-dark .role-seg button.active{background:#f4f4f5;color:#18181b}
+body.theme-dark .avt{color:#fff}
+/* 会话菜单不再只依赖鼠标 hover，键盘聚焦和触屏都能到达。 */
     .proj-leaf:focus-within .ps-menu{display:inline-flex}
-
-    /* 平板：右侧面板改成覆盖式抽屉，不再挤压主工作区。 */
+/* 平板：右侧面板改成覆盖式抽屉，不再挤压主工作区。 */
     @media (max-width:1199px){
       .sidepanel{position:fixed;z-index:55;right:0;top:45px;bottom:0;height:auto;width:min(360px,calc(100vw - 48px));
         box-shadow:-10px 0 30px rgba(0,0,0,.14)}
@@ -605,7 +570,7 @@ svg{display:block}
       .wz-item{flex:none;max-width:190px}
       .mk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
-    /* 手机：左右栏都作为抽屉，主区独占宽度；工具条和卡片改为单列。 */
+/* 手机：左右栏都作为抽屉，主区独占宽度；工具条和卡片改为单列。 */
     @media (max-width:767px){
       .titlebar{min-height:42px;padding:4px 8px 0}.titlebar .wtab:not(.active),.win-controls{display:none}
       .sidebar{position:fixed;z-index:60;left:0;top:42px;bottom:0;height:auto;width:min(300px,86vw)!important;
@@ -621,7 +586,21 @@ svg{display:block}
       .overlay{padding:10px}.modal{padding:18px 16px;max-height:92vh}
       .proj-leaf .ps-menu{display:inline-flex}
     }
-
+/* 本页属性条上的小输入框（时长） */
+.dp-pagebar .dp-min{width:64px;height:26px;border:.5px solid var(--line-strong);border-radius:7px;
+  padding:0 6px;font-size:12.5px;font-family:inherit;text-align:center;color:var(--ink-800)}
+.dp-props{gap:8px}
+.dp-props .dp-cnt{margin-left:auto}
+/* 页缩略图上的操作条（R11） */
+.wz-thumb .ops{position:absolute;right:4px;top:4px;display:none;gap:3px}
+.wz-thumb:hover .ops{display:flex}
+.wz-thumb .ops button{width:22px;height:22px;border-radius:6px;border:.5px solid var(--line-strong);background:rgba(255,255,255,.94);color:var(--ink-600);font-size:11px;line-height:1;cursor:pointer;padding:0}
+.wz-thumb .ops button:hover{background:#fff;color:var(--ink-900)}
+/* 页内编辑叠加层（R11）：与 SVG 同在一个被 scale 的容器里，用设计像素绝对定位 */
+.dp-boxlayer{position:absolute;left:0;top:0;width:1280px;height:720px;z-index:3}
+.dp-box{position:absolute;box-sizing:border-box;border:1px dashed transparent;border-radius:4px;cursor:text;outline:none;white-space:pre-wrap;overflow:hidden;line-height:1.3;font-family:var(--font);color:transparent;caret-color:var(--ink-900)}
+.dp-box:hover{border-color:rgba(47,107,255,.45);background:rgba(47,107,255,.06)}
+.dp-box.dp-editing{border:1px solid var(--blue);background:rgba(255,255,255,.96);color:var(--ink-900);box-shadow:0 2px 10px rgba(0,0,0,.12);z-index:5;overflow:visible}
 </style>
 <!-- 侧边面板的多格式渲染库：CDN 主用，加载失败自动落回本地 vendor（离线不白屏） -->
 <script defer src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js" onerror="this.onerror=null;this.src='/static/vendor/marked.min.js'"></script>
@@ -3169,11 +3148,13 @@ svg{display:block}
       '<div class="dp-bd" id="wzDocBody" style="padding:12px 0 16px"></div>' +
       '<div class="dp-ft" id="wzDocRes"></div>';
   }
-  /* 幻灯片页签的左栏：页列表（WPS 那种"左边一列页"的第一步；R11 再做成真缩略图 + 拖动排序） */
+  /* 幻灯片页签的左栏：**真页缩略图**（复用服务端那份 SVG，缩到小框里）+ 悬停页操作（R11）。
+     拖动排序留到 R12 —— 先把"看着像 WPS、点点就能换页、能加/删/复制"做扎实。 */
   function wzRailThumbs(){
     var el = document.getElementById('wzLeft'); if(!el) return;
     var sl = (DOCP && DOCP.slides) || [];
-    var total = DOCP_SL.fillPreview ? ((DOCP_SL.pages || []).length || sl.length) : sl.length;
+    var pages = DOCP_SL.pages || [];
+    var total = DOCP_SL.fillPreview ? (pages.length || sl.length) : sl.length;
     var h = '<div class="wz-rail-h">幻灯片' + (total ? (' · 共 ' + total + ' 页') : '') + '</div>';
     if(!total){
       el.innerHTML = h + '<div class="wz-item" style="cursor:default;color:var(--ink-400)">（还没有页面）</div>';
@@ -3181,21 +3162,51 @@ svg{display:block}
     }
     for(var i = 0; i < total; i++){
       var s = sl[i] || {};
-      h += '<div class="wz-item' + (i === DOCP_PAGE ? ' wz-cur' : '') + '" data-thumb="' + i + '" role="button" tabindex="0">' +
-        '<span class="n">' + (i + 1) + '</span><div style="min-width:0">' +
-        '<div class="t">' + escHtml(s.name || s.title || ('第 ' + (i + 1) + ' 页')) + '</div>' +
-        '<div class="m">' + (parseInt(s.minutes, 10) ? ((parseInt(s.minutes, 10) || 0) + ' 分钟') : escHtml(s.layout || '要点')) + '</div>' +
+      var thumb = pages[i] ? '<div class="cv">' + pages[i] + '</div>'
+                           : '<div class="cv" style="display:flex;align-items:center;justify-content:center;' +
+                             'color:var(--ink-400);font-size:12px">' + escHtml(s.name || '（这页还没渲染）') + '</div>';
+      h += '<div class="wz-thumb' + (i === DOCP_PAGE ? ' wz-cur' : '') + '" data-thumb="' + i + '" role="button" tabindex="0">' +
+        thumb + '<div class="n">' + (i + 1) + ' / ' + total + '　' + escHtml(s.name || s.title || '') +
+        (parseInt(s.minutes, 10) ? ('　' + (parseInt(s.minutes, 10) || 0) + ' 分钟') : '') + '</div>' +
+        '<div class="ops">' +
+          '<button data-thumb-dup="' + i + '" title="复制这一页">⧉</button>' +
+          '<button data-thumb-up="' + i + '" title="上移">↑</button>' +
+          '<button data-thumb-dn="' + i + '" title="下移">↓</button>' +
+          '<button data-thumb-del="' + i + '" title="删掉这一页">✕</button>' +
         '</div></div>';
     }
     el.innerHTML = h;
-    Array.prototype.forEach.call(el.querySelectorAll('.wz-item[data-thumb]'), function(it){
-      it.addEventListener('click', function(){
+    Array.prototype.forEach.call(el.querySelectorAll('.wz-thumb[data-thumb]'), function(it){
+      it.addEventListener('click', function(ev){
+        if(ev.target && ev.target.closest && ev.target.closest('.ops')) return;   /* 点工具按钮不换页 */
         DOCP_PAGE = parseInt(it.dataset.thumb, 10) || 0;
         var bd = docpEl('wzDocBody');
         if(bd) docpPaintPage(bd);
-        wzRailThumbs();                     /* 高亮跟着走 */
+        wzRailThumbs();
       });
     });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-thumb-dup],[data-thumb-up],[data-thumb-dn],[data-thumb-del]'),
+      function(b){
+        b.addEventListener('click', function(ev){
+          ev.stopPropagation();
+          var i = parseInt(b.dataset.thumbDup || b.dataset.thumbUp || b.dataset.thumbDn ||
+                           b.dataset.thumbDel, 10) || 0;
+          if(b.dataset.thumbDup !== undefined) docpDupPage(i);
+          else if(b.dataset.thumbDel !== undefined) docpDelPage(i);
+          else docpMovePage(i, b.dataset.thumbUp !== undefined ? -1 : 1);
+        });
+      });
+  }
+  /* 复制一页（标题加「副本」，文字照抄） */
+  function docpDupPage(i){
+    var sl = (DOCP && DOCP.slides) || [];
+    var src = sl[i]; if(!src) return;
+    var copy = JSON.parse(JSON.stringify(src));
+    copy.name = (copy.name || copy.title || '第 ' + (i + 1) + ' 页') + '（副本）';
+    sl.splice(i + 1, 0, copy);
+    DOCP_PAGE = i + 1;
+    DOCP_SL.editing = -1;
+    docpAfterEdit(true);
   }
   /* 挂载（或重挂）文档外壳。笔记：`#wzDocFile` 是挂载时新建的，
      所以 change 绑定必须跟着挂载走（老代码绑在常驻元素上，这里不能照抄 —— 踩过）。 */
@@ -3296,6 +3307,23 @@ svg{display:block}
     dzRender();
     if(WZ_TAB !== 'plan') wzMountDoc();
     if(WZ_TAB === 'slides') wzRailThumbs();
+  }
+  /* 幻灯片页签上的快捷键：Ctrl+Z 撤销 / Ctrl+Y（或 Ctrl+Shift+Z）重做。
+     只在「幻灯片」页签生效，且只在没在输入框里打字时抢键（否则会打断老师打字）。 */
+  function docpKeysBind(){
+    document.addEventListener('keydown', function(ev){
+      if(WZ_TAB !== 'slides') return;
+      if(!(ev.ctrlKey || ev.metaKey)) return;
+      var k = String(ev.key || '').toLowerCase();
+      if(k !== 'z' && k !== 'y') return;
+      var t = ev.target || {};
+      if(t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') return;
+      var bd = docpEl('wzDocBody');
+      if(!bd) return;
+      ev.preventDefault();
+      if(k === 'y' || ev.shiftKey) docpRedo(bd);
+      else docpUndo(bd);
+    });
   }
   /* 编排台的「预览 PPT」也不再开新窗口：把这几页送进**右侧面板**的「幻灯片」页签看 */
   /* 「预览 PPT」不再"推给右侧面板"：就在同一个工作区切到「幻灯片」页签（R8） */
@@ -3810,9 +3838,10 @@ svg{display:block}
      面板只做三件事：要一份 SVG（POST /api/slide/render）、等比缩放进 16:9 台子、翻页。
      为什么不再在前端拼 HTML：那样预览与导出就是两套渲染，"预览=导出"永远修不掉。 */
   var DOCP_PAGE = 0;
-  var DOCP_SL = { pages: [], sig: '', themeId: '', themes: [], warn: [], fail: false, busy: false,
-                  editing: -1, seq: 0, saveTimer: null,
-                  tplId: '', tplList: [], tplLoaded: false, edited: false, fillPreview: false };
+  var DOCP_SL = { pages: [], boxes: [], sig: '', themeId: '', themes: [], warn: [], fail: false, busy: false,
+                  editing: -1, seq: 0, saveTimer: null, undo: [], redo: [],
+                  tplId: '', tplList: [], tplLoaded: false, edited: false, fillPreview: false,
+                  fillOverrides: {} };
   var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
                       ['two-col', '两栏'], ['media', '图文'], ['end', '结尾']];
   var CHARS_PER_BLOCK = 22;                     /* 与 slide_deck.CHARS_PER_BLOCK 对齐（只提示不截断） */
@@ -3941,10 +3970,13 @@ svg{display:block}
       if(d.preview && d.preview.length){
         DOCP_SL.fillPreview = true;
         DOCP_SL.pages = d.preview;
+        DOCP_SL.fillPlan = d.plan || null;     /* R11：填充页的盒子就从这份计划的 fills[].geo 来 */
+        DOCP_SL.fillOverrides = {};            /* 新填一遍 → 旧的逐格改动作废 */
         DOCP_SL.sig = 'fill-preview';          /* 占住 sig：别被普通渲染覆盖 */
         DOCP_PAGE = 0;
         docpRenderSlides(docpEl('wzDocBody'));
-        showToast('预览已切到「按模板填出来的样子」（' + d.preview.length + ' 页）');
+        showToast('预览已切到「按模板填出来的样子」（' + d.preview.length + ' 页）—— ' +
+                  '点页面上的字也能直接改，改完点「应用修改」');
       }
       showToast('已按模板填充' + (d.warnings && d.warnings.length ? '（有提示，见结果条）' : ''));
     }).catch(function(e){ docpResult('<span style="color:#dc2626">✗ ' + escHtml(String(e)) + '</span>'); });
@@ -3960,10 +3992,14 @@ svg{display:block}
       if(cb) cb();
     }).catch(function(){ if(cb) cb(); });
   }
-  /* 页数据指纹：面板数据或主题变了才重新找服务端要 SVG */
+  /* 页数据指纹：面板数据或主题变了才重新找服务端要 SVG。
+     注意把 blocks/bullets 的**文字**也算进指纹（R11）：页内改字后必须重出 SVG，否则改了看不见。 */
   function docpSlidesSig(sl){
     return (docpThemeGet() || '-') + '|' + sl.length + '|' + sl.map(function(s){
-      return [s.name || '', s.layout || '', s.minutes || '', (s.bullets || []).length, (s.blocks || []).length].join('~');
+      var txt = ((s.blocks || []).map(function(b){ return (b.label || '') + (b.text || ''); }).join('¶')) ||
+                ((s.bullets || []).join('¶'));
+      return [s.name || '', s.title || '', s.layout || '', s.minutes || '', s.label || '',
+              s.subtitle || '', s.meta || '', s.closing || '', s.caption || '', txt].join('~');
     }).join('||');
   }
   function docpPagesEnsure(bd, sl, cb){
@@ -3972,20 +4008,24 @@ svg{display:block}
     if(DOCP_SL.sig === sig && DOCP_SL.pages.length){ if(cb) cb(); return; }
     if(DOCP_SL.busy) return;
     DOCP_SL.busy = true;
+    /* annotate=true（**只有预览传**）：拿回每页的可编辑盒子（`boxes`），页内编辑靠它定位；
+       导出那条路不传，SVG 与以前逐字节一致（docs/25 D8）。 */
     spJson('/api/slide/render', 'POST', { theme_id: docpThemeGet(), template_id: docpTplGet(),
-                                          slides: sl,
+                                          slides: sl, annotate: true,
                                           title: (DOCP && DOCP.title) || '', session_id: CUR || '' })
       .then(function(d){
         DOCP_SL.busy = false;
         if(d && d.ok && d.enabled !== false && (d.pages || []).length){
           DOCP_SL.pages = d.pages; DOCP_SL.warn = d.warnings || []; DOCP_SL.fail = false;
+          DOCP_SL.boxes = d.boxes || [];
           DOCP_SL.sig = sig;
         }else{
-          DOCP_SL.pages = []; DOCP_SL.fail = true;      /* 拿不到 SVG → 退化成纯文本预览，别白屏 */
+          DOCP_SL.pages = []; DOCP_SL.boxes = []; DOCP_SL.fail = true;   /* 拿不到 SVG → 退化成纯文本，别白屏 */
         }
         if(cb) cb();
       })
-      .catch(function(){ DOCP_SL.busy = false; DOCP_SL.pages = []; DOCP_SL.fail = true; if(cb) cb(); });
+      .catch(function(){ DOCP_SL.busy = false; DOCP_SL.pages = []; DOCP_SL.boxes = [];
+                         DOCP_SL.fail = true; if(cb) cb(); });
   }
   /* 纯文本兜底（服务端渲染不可用时用；没有 SVG 也要能看内容） */
   function docpPlainHtml(s){
@@ -4042,18 +4082,16 @@ svg{display:block}
       }).catch(function(){});
     }, 700);
   }
-  /* 结构变了（增删/排序/换版式）→ 整块重画；文字变了 → 只更卡片标题 + 重出 SVG，别抢焦点 */
+  /* 结构变了（增删/排序/换版式）→ 整块重画；文字变了 → 只重出 SVG，别抢焦点 */
   function docpAfterEdit(structural){
     var bd = docpEl('wzDocBody');
     if(!bd) return;
+    DOCP_SL.sig = '';                            /* 数据变了就必须重出 SVG（否则改动看不见） */
     if(structural){ docpRenderSlides(bd); }
     else{
-      var card = bd.querySelector('.dp-slide[data-pg="' + DOCP_PAGE + '"] h4');
-      var s = docpSlideAt(DOCP_PAGE);
-      if(card && s) card.textContent = s.name || '';
-      DOCP_SL.sig = '';
       docpPagesEnsure(bd, (DOCP && DOCP.slides) || [], function(){ docpPaintStage(bd); });
     }
+    docpRailMaybe();                             /* 左栏缩略图跟着更新（页数/顺序/当前页） */
     docpSaveSlides();
   }
   function docpAddPage(){
@@ -4080,49 +4118,6 @@ svg{display:block}
     docpAfterEdit(true);
   }
   /* 每页卡片 + 就地编辑器 */
-  function docpCardHtml(s, i, total){
-    var bs = docpBlocksOf(s).slice(0, 6);
-    var opts = DOCP_LAYOUTS.map(function(lo){
-      var cur = (s.layout || (i === 0 ? 'cover' : (i === total - 1 ? 'end' : 'bullets')));
-      return '<option value="' + lo[0] + '"' + (lo[0] === cur ? ' selected' : '') + '>' + lo[1] + '</option>';
-    }).join('');
-    return '<div class="dp-slide' + (i === DOCP_PAGE ? ' dp-cur' : '') + '" data-pg="' + i + '">' +
-      '<div class="n">第 ' + (i + 1) + ' / ' + total + ' 页' +
-      (s.minutes ? ('　' + escHtml(String(s.minutes)) + ' 分钟') : '') + '</div>' +
-      '<h4>' + escHtml(s.name || '') + '</h4>' +
-      (bs.length ? ('<ul>' + bs.map(function(b){ return '<li>' + escHtml(b.text) + '</li>'; }).join('') + '</ul>') : '') +
-      '<div class="dp-cardbar">' +
-        '<button data-edit="' + i + '">' + (DOCP_SL.editing === i ? '收起' : '改') + '</button>' +
-        '<button data-page-up="' + i + '" title="上移">↑</button>' +
-        '<button data-page-dn="' + i + '" title="下移">↓</button>' +
-        '<select data-layout="' + i + '" title="换版式">' + opts + '</select>' +
-        '<button data-page-del="' + i + '" title="删掉这页">删</button>' +
-      '</div>' + (DOCP_SL.editing === i ? docpEditorHtml(s, i) : '') + '</div>';
-  }
-  function docpEditorHtml(s, i){
-    var bs = docpBlocksOf(s);
-    var rows = bs.map(function(b, j){
-      var over = (b.text || '').length > CHARS_PER_BLOCK;
-      return '<div class="dp-blk" data-b="' + j + '">' +
-        '<label>小块 ' + (j + 1) + '（可选小标签 + 内容）</label>' +
-        '<input type="text" data-f="label" value="' + escHtml(b.label || '') + '" placeholder="小标签，如「定义」">' +
-        '<textarea data-f="text" rows="2">' + escHtml(b.text || '') + '</textarea>' +
-        '<div class="row">' +
-          '<button data-b-up="' + j + '">↑</button><button data-b-dn="' + j + '">↓</button>' +
-          '<button data-b-del="' + j + '">删这块</button>' +
-          '<span class="dp-cnt' + (over ? ' dp-over' : '') + '">' + (b.text || '').length + ' 字</span>' +
-        '</div></div>';
-    }).join('');
-    return '<div class="dp-edit" data-edit-for="' + i + '">' +
-      '<label>这一页的标题</label>' +
-      '<input type="text" data-f="name" value="' + escHtml(s.name || '') + '">' +
-      '<label>时长（分钟，可空）</label>' +
-      '<input type="text" data-f="minutes" value="' + escHtml(String(s.minutes || '')) + '">' +
-      rows +
-      '<div class="acts"><button data-b-add="' + i + '">+ 加一块</button>' +
-      '<span class="dp-cnt">建议每块 ≤' + CHARS_PER_BLOCK + ' 字（超出只提示，不会截断）</span></div>' +
-      '</div>';
-  }
   function docpWarnHtml(){
     return (DOCP_SL.warn || []).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
   }
@@ -4136,8 +4131,265 @@ svg{display:block}
     if(st) st.innerHTML = docpSlideStat(sl);      /* 兜底状态也要如实显示（别让人以为还是 SVG） */
     var wb = bd.querySelector('#dpWarnBox');
     if(wb) wb.innerHTML = docpWarnHtml();         /* 渲染回来的提示（如"建议拆页"）要进 DOM */
+    docpBoxesPaint(bd);                           /* R11：给这一页铺"可编辑盒子"叠加层 */
     docpFitSlide(bd);
   }
+  /* ==== 页内编辑（R11）=========================================================
+     做法：服务端在预览 SVG 里给每个文字槽打了 `data-slot` 并回传 `boxes`（设计像素 1280×720）。
+     叠加层就放在**同一个被 scale 的容器**里（#dpCanvas）用绝对定位 —— 缩放、位置天然对齐，
+     不用量任何像素（jsdom / SVG 量尺寸都不可靠，这也是"能自动测"的关键）。
+     点一下直接改；改完把**那一格**回传 `POST /api/slide/slot`（槽位→字段的映射在服务端，只有一份）。 */
+  var WZ_EDIT = { slot: '', box: null, seq: 0 };
+
+  function docpBoxesHtml(boxes){
+    var h = '';
+    boxes.forEach(function(b){
+      if(!b || !b.slot) return;
+      h += '<div class="dp-box" data-slot="' + escHtml(b.slot) + '" role="button" tabindex="0"' +
+        ' title="点一下改这段文字"' +
+        ' style="left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px;' +
+        'font-size:' + b.size + 'px;text-align:' + (b.align === 'middle' ? 'center'
+          : (b.align === 'end' ? 'right' : 'left')) + '"></div>';
+    });
+    return h;
+  }
+  function docpBoxesPaint(bd){
+    var cv = bd.querySelector('#dpCanvas');
+    if(!cv) return;
+    Array.prototype.forEach.call(cv.querySelectorAll('.dp-boxlayer'), function(n){ n.remove(); });
+    if(DOCP_SL.fail) return;                                 /* 纯文本兜底：没有 SVG，也就没有盒子 */
+    var boxes = DOCP_SL.fillPreview ? docpFillBoxes() : ((DOCP_SL.boxes || [])[DOCP_PAGE] || []);
+    if(!boxes.length) return;
+    var layer = document.createElement('div');
+    layer.className = 'dp-boxlayer';
+    layer.innerHTML = docpBoxesHtml(boxes);
+    cv.appendChild(layer);
+    Array.prototype.forEach.call(layer.querySelectorAll('.dp-box'), function(el){
+      el.addEventListener('click', function(){ docpBoxEdit(bd, el); });
+    });
+  }
+  /* 模板填充页的盒子：来自填充计划的 `fills[]`（内容槽才有；装饰槽一个字不许动）。
+     坐标就是 `geo`（1280×720 设计像素），槽位名 `fill:<shape_index>` —— 回写用 `mapping`。 */
+  function docpFillBoxes(){
+    var plan = DOCP_SL.fillPlan;
+    if(!plan || !plan.pages) return [];
+    var page = plan.pages[DOCP_PAGE];
+    if(!page) return [];
+    var out = [];
+    (page.fills || []).forEach(function(f){
+      if((f.role || '') === 'decoration') return;
+      var geo = f.geo || {};
+      if(!(parseFloat(geo.w) > 0)) return;
+      var text = (f.shape_index in DOCP_SL.fillOverrides)
+        ? DOCP_SL.fillOverrides[f.shape_index] : (f.text || '');
+      out.push({ slot: 'fill:' + f.shape_index, kind: 'text', align: 'start',
+                 x: geo.x, y: geo.y, w: geo.w, h: geo.h,
+                 size: parseFloat(f.size_px) || 16, text: text,
+                 capacity: f.capacity, role: f.role });
+    });
+    return out;
+  }
+  /* 填充页改字：**先本地记着**（立刻能在页面上看到），点「应用修改」才真正重填（重填 3~6 秒） */
+  function docpFillCommit(bd, slot, text){
+    var m = /^fill:(\d+)$/.exec(slot);
+    if(!m) return;
+    DOCP_SL.fillOverrides[parseInt(m[1], 10)] = text;
+    docpFillPendingPaint(bd);
+    showToast('记下了（还没重填）：改完点「应用修改」');
+  }
+  function docpFillPendingCount(){
+    return Object.keys(DOCP_SL.fillOverrides || {}).length;
+  }
+  function docpFillPendingPaint(bd){
+    var el = bd.querySelector('#dpFillApply');
+    if(el){
+      var n = docpFillPendingCount();
+      el.disabled = !n;
+      el.textContent = n ? ('应用修改（' + n + '）') : '应用修改';
+    }
+    var host = bd.querySelector('#dpFillPending');
+    if(host) host.textContent = docpFillPendingCount() ? ('有 ' + docpFillPendingCount() + ' 处改动待应用') : '';
+  }
+  /* 把逐格改动合成 `mapping` 交给后端重填（接口与外部 agent 用的是同一条：docs/24 §4） */
+  function docpFillApply(bd){
+    var plan = DOCP_SL.fillPlan;
+    var tid = docpTplGet();
+    var over = DOCP_SL.fillOverrides || {};
+    var keys = Object.keys(over);
+    if(!plan || !tid || !keys.length) return;
+    var byPage = {};
+    (plan.pages || []).forEach(function(p){
+      (p.fills || []).forEach(function(f){
+        if(!(f.shape_index in over)) return;
+        var ti = p.template_index;
+        byPage[ti] = byPage[ti] || [];
+        byPage[ti].push({ shape_index: f.shape_index, text: over[f.shape_index] });
+      });
+    });
+    var mapping = Object.keys(byPage).map(function(ti){
+      return { template_index: parseInt(ti, 10), fills: byPage[ti] };
+    });
+    var btn = bd.querySelector('#dpFillApply');
+    if(btn){ btn.disabled = true; btn.textContent = '正在重填…'; }
+    spJsonPermission('/api/slide/fill', 'POST', {
+      template_id: tid, session_id: CUR || '', slides: (DOCP && DOCP.slides) || [],
+      title: (DOCP && DOCP.title) || '', outDir: dzOutDirGet() || '', confirm: true,
+      mapping: mapping,
+    }).then(function(d){
+      if(!d || !d.ok){
+        if(btn){ btn.disabled = false; btn.textContent = '应用修改'; }
+        showToast('重填失败：' + ((d && d.error) || '未知错误'), false);
+        return;
+      }
+      DOCP_SL.fillOverrides = {};
+      DOCP_SL.fillPlan = d.plan || DOCP_SL.fillPlan;
+      if(d.preview && d.preview.length){ DOCP_SL.pages = d.preview; }
+      DOCP_SL.sig = 'fill-preview';
+      DOCP_SL.previewSig = '';
+      docpRenderSlides(bd);
+      showToast('已按你的修改重新填好');
+    }).catch(function(e){
+      if(btn){ btn.disabled = false; btn.textContent = '应用修改'; }
+      showToast('重填失败：' + (e && e.message ? e.message : e), false);
+    });
+  }
+  /* 进入某一格的编辑态：把原槽文字藏起来，同位置放一个输入框（所见即所编） */
+  function docpBoxEdit(bd, el){
+    var cv = bd.querySelector('#dpCanvas');
+    if(!cv) return;
+    var slot = el.dataset.slot;
+    var s = docpSlideAt(DOCP_PAGE) || {};
+    var cur = DOCP_SL.fillPreview ? (el.textContent || '') : docpSlotText(s, slot);
+    var svgSlot = cv.querySelector('svg [data-slot="' + slot + '"]');
+    if(svgSlot) svgSlot.style.visibility = 'hidden';
+    var size = parseFloat((el.style.fontSize || '').replace('px', '')) || 24;
+    el.classList.add('dp-editing');
+    el.setAttribute('contenteditable', 'true');
+    el.style.fontSize = size + 'px';
+    el.textContent = cur;
+    el.focus();
+    try{
+      var r = document.createRange(); r.selectNodeContents(el);
+      var sel = window.getSelection(); sel.removeAllRanges();
+      sel.addRange(r);                                    /* 全选：直接打字就是替换 */
+    }catch(e){}
+    WZ_EDIT.slot = slot;
+    WZ_EDIT.box = el;
+    var done = function(commit){
+      if(WZ_EDIT.box !== el) return;
+      WZ_EDIT.box = null; WZ_EDIT.slot = '';
+      el.removeAttribute('contenteditable');
+      el.classList.remove('dp-editing');
+      var text = (el.textContent || '').replace(/\s+$/, '');
+      el.textContent = '';
+      if(svgSlot) svgSlot.style.visibility = '';
+      if(commit && text !== cur) docpSlotCommit(bd, slot, text, cur);
+    };
+    el.addEventListener('blur', function(){ done(true); });
+    el.addEventListener('keydown', function(ev){
+      if(ev.key === 'Escape'){ ev.preventDefault(); done(false); }
+      if(ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); done(true); }
+      ev.stopPropagation();
+    });
+  }
+  /* 槽位当前文字（**只用于显示**；真正的字段映射在服务端 slide_deck.apply_slot） */
+  function docpSlotText(s, slot){
+    var blocks = docpBlocksOf(s);
+    var m = /^block:(\d+)(:label)?$/.exec(slot);
+    if(m){
+      var b = blocks[parseInt(m[1], 10)] || {};
+      return m[2] ? (b.label || '') : (b.text || '');
+    }
+    m = /^(left|right):(heading|bullet:(\d+))$/.exec(slot);
+    if(m){
+      var col = s[m[1]] || {};
+      if(m[2] === 'heading') return col.heading || '';
+      return ((col.bullets || [])[parseInt(m[3], 10)]) || '';
+    }
+    if(slot === 'title') return s.name || s.title || '';
+    return s[slot] || '';
+  }
+  /* 改动提交：本地先"乐观"生效（页面立刻是新的），同时把这一格回传服务端落库 */
+  function docpSlotCommit(bd, slot, text, before){
+    if(/^fill:/.test(slot)){ docpFillCommit(bd, slot, text); return; }   /* 模板填充页：走 mapping */
+    DOCP_SL.undo.push({ index: DOCP_PAGE, slot: slot, before: before, after: text });
+    if(DOCP_SL.undo.length > 20) DOCP_SL.undo.shift();
+    DOCP_SL.redo.length = 0;
+    docpSlotApplyLocal(docpSlideAt(DOCP_PAGE), slot, text);
+    DOCP_SL.sig = '';                                   /* 逼下一页重出 SVG（文字变了） */
+    var sl = (DOCP && DOCP.slides) || [];
+    docpPagesEnsure(bd, sl, function(){ docpPaintStage(bd); docpRailMaybe(); });
+    var seq = ++DOCP_SL.seq;
+    spJson('/api/slide/slot', 'POST', { session_id: CUR || '', index: DOCP_PAGE, slot: slot,
+                                        text: text, title: (DOCP && DOCP.title) || '' })
+      .then(function(d){
+        if(seq !== DOCP_SL.seq) return;
+        if(d && d.ok && d.slides){ DOCP.slides = d.slides; }   /* 采纳服务端收干净的结果 */
+        DOCP_SL.edited = true;
+        docpUpdateStat();
+      }).catch(function(){ showToast('这一格没存上（网络？）：改动还在页面上，点【保存】再试', false); });
+    docpFmtTip(true);
+  }
+  /* 本地乐观改（与服务端 apply_slot 同语义：清空即删、下标补齐） */
+  function docpSlotApplyLocal(s, slot, text){
+    if(!s) return;
+    var blocks = docpBlocksOf(s);
+    var m = /^block:(\d+)(:label)?$/.exec(slot);
+    if(m){
+      var i = parseInt(m[1], 10);
+      while(blocks.length <= i) blocks.push({ label: '', text: '' });
+      if(m[2]) blocks[i].label = text;
+      else{
+        blocks[i].text = text;
+        if(!text && !(blocks[i].label || '')) blocks.splice(i, 1);
+      }
+      docpSetBlocks(s, blocks);
+      return;
+    }
+    m = /^(left|right):(heading|bullet:(\d+))$/.exec(slot);
+    if(m){
+      var col = s[m[1]] || { heading: '', bullets: [] };
+      col.bullets = (col.bullets || []).slice();
+      if(m[2] === 'heading') col.heading = text;
+      else{
+        var j = parseInt(m[3], 10);
+        while(col.bullets.length <= j) col.bullets.push('');
+        if(text) col.bullets[j] = text; else col.bullets.splice(j, 1);
+      }
+      s[m[1]] = col;
+      return;
+    }
+    if(slot === 'title'){ s.name = text; s.title = text; }
+    else s[slot] = text;
+  }
+  /* 撤销 / 重做（本地 20 步；恢复后同样回传服务端） */
+  function docpUndo(bd){
+    var step = DOCP_SL.undo.pop();
+    if(!step){ showToast('没有可撤销的了'); return; }
+    DOCP_SL.redo.push(step);
+    DOCP_PAGE = step.index;
+    docpSlotApplyLocal(docpSlideAt(step.index), step.slot, step.before);
+    docpSlotPush(bd, step.index, step.slot, step.before);
+  }
+  function docpRedo(bd){
+    var step = DOCP_SL.redo.pop();
+    if(!step){ showToast('没有可重做的了'); return; }
+    DOCP_SL.undo.push(step);
+    DOCP_PAGE = step.index;
+    docpSlotApplyLocal(docpSlideAt(step.index), step.slot, step.after);
+    docpSlotPush(bd, step.index, step.slot, step.after);
+  }
+  function docpSlotPush(bd, index, slot, text){
+    DOCP_SL.sig = '';
+    docpRenderSlides(bd);                                /* 撤回可能改了块数，整块重画最稳 */
+    var seq = ++DOCP_SL.seq;
+    spJson('/api/slide/slot', 'POST', { session_id: CUR || '', index: index, slot: slot,
+                                        text: text, title: (DOCP && DOCP.title) || '' })
+      .then(function(d){ if(seq === DOCP_SL.seq && d && d.ok && d.slides) DOCP.slides = d.slides; })
+      .catch(function(){});
+  }
+  /* 幻灯片页签的左栏：页缩略图（真图）+ 页操作 */
+  function docpRailMaybe(){ if(WZ_TAB === 'slides') wzRailThumbs(); }
   function docpSlidesHtml(sl){
     var opts = DOCP_SL.themes.map(function(t){
       return '<option value="' + escHtml(t.id) + '"' + (t.id === docpThemeGet() ? ' selected' : '') + '>' +
@@ -4161,16 +4413,41 @@ svg{display:block}
       '<div id="dpWarnBox">' + warn + '</div>' +
       (DOCP_SL.fillPreview
         ? '<div class="dp-slhead"><span class="dp-warn" style="margin:0">当前预览 = 按模板《' +
-          escHtml(docpTplName(docpTplGet())) + '》填出来的样子</span>' +
-          '<span style="flex:1"></span><button id="dpPreviewBack">切回我们的版式</button></div>'
+          escHtml(docpTplName(docpTplGet())) + '》填出来的样子 —— <b>内容槽也能点着改</b></span>' +
+          '<span id="dpFillPending" style="font-size:11.5px;color:var(--ink-500)"></span>' +
+          '<span style="flex:1"></span>' +
+          '<button id="dpFillApply"' + (docpFillPendingCount() ? '' : ' disabled') + '>应用修改' +
+          (docpFillPendingCount() ? ('（' + docpFillPendingCount() + '）') : '') + '</button>' +
+          '<button id="dpPreviewBack">切回我们的版式</button></div>'
         : '') +
       '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-canvas" id="dpCanvas"></div></div>' +
       '<div class="dp-pagebar"><button data-pg="prev">上一页</button>' +
-      '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页　点下面的卡片可直接跳页</span>' +
-      '<button data-pg="next">下一页</button></div>' +
-      sl.map(function(s, i){ return docpCardHtml(s, i, sl.length); }).join('') +
+      '<button data-pg="next">下一页</button>' +
+      '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页　' +
+      '<b>点页面上的文字就能直接改</b>（左栏缩略图换页 · Ctrl+Z 撤销）</span></div>' +
+      docpPagePropsHtml() +
       '<div class="dp-pagebar"><button id="dpAddPage">+ 加一页</button>' +
+      '<button id="dpUndo">撤销</button><button id="dpRedo">重做</button>' +
       '<span>改完自动存回会话；下载 ▾ 里的「新版式」就是这份</span></div>';
+  }
+  /* 本页属性条（R12）：页内点着改覆盖不到的字段 —— 时长、版式、加一块。
+     标题/正文都在页面上直接改，所以这里不重复放标题输入框。 */
+  function docpPagePropsHtml(){
+    var sl = (DOCP && DOCP.slides) || [];
+    var s = docpSlideAt(DOCP_PAGE) || {};
+    var cur = s.layout || (DOCP_PAGE === 0 ? 'cover' : (DOCP_PAGE === sl.length - 1 ? 'end' : 'bullets'));
+    var opts = DOCP_LAYOUTS.map(function(lo){
+      return '<option value="' + lo[0] + '"' + (lo[0] === cur ? ' selected' : '') + '>' + lo[1] + '</option>';
+    }).join('');
+    return '<div class="dp-pagebar dp-props">' +
+      '<span>本页属性</span>' +
+      '<select id="dpLayout" title="换版式">' + opts + '</select>' +
+      '<input id="dpMinutes" class="dp-min" type="number" min="0" value="' +
+        (parseInt(s.minutes, 10) || 0) + '" title="这一页的时长（分钟）" aria-label="本页时长（分钟）">' +
+      '<span>分钟</span>' +
+      '<button id="dpAddBlock" title="在本页最后加一块要点（加完点它直接改字）">＋ 加一块</button>' +
+      '<span style="flex:1"></span>' +
+      '<span class="dp-cnt">每块建议 ≤ ' + CHARS_PER_BLOCK + ' 字（超出只提示，不截断）</span></div>';
   }
   /* 幻灯片页签的全部接线（每次重画都要重来一遍） */
   function docpSlidesWire(bd, sl){
@@ -4182,6 +4459,7 @@ svg{display:block}
         else if(v === 'next') DOCP_PAGE++;
         else DOCP_PAGE = parseInt(v, 10) || 0;
         docpPaintPage(bd);
+        docpRailMaybe();
       });
     });
     var sel = bd.querySelector('#dpTheme');
@@ -4192,6 +4470,31 @@ svg{display:block}
       if(docpTplGet()) { docpTplSet(''); showToast('已切回内置主题（模板已取消）'); }
       DOCP_SL.sig = '';                  /* 换主题 → 重新要一份 SVG */
       docpRenderSlides(bd);
+    });
+    var undo = bd.querySelector('#dpUndo');
+    if(undo) undo.addEventListener('click', function(){ docpUndo(bd); });
+    var redo = bd.querySelector('#dpRedo');
+    if(redo) redo.addEventListener('click', function(){ docpRedo(bd); });
+    /* 本页属性：换版式 / 改时长 / 加一块（这三样页内编辑覆盖不到） */
+    var lay = bd.querySelector('#dpLayout');
+    if(lay) lay.addEventListener('change', function(){
+      var s = docpSlideAt(DOCP_PAGE);
+      if(s){ s.layout = lay.value; docpAfterEdit(true); }
+    });
+    var mins = bd.querySelector('#dpMinutes');
+    if(mins) mins.addEventListener('change', function(){
+      var s = docpSlideAt(DOCP_PAGE);
+      if(s){ s.minutes = parseInt(mins.value, 10) || 0; docpAfterEdit(false); }
+    });
+    var addBlk = bd.querySelector('#dpAddBlock');
+    if(addBlk) addBlk.addEventListener('click', function(){
+      var s = docpSlideAt(DOCP_PAGE);
+      if(!s) return;
+      var blocks = docpBlocksOf(s);
+      blocks.push({ label: '', text: '新要点' });     /* 给个占位文字：空块存不住（clean_slides 会丢） */
+      docpSetBlocks(s, blocks);
+      docpAfterEdit(true);
+      showToast('加了，直接点页面上的「新要点」改字');
     });
     var add = bd.querySelector('#dpAddPage');
     if(add) add.addEventListener('click', docpAddPage);
@@ -4262,120 +4565,24 @@ svg{display:block}
     if(pvBack) pvBack.addEventListener('click', function(){
       DOCP_SL.fillPreview = false;
       DOCP_SL.pages = [];
+      DOCP_SL.fillPlan = null;
+      DOCP_SL.fillOverrides = {};
       DOCP_SL.sig = '';                       /* 清掉指纹 → 重新取我们版式的 SVG */
       DOCP_PAGE = 0;
       docpRenderSlides(bd);
     });
-    bd.querySelectorAll('[data-edit]').forEach(function(b){
-      b.addEventListener('click', function(){
-        var i = parseInt(b.dataset.edit, 10) || 0;
-        DOCP_SL.editing = (DOCP_SL.editing === i) ? -1 : i;
-        DOCP_PAGE = i;
-        docpRenderSlides(bd);
-      });
-    });
-    bd.querySelectorAll('[data-page-up]').forEach(function(b){
-      b.addEventListener('click', function(){ docpMovePage(parseInt(b.dataset.pageUp, 10) || 0, -1); });
-    });
-    bd.querySelectorAll('[data-page-dn]').forEach(function(b){
-      b.addEventListener('click', function(){ docpMovePage(parseInt(b.dataset.pageDn, 10) || 0, 1); });
-    });
-    bd.querySelectorAll('[data-page-del]').forEach(function(b){
-      b.addEventListener('click', function(){ docpDelPage(parseInt(b.dataset.pageDel, 10) || 0); });
-    });
-    bd.querySelectorAll('[data-layout]').forEach(function(s2){
-      s2.addEventListener('change', function(){
-        var i = parseInt(s2.dataset.layout, 10) || 0;
-        var s = docpSlideAt(i);
-        if(s){ s.layout = s2.value; docpAfterEdit(true); }
-      });
-    });
-    /* 就地编辑：文字改动 700ms 防抖存回；结构改动立刻重画 */
-    var box = bd.querySelector('.dp-edit');
-    if(box){
-      var page = parseInt(box.dataset.editFor, 10) || 0;
-      /* 注意：一律用 docpSlideAt(page) **现取**，不要闭包持有对象引用 ——
-         保存回来的清洗结果会整段替换 DOCP.slides，闭包里的旧对象会变成"孤儿"，
-         之后的修改就写进孤儿里、界面上看不到（踩过）。 */
-      box.querySelectorAll('input[data-f],textarea[data-f]').forEach(function(inp){
-        var f = inp.dataset.f;
-        var blk = inp.closest('.dp-blk');
-        inp.addEventListener('input', function(){
-          var s = docpSlideAt(page);
-          if(!s) return;
-          if(blk){                                        /* 块内字段 */
-            var j = parseInt(blk.dataset.b, 10) || 0;
-            var blocks = docpBlocksOf(s);
-            if(blocks[j]){
-              blocks[j][f === 'label' ? 'label' : 'text'] = inp.value;
-              docpSetBlocks(s, blocks);
-            }
-            if(f === 'text'){
-              var cnt = blk.querySelector('.dp-cnt');
-              if(cnt){
-                cnt.textContent = inp.value.length + ' 字';
-                cnt.classList.toggle('dp-over', inp.value.length > CHARS_PER_BLOCK);
-              }
-            }
-          }else{
-            s[f] = inp.value;
-          }
-          docpAfterEdit(false);
-        });
-      });
-      box.querySelectorAll('[data-b-add]').forEach(function(b){
-        b.addEventListener('click', function(){
-          var s = docpSlideAt(page);
-          if(!s) return;
-          var blocks = docpBlocksOf(s);
-          blocks.push({ label: '', text: '' });
-          docpSetBlocks(s, blocks);
-          docpAfterEdit(true);
-        });
-      });
-      box.querySelectorAll('[data-b-del]').forEach(function(b){
-        b.addEventListener('click', function(){
-          var s = docpSlideAt(page);
-          if(!s) return;
-          var j = parseInt(b.dataset.bDel, 10) || 0;
-          var blocks = docpBlocksOf(s);
-          blocks.splice(j, 1);
-          docpSetBlocks(s, blocks);
-          docpAfterEdit(true);
-        });
-      });
-      box.querySelectorAll('[data-b-up]').forEach(function(b){
-        b.addEventListener('click', function(){
-          var s = docpSlideAt(page);
-          if(!s) return;
-          var j = parseInt(b.dataset.bUp, 10) || 0;
-          var blocks = docpBlocksOf(s);
-          if(j > 0){ var t = blocks[j - 1]; blocks[j - 1] = blocks[j]; blocks[j] = t; docpSetBlocks(s, blocks); docpAfterEdit(true); }
-        });
-      });
-      box.querySelectorAll('[data-b-dn]').forEach(function(b){
-        b.addEventListener('click', function(){
-          var s = docpSlideAt(page);
-          if(!s) return;
-          var j = parseInt(b.dataset.bDn, 10) || 0;
-          var blocks = docpBlocksOf(s);
-          if(j < blocks.length - 1){ var t = blocks[j + 1]; blocks[j + 1] = blocks[j]; blocks[j] = t; docpSetBlocks(s, blocks); docpAfterEdit(true); }
-        });
-      });
-    }
+    var fillApply = bd.querySelector('#dpFillApply');
+    if(fillApply) fillApply.addEventListener('click', function(){ docpFillApply(bd); });
   }
-  /* 只换页：更新舞台 + 当前卡片高亮 + 页码，**不重建 DOM**（重建会让页面滚动位置跳走 —— 踩过） */
+  /* 只换页：更新舞台 + 页码，**不重建 DOM**（重建会让页面滚动位置跳走 —— 踩过） */
   function docpPaintPage(bd){
     var sl = (DOCP && DOCP.slides) || [];
     var total = DOCP_SL.fillPreview ? ((DOCP_SL.pages || []).length || sl.length) : sl.length;
     if(DOCP_PAGE < 0) DOCP_PAGE = 0;
     if(DOCP_PAGE > total - 1) DOCP_PAGE = total - 1;
     docpPaintStage(bd);
-    Array.prototype.forEach.call(bd.querySelectorAll('.dp-slide'), function(el, i){
-      el.classList.toggle('dp-cur', i === DOCP_PAGE);
-    });
     var bar = bd.querySelector('.dp-pagebar span');
-    if(bar) bar.textContent = '第 ' + (DOCP_PAGE + 1) + ' / ' + total + ' 页　点下面的卡片可直接跳页';
+    if(bar) bar.textContent = '第 ' + (DOCP_PAGE + 1) + ' / ' + total + ' 页　点左栏缩略图换页';
   }
   function docpRenderSlides(bd){
     var deck = docpBuildDeck(), sl = deck.slides || [];
@@ -4881,6 +5088,7 @@ svg{display:block}
   }
   /* 启动初始化（R9 起面板不再有文档视图，这里只剩"预览台尺寸跟着窗口变"这一件事） */
   function docpInit(){
+    docpKeysBind();                                   /* Ctrl+Z / Ctrl+Y（幻灯片页签） */
     window.addEventListener('resize', function(){ if(DOCP_ON) docpRefit(); });
   }
   /* ==== 启动初始化（会话文档预览面板 + 导出位置；编排台由 dzBind 自调用初始化）==== */

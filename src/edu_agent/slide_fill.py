@@ -799,14 +799,20 @@ SCHEMA = "edu-agent.fill-plan.v1"
 
 
 def apply_mapping(the_plan: dict, mapping: list[dict] | None) -> dict:
-    """把**外部 agent** 给的 `mapping` 收干净后套进计划（判断由 agent 做，执行由我们做）。
+    """把**外部 agent（或老师的页内编辑）**给的 `mapping` 收干净后套进计划（判断由调用方做，执行由我们做）。
 
     `mapping` 形状（与 `plan["pages"]` 同构，可以只给一部分页）：
 
-        [{"template_index": 1, "fills": [{"role": "title", "text": "情境导入"},
-                                         {"role": "body",  "text": "投影五个实例"}]}]
+        [{"template_index": 1, "fills": [{"shape_index": 5, "text": "改后的正文"}]}]
 
-    规则：只认计划里**已有的模板页**与**已有的 role**；文字超容量仍走 `_fit_text` 适度压缩并记 `adjustments`；
+    两条写法：
+
+    · **`shape_index` 精确指槽**（页内编辑与"一页多个同角色槽"必须用这个）：
+      只改那一个框。为什么必须有它（R7 发现的真问题）：卡片式模板一页有 4 个 `body` 槽，
+      而按 `role` 匹配会把**4 个框写成同一句话** —— 老师改一格就污染整页。
+    · 只给 `role`：改该角色的**第一个**槽（老写法，语义收紧后写进 `docs/24`）。
+
+    规则：只认计划里已有的模板页；文字超容量仍走 `_fit_text` 适度压缩并记 `adjustments`；
     没给到的页保持草案原样（所以"只改一页"是合法的）。
     """
     if not isinstance(mapping, list) or not mapping:
@@ -819,20 +825,32 @@ def apply_mapping(the_plan: dict, mapping: list[dict] | None) -> dict:
         page = by_index.get(row.get("template_index"))
         if page is None:
             continue
-        wanted = {str(f.get("role") or ""): str(f.get("text") or "")
-                  for f in (row.get("fills") or []) if isinstance(f, dict)}
+        by_shape: dict[int, str] = {}
+        by_role: dict[str, str] = {}
+        for f in (row.get("fills") or []):
+            if not isinstance(f, dict):
+                continue
+            if isinstance(f.get("shape_index"), int):
+                by_shape[int(f["shape_index"])] = str(f.get("text") or "")
+            elif f.get("role"):
+                by_role.setdefault(str(f["role"]), str(f.get("text") or ""))
         for fill in page.get("fills") or []:
             role = fill.get("role") or "body"
-            if role not in wanted:
+            shape = fill.get("shape_index")
+            if isinstance(shape, int) and shape in by_shape:
+                wanted = by_shape[shape]               # 精确指槽（页内编辑走这条）
+            elif role in by_role:
+                wanted = by_role.pop(role)             # 只给 role：**只动第一个**同角色槽
+            else:
                 continue
-            text = wanted[role].strip()
+            text = wanted.strip()
             cap = int(fill.get("capacity") or 0)
             if text and cap > 0 and len(text) > cap:
                 text, changed = _fit_text(text, cap)
                 if changed:
                     the_plan.setdefault("adjustments", []).append(
-                        {"action": "trim", "by": "agent-mapping", "cap": cap,
-                         "before": len(wanted[role]), "after": len(text), "text": text[:24]})
+                        {"action": "trim", "by": "mapping", "cap": cap,
+                         "before": len(wanted), "after": len(text), "text": text[:24]})
             fill["text"] = text
             fill["clear"] = not text
             touched += 1

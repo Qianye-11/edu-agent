@@ -578,7 +578,8 @@ class AgentApiTest(_FillCase):
         self.assertEqual(out["mapping_applied"], 1, "只认已有的页与角色")
         got = out["pages"][0]["fills"][0]["text"]
         self.assertLessEqual(len(got), cap or len(got), "超容量要被压到放得下")
-        self.assertTrue(any(a.get("by") == "agent-mapping" for a in out.get("adjustments") or []))
+        self.assertTrue(any(a.get("by") in ("mapping", "agent-mapping")
+                            for a in out.get("adjustments") or []))
         self.assertNotIn("不该生效", str(out))
 
     @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx 当模板")

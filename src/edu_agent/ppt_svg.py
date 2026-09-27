@@ -25,9 +25,14 @@ LAYOUTS = ("cover", "section", "bullets", "two-col", "media", "end")
 # ---------------------------------------------------------------- 画布与图元
 
 class Canvas:
-    """1280×720 设计坐标上的定位工具：安全边距、12 栏网格、页脚。"""
+    """1280×720 设计坐标上的定位工具：安全边距、12 栏网格、页脚。
 
-    def __init__(self, t: dict):
+    `boxes`：**可编辑盒子**收集器（R10）。给 `render_slide(..., boxes=[])` 传一个列表，
+    渲染时每个"文字槽"就把自己的可编辑区域（设计像素）记进去 —— 前端拿它做页内编辑的叠加层，
+    不用自己去量像素（jsdom / SVG 量尺寸都不可靠）。
+    """
+
+    def __init__(self, t: dict, boxes: list[dict] | None = None):
         c = t["canvas"]
         self.t = t
         self.w = int(c["w"])
@@ -44,6 +49,32 @@ class Canvas:
         self.family = ", ".join(t["fonts"]["stack"])
         self.ls = float(self.type.get("letter_spacing") or 0)
         self.right = self.margin + self.content_w
+        self.boxes = boxes
+
+    def box(self, slot: str, x: float, y: float, w: float, h: float, size: float,
+            *, kind: str = "text", align: str = "start") -> None:
+        """记一个可编辑盒子（`slot` 为空或没开 annotate 就什么都不做）。
+
+        **同一个槽只留一个盒子**（保留面积更大的那个）：`text()` 会自动给单行做个小盒子，
+        而版式里往往随后又显式给一个"整行/整块"的大盒子（点击区更友好）—— 两个都留会让前端
+        画出两块重叠的点击区（踩过：`title` 出现两次）。
+        """
+        if self.boxes is None or not slot:
+            return
+        area = float(w) * float(h)
+        for i, b in enumerate(self.boxes):
+            if b.get("slot") != slot:
+                continue
+            if area > float(b.get("w") or 0) * float(b.get("h") or 0):
+                self.boxes[i] = {"slot": slot, "kind": kind, "align": align,
+                                 "x": round(float(x), 1), "y": round(float(y), 1),
+                                 "w": round(float(w), 1), "h": round(float(h), 1),
+                                 "size": round(float(size), 1)}
+            return
+        self.boxes.append({"slot": slot, "kind": kind, "align": align,
+                           "x": round(float(x), 1), "y": round(float(y), 1),
+                           "w": round(float(w), 1), "h": round(float(h), 1),
+                           "size": round(float(size), 1)})
 
     # -- 字号 / 颜色 / 字重
     def size(self, key: str) -> float:
@@ -82,8 +113,12 @@ def esc(s: object) -> str:
 
 
 def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int | None = None,
-         fill: str | None = None, anchor: str = "start") -> str:
-    """一行文字（给的是**基线** y；不用 dominant-baseline，转 pptx 时口径一致）。"""
+         fill: str | None = None, anchor: str = "start", slot: str = "") -> str:
+    """一行文字（给的是**基线** y；不用 dominant-baseline，转 pptx 时口径一致）。
+
+    `slot` 给了就顺手记一个可编辑盒子（高 = 一行；宽 = 这行文字的实际宽度），
+    并给元素打上 `data-slot` 方便前端"编辑时隐藏这一槽"。
+    """
     if s is None or str(s) == "":
         return ""
     attrs = [
@@ -96,6 +131,11 @@ def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int 
         attrs.append(f'text-anchor="{anchor}"')
     if cv.ls:
         attrs.append(f'letter-spacing="{cv.ls}em"')
+    if slot and cv.boxes is not None:               # ⚠️ 只在 annotate 时打点：导出要逐字节一致
+        attrs.append(f'data-slot="{esc(slot)}"')
+        w = sum(char_w(ch, size) for ch in str(s))
+        bx = x - (w / 2 if anchor == "middle" else (w if anchor == "end" else 0))
+        cv.box(slot, bx, y - size * 0.86, max(w, size), size * 1.26, size, align=anchor)
     return f'<text {" ".join(attrs)}>{esc(s)}</text>'
 
 
@@ -156,12 +196,19 @@ def wrap(s: object, max_w: float, size: float) -> list[str]:
 
 
 def paragraph(cv: Canvas, x: float, y: float, s: object, *, size: float, max_w: float, lh: float,
-              weight: int | None = None, fill: str | None = None) -> tuple[str, float]:
-    """多行文字；返回 (SVG 片段, 下一次可用的基线 y)。"""
+              weight: int | None = None, fill: str | None = None, slot: str = "") -> tuple[str, float]:
+    """多行文字；返回 (SVG 片段, 下一次可用的基线 y)。
+
+    `slot` 给了就记**一个盒子盖住整块**（宽 = 版心宽，高 = 行数 × 行距）——
+    点哪儿都能进编辑，比逐行小盒子好用（R10）。
+    """
     lines = wrap(s, max_w, size)
     step = size * lh
-    svg = "".join(text(cv, x, y + i * step, ln, size=size, weight=weight, fill=fill)
+    svg = "".join(text(cv, x, y + i * step, ln, size=size, weight=weight, fill=fill,
+                       slot=(slot if i == 0 else ""))
                   for i, ln in enumerate(lines))
+    if slot and lines:
+        cv.box(slot, x, y - size * 0.86, max_w, max(1, len(lines)) * step + size * 0.2, size)
     return svg, y + max(1, len(lines)) * step
 
 
@@ -173,11 +220,14 @@ def title_block(cv: Canvas, slots: dict) -> tuple[str, float]:
     y = cv.margin
     if slots.get("label"):
         out.append(text(cv, cv.margin, y + cv.size("label") * 0.9, slots["label"],
-                        size=cv.size("label"), weight=cv.weight("label"), fill=cv.color("sub")))
+                        size=cv.size("label"), weight=cv.weight("label"), fill=cv.color("sub"),
+                        slot="label"))
         y += cv.size("label") * 1.9
     y += cv.size("title") * 0.82
     out.append(text(cv, cv.margin, y, slots.get("title") or "", size=cv.size("title"),
-                    weight=cv.weight("title")))
+                    weight=cv.weight("title"), slot="title"))
+    cv.box("title", cv.margin, cv.margin, cv.content_w, y - cv.margin + cv.size("title") * 0.4,
+           cv.size("title"))                       # 标题的点击区给整行（文字可能短，别只框住那几个字）
     rule_y = y + cv.size("title") * 0.6
     out.append(rect(cv.margin, rule_y - 2, 44, 2, fill=cv.marker))
     out.append(line(cv.margin + 60, rule_y, cv.right, rule_y, cv.color("line"), 1))
@@ -185,7 +235,7 @@ def title_block(cv: Canvas, slots: dict) -> tuple[str, float]:
 
 
 def footer(cv: Canvas, index: int, total: int) -> str:
-    """页脚细线 + 页码 x/N（画在安全边距内）。"""
+    """页脚细线 + 页码 x/N（画在安全边距内）。页码**只读**（不给编辑盒子）。"""
     return (line(cv.margin, cv.footer_y - 22, cv.right, cv.footer_y - 22, cv.color("line"), 1) +
             text(cv, cv.right, cv.footer_y, f"{index + 1} / {total}", size=cv.size("caption"),
                  fill=cv.color("sub"), anchor="end"))
@@ -240,18 +290,21 @@ def _cover(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str])
     out = []
     if slots.get("label"):
         out.append(text(cv, cv.margin, cv.margin + cv.size("label") * 0.9, slots["label"],
-                        size=cv.size("label"), weight=cv.weight("label"), fill=cv.color("sub")))
+                        size=cv.size("label"), weight=cv.weight("label"), fill=cv.color("sub"),
+                        slot="label"))
     y = cv.h * 0.42
     out.append(text(cv, cv.margin, y, slots.get("title") or "", size=cv.size("cover"),
-                    weight=cv.weight("cover")))
+                    weight=cv.weight("cover"), slot="title"))
+    cv.box("title", cv.margin, y - cv.size("cover"), cv.content_w, cv.size("cover") * 1.6,
+           cv.size("cover"))
     out.append(rect(cv.margin, y + cv.size("cover") * 0.56, 96, 3, fill=cv.marker))
     if slots.get("subtitle"):
         out.append(text(cv, cv.margin, y + cv.size("cover") * 1.2, slots["subtitle"],
-                        size=cv.size("body"), fill=cv.color("sub")))
+                        size=cv.size("body"), fill=cv.color("sub"), slot="subtitle"))
     if slots.get("meta"):
         out.append(line(cv.margin, cv.footer_y - 34, cv.right, cv.footer_y - 34, cv.color("line"), 1))
         out.append(text(cv, cv.margin, cv.footer_y, slots["meta"], size=cv.size("label"),
-                        fill=cv.color("sub")))
+                        fill=cv.color("sub"), slot="meta"))
     return "".join(out)
 
 
@@ -265,7 +318,9 @@ def _section(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str
     out.append(text(cv, x, y, slots.get("index") or "", size=size, weight=cv.weight("cover"),
                     fill=cv.marker))
     out.append(text(cv, x, y + size, slots.get("title") or "", size=cv.size("title"),
-                    weight=cv.weight("title")))
+                    weight=cv.weight("title"), slot="title"))
+    cv.box("title", x, y + size - cv.size("title"), cv.right - x, cv.size("title") * 1.5,
+           cv.size("title"))
     return "".join(out)
 
 
@@ -284,15 +339,18 @@ def _bullets(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str
         heights.append(h)
         drawn.append(lines)
     tops = distribute(y_top, cv.footer_y, heights, size * float(cv.type.get("para_gap_ratio") or 0.6))
-    for it, lines, y in zip(items, drawn, tops):
+    for bi, (it, lines, y) in enumerate(zip(items, drawn, tops)):
         out.append(rect(cv.margin, y, 2, 14, fill=cv.marker))      # 主色短竖线（不套卡片）
         ty = y
         if it.get("label"):
             out.append(text(cv, cv.margin + 24, ty + lab * 0.9, it["label"], size=lab,
-                            weight=cv.weight("label"), fill=cv.marker))
+                            weight=cv.weight("label"), fill=cv.marker, slot=f"block:{bi}:label"))
             ty += lab * 1.7
         for i, ln in enumerate(lines):
-            out.append(text(cv, cv.margin + 24, ty + size * 0.82 + i * size * lh, ln, size=size))
+            out.append(text(cv, cv.margin + 24, ty + size * 0.82 + i * size * lh, ln, size=size,
+                            slot=(f"block:{bi}" if i == 0 else "")))
+        cv.box(f"block:{bi}", cv.margin + 24, ty - size * 0.86, max_w,
+               max(1, len(lines)) * size * lh + size * 0.2, size)
     return "".join(out)
 
 
@@ -316,10 +374,15 @@ def _two_col(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str
             lines_list.append(ls)
         head_h = size * 1.6 if col.get("heading") else 0.0
         if col.get("heading"):
-            out.append(text(cv, x, y_top, col["heading"], size=size, weight=700))
-        for ls, yy in zip(lines_list, distribute(y_top + head_h, cv.footer_y, heights, size * 0.5)):
+            out.append(text(cv, x, y_top, col["heading"], size=size, weight=700,
+                            slot=f"{key}:heading"))
+        for j, (ls, yy) in enumerate(zip(lines_list, distribute(y_top + head_h, cv.footer_y,
+                                                                heights, size * 0.5))):
             for k, ln in enumerate(ls):
-                out.append(text(cv, x, yy + size * 0.82 + k * size * lh, ln, size=size))
+                out.append(text(cv, x, yy + size * 0.82 + k * size * lh, ln, size=size,
+                                slot=(f"{key}:bullet:{j}" if k == 0 else "")))
+            cv.box(f"{key}:bullet:{j}", x, yy - size * 0.86, col_w,
+                   max(1, len(ls)) * size * lh + size * 0.2, size)
     return "".join(out)
 
 
@@ -337,13 +400,14 @@ def _media(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str])
     yy = y + size * 0.9
     if slots.get("caption"):
         svg, yy = paragraph(cv, x, yy, slots["caption"], size=cv.size("caption"), max_w=max_w,
-                            lh=1.45, fill=cv.color("sub"))
+                            lh=1.45, fill=cv.color("sub"), slot="caption")
         out.append(svg)
         yy += size * 0.9
-    for b in apply_density(cv, slots.get("bullets") or [], warnings, f"第 {index + 1} 页"):
+    for bi, b in enumerate(apply_density(cv, slots.get("bullets") or [], warnings,
+                                         f"第 {index + 1} 页")):
         out.append(text(cv, x, yy, "—", size=size, fill=cv.marker))
         svg, yy = paragraph(cv, x + size * 0.9, yy, b, size=size, max_w=max_w - size * 0.9,
-                            lh=float(cv.type["lh_body"]))
+                            lh=float(cv.type["lh_body"]), slot=f"block:{bi}")
         out.append(svg)
         yy += size * 0.55
     return "".join(out)
@@ -385,12 +449,14 @@ def _end(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str]) -
     for i, b in enumerate(apply_density(cv, slots.get("bullets") or [], warnings, f"第 {index + 1} 页")):
         out.append(text(cv, cv.margin, y + i * size * 2.1, str(i + 1), size=size * 0.9,
                         weight=cv.weight("label"), fill=cv.marker))
-        out.append(text(cv, cv.margin + 40, y + i * size * 2.1, b, size=size))
+        out.append(text(cv, cv.margin + 40, y + i * size * 2.1, b, size=size, slot=f"block:{i}"))
+        cv.box(f"block:{i}", cv.margin + 40, y + i * size * 2.1 - size * 0.86,
+               cv.content_w - 40, size * 1.3, size)
     if slots.get("closing"):
         cy = cv.footer_y - 70
         out.append(line(cv.margin, cy - 34, cv.right, cy - 34, cv.color("line"), 1))
         out.append(text(cv, cv.margin, cy, slots["closing"], size=cv.size("caption"),
-                        fill=cv.marker))
+                        fill=cv.marker, slot="closing"))
     return "".join(out)
 
 
@@ -401,11 +467,15 @@ _RENDERERS = {"cover": _cover, "section": _section, "bullets": _bullets,
 # ---------------------------------------------------------------- 对外接口
 
 def render_slide(t: dict, layout: str, slots: dict | None = None, *, index: int = 0, total: int = 1,
-                 warnings: list[str] | None = None) -> str:
-    """渲染一页，返回完整 SVG 文本（画布底色 + 版式 + 页脚；封面不画页码）。"""
+                 warnings: list[str] | None = None, boxes: list[dict] | None = None) -> str:
+    """渲染一页，返回完整 SVG 文本（画布底色 + 版式 + 页脚；封面不画页码）。
+
+    `boxes` 给了一个列表（`annotate`）时：给每个文字槽打 `data-slot` 并收集**可编辑盒子**
+    （设计像素 1280×720）。**导出路径不传它** —— 导出用的 SVG 与以前逐字节一致（`docs/25` D8）。
+    """
     if layout not in _RENDERERS:
         raise ValueError(f"没有这个版式：{layout}（可选：{', '.join(LAYOUTS)}）")
-    cv = Canvas(t)
+    cv = Canvas(t, boxes)
     warn = warnings if warnings is not None else []
     sl = slots or {}
     body = _RENDERERS[layout](cv, sl, index, total, warn)

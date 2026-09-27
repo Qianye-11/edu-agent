@@ -381,9 +381,52 @@ node tools/uicheck/panel_check.js
 |---|---|---|---|
 | **R8** | 渲染目标改嫁（含 **Markdown 作为并列页签**）+ 四条入口重接 + 数据统一 + 旧 localStorage 迁移（D10，留备份） | 教案中心能干活（文档/MD/幻灯片都在里面），面板仍在（双跑对拍） | ✅ **已完成 2026-09-27**（交付记录见 §4.3） |
 | **R9** | 面板回退 4 钮 + 清理重复定义 + localStorage 清单 + UI 检查脚本改造 + 文案/开关 + **学生按钮改「下载 Word」**（D9，已随 R8 做）+ 只读调试钩子 + 演示模板删除入口 | 侧边面板恢复原样 | ✅ **已完成 2026-09-27**（交付记录见 §8.2） |
-| **R10** | 服务端 `boxes`/`data-slot`（`annotate` 开关）+ 新单测 | 接口可供编辑器 | 待开工 |
-| **R11** | 页内编辑交互（叠加层/撤销/缩略图/页操作）+ **填充页编辑（`shape_index` + `mapping`）** + `apply_mapping` 修精确指槽 + 面板检查 | 能像 WPS 那样改字（含模板页） | 待开工 |
-| **R12** | 删卡片、属性右栏、填充页点槽、MD 源码/预览切换收口、全量验收、文档/CHANGELOG | 交付 | 待开工 |
+| **R10** | 服务端 `boxes`/`data-slot`（`annotate` 开关）+ 新单测 | 接口可供编辑器 | ✅ **已完成 2026-09-27**（§8.3） |
+| **R11** | 页内编辑交互（叠加层/撤销/缩略图/页操作）+ **填充页编辑（`shape_index` + `mapping`）** + `apply_mapping` 修精确指槽 + 面板检查 | 能像 WPS 那样改字（含模板页） | ✅ **已完成 2026-09-27**（§8.3） |
+| **R12** | 删卡片、属性右栏、填充页点槽、MD 源码/预览切换收口、全量验收、文档/CHANGELOG | 交付 | ✅ **主体已完成 2026-09-27**（拖动排序留下一轮，见 §8.3 遗留） |
+
+### 8.3 R10–R12 交付记录（2026-09-27）
+
+**服务端（R10）**
+
+| 落点 | 内容 |
+|---|---|
+| `ppt_svg.py` | `Canvas` 挂 `boxes` 收集器 + `cv.box(...)`；`text()/paragraph()` 收 `slot=`，只在 **annotate** 时打 `data-slot` 并记盒子（高=行数×行距、宽=版心宽）；6 个版式的每个文字槽都标了槽位名（标题/小标题/每个块/两栏标题与条目/副标题/元信息/结尾语；**页码不打点**，只读） |
+| `slide_deck.py` | `build_deck(..., annotate=True)` 额外回 `boxes`（每页一组）；新增 **`apply_slot(slide, slot, text)`** —— 槽位→字段的**唯一一份映射**（`title/subtitle/meta/label/closing/caption`、`block:<i>[:label]`、`left\|right:heading`、`left\|right:bullet:<i>`）；清空即删、下标自动补齐、超 400 字与 `clean_slides` 同口径 |
+| `web_server.py` | `POST /api/slide/render` 新增 `annotate`；新增 **`POST /api/slide/slot`**（`{index, slot, text}` → 落进会话那份 slides → 回清洗后的整册）。⚠️ 存的时候**读-改-写**：`set_session_doc` 是整份替换，直接塞 `{slides}` 会把 `markdown/md_sig/slides_edited` 一起抹掉（踩过） |
+| `slide_fill.py` | `apply_mapping` 支持 **`shape_index` 精确指槽**；只给 `role` 时语义收紧为"该角色**第一个**槽"（从前会把一页 4 个正文槽写成同一句 —— R7 发现的真问题）；`adjustments[].by` 由 `agent-mapping` 改为 `mapping`（同一套代码现在也给页内编辑用），`docs/24` §4/§6 已同步 |
+| `tests/test_slide_boxes.py`（新，18 例） | 每个可编辑槽都有盒子且坐标在 1280×720 内、字号 ∈ tokens 阶梯；**SVG 打点集合 = boxes 集合**；`annotate=False` 时**没有** `data-slot`（导出逐字节一致）；`apply_slot` 的八种槽位与边界（清空即删/下标补齐/400 字上限/不认识的槽要拒绝）；`/api/slide/slot` 不抹会话文档的其它字段；**4 卡片模板**：多个同角色槽下 `shape_index` 只改一格、`role` 只改第一格；装饰槽不进 `fills`（只在 `kept` 里） |
+
+**前端（R11/R12）**
+
+| 落点 | 内容 |
+|---|---|
+| 预览请求 | `docpPagesEnsure` 带 `annotate: true` 并把 `boxes` 存进 `DOCP_SL.boxes`；页数据指纹补上文字（改了字必须重出 SVG，否则"改了看不见"） |
+| 页内编辑 | 叠加层放在**同一个被 scale 的容器**（`#dpCanvas`）里按设计像素绝对定位 → 与 SVG 天然对齐、零测量；点一下把该槽的 SVG 文字 `visibility:hidden` + 同位置 `contenteditable`（全选，直接打字即替换）；`Esc` 取消、`Enter`/失焦提交；提交走 `POST /api/slide/slot`（本地先乐观生效，服务端回来后采纳清洗结果） |
+| 撤销/重做 | 本地 20 步，`Ctrl+Z`/`Ctrl+Y`（`Ctrl+Shift+Z` 也算重做）；按钮 + 快捷键都有；撤回后同样回传服务端 |
+| 左栏 | **真页缩略图**（复用服务端那份 SVG）+ 当前页高亮 + 悬停页操作（复制/上移/下移/删）+ 点缩略图换页 |
+| 本页属性条 | 时长 / 版式 / 「＋加一块」（页内点着改覆盖不到的三样）。**加一块给的是占位文字「新要点」**：空块存不住（`clean_slides` 会丢），给占位才点得到、改得动 |
+| 删卡片 | `docpCardHtml`/`docpEditorHtml` + 卡片接线 + 卡片 CSS（`.dp-cardbar*`/`.dp-slide*` 共 10 条规则）全部删除；`.dp-slidewrap`（舞台外壳）保留 |
+| 填充页编辑 | 盒子来自填充计划的 `fills[].geo`（`role=decoration` 不给盒子）；改字先记进 `fillOverrides`（页面立刻可见 + 显示"待应用 N 处"），点**「应用修改」**才用 `mapping` 重填（重填 3~6 秒，不每键重填） |
+| `tools/uicheck/panel_check.js` | 卡片相关断言换成 22 条新用例：卡片归零 / 盒子按设计像素定位 / 点字进编辑且原文字隐藏 / 改完只回传那一格 / 撤销 / 属性条 / 缩略图数量与换页与页操作 / 加页 / **填充页盒子 + 应用修改只带改动的那一格**；另给 `/api/slide/render` 桩补了 `boxes`、给 `/api/slide/fill` 桩补了 `preview`+`plan`（不然这两条主链路在 jsdom 里根本验不到） |
+
+**R10–R12 又抓到的两个坑**
+
+1. **CSS 是多行规则**：按"行"删选择器会把声明体留成残骸 → jsdom 直接 `Could not parse CSS stylesheet`。
+   正确做法是**按花括号扫描整条规则**再删（脚本里顺手还清掉了库里早就存在的一个多余 `}` —— CSS 的错误恢复
+   一直把它吞掉了，所以以前没人发现）。
+2. **`.dp-edit/.dp-blk/.dp-cnt/.dp-mdta` 还在用**：对齐面板与 Markdown 源码框复用了这几个类名，
+   差点被我当"卡片遗留"一起删掉。
+
+**验收**：单测 **480** 全绿（新增 18 例）· 面板检查 **114/114**（R9 是 103）· 体检 49/49 · 审计 error 0 ·
+`tools/wz_shot.py --seed` 截图人眼过（左栏真缩略图 + 大舞台 + 无卡片）。
+
+**遗留（下一轮，如实记）**
+
+- **缩略图拖动排序**没做（现在是悬停按钮 ↑↓）：pointer 拖动要处理自动滚动与命中判定，留一轮做完更稳。
+- **页内编辑的"右侧属性栏"**没单独立一栏，做成了舞台下方的**本页属性条**（时长/版式/加一块）——
+  页签行已经有主题/模板工具，再加一栏会把舞台挤窄；觉得不合适下轮挪。
+- 模板填充页的编辑仍走"改完点应用"（重填要起 ppt-master 转换，3~6 秒）；要做到"每键即时"得改填充内核。
 
 ### 8.1 R8 交付记录（2026-09-27）
 

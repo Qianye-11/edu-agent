@@ -61,6 +61,38 @@
     **模板原稿只读**（在 `data/tmp/ppt_jobs/fill-*/` 副本上填），产物进 `data/ppt_out/`。
 - 单测 `tests/test_slide_template.py`（13 例）+ `tests/test_slide_fill.py`（12 例）；面板检查 65 → **73** 条。
 
+### 新增（R10–R12 · 幻灯片页内编辑（WPS 式）+ 删卡片，2026-09-27）
+
+> 老师要求：「像 WPS 一样的 PPT 显示界面，把卡片融入到 PPT 页内，不要卡片了，要能在 PPT 页内编辑」，
+> 并拍板「**ppt 有关的编辑都要能编辑**」（含模板填充页）。计划书 = `docs/25` §5。
+
+1. **服务端给"可编辑盒子"**：`ppt_svg` 在预览渲染时给每个文字槽打 `data-slot` 并记下它的可编辑区域
+   （1280×720 设计像素）；`slide_deck.build_deck(annotate=True)` 额外回 `boxes`；`POST /api/slide/render`
+   加 `annotate` 开关。**导出路径不传它** ⇒ 导出的 SVG 与以前逐字节一致（有单测钉住）。
+2. **页内点着改字**：叠加层放在与 SVG **同一个被 scale 的容器**里按设计像素绝对定位 —— 与 SVG 天然对齐、
+   零测量（jsdom / SVG 量尺寸都不可靠，这也是它可自动测的原因）。点一下：那一槽的 SVG 文字隐藏、同位置出现
+   输入框（全选，直接打字即替换）；`Esc` 取消、`Enter`/失焦提交。
+3. **改哪格只回哪格**：新增 `POST /api/slide/slot`，槽位→字段的映射只在服务端 `slide_deck.apply_slot`
+   维护**一份**（改字段名 Python 单测会红）。⚠️ 存的时候是**读-改-写**：`set_session_doc` 整份替换，
+   直接塞 `{slides}` 会把 `markdown/md_sig/slides_edited` 一起抹掉。
+4. **模板填充页也能改**（老师拍板）：盒子来自填充计划的 `fills[].geo`（`role=decoration` 不给盒子，
+   装饰一个字不许动）；改字先记着（页面立刻可见 + "待应用 N 处"），点**「应用修改」**才用 `mapping` 重填。
+5. **`mapping` 支持 `shape_index` 精确指槽**（R7 发现的真问题）：从前只按 `role` 匹配，卡片式模板一页
+   4 个正文槽会被一次写成同一句；只给 `role` 的语义收紧为"第一个槽"。`docs/24` 契约与变更记录已同步。
+6. **左栏换成真页缩略图**（复用服务端那份 SVG）+ 当前页高亮 + 悬停页操作（复制/上移/下移/删）+ 点图换页；
+   底部一条**本页属性条**（时长 / 版式 / ＋加一块 —— 页内改不到的三样）。
+7. **撤销/重做**：本地 20 步，`Ctrl+Z` / `Ctrl+Y`（`Ctrl+Shift+Z` 同样重做），按钮与快捷键都有。
+8. **卡片彻底删掉**：`docpCardHtml`/`docpEditorHtml` + 接线 + `.dp-cardbar*`/`.dp-slide*` 十条 CSS 全清。
+
+配套：单测 462 → **480**（新增 `tests/test_slide_boxes.py` 18 例）、面板检查 103 → **114**（卡片断言换成
+22 条页内编辑用例；顺带给 `/api/slide/render` 桩补 `boxes`、给 `/api/slide/fill` 桩补 `preview`+`plan`，
+不然这两条主链路在 jsdom 里验不到）、体检 49/49、审计 error 0。
+
+两个坑记在 `docs/25` §8.3：① **CSS 是多行规则**，按行删选择器会把声明体留成残骸（jsdom 直接报
+`Could not parse CSS stylesheet`；顺手清掉了库里早有的一个多余 `}`）；② `.dp-edit/.dp-blk/.dp-cnt/.dp-mdta`
+还被**对齐面板**与 Markdown 源码框用着，别当卡片遗留误删。
+遗留：缩略图**拖动**排序、独立右栏（现为属性条）、填充页"每键即时"（现为改完点应用，重填 3~6 秒）。
+
 ### 变更（R9 · 侧边面板恢复原样 + 两处补齐，2026-09-27）
 
 > R8 把文档整套搬进教案工作台后，这一轮把侧边面板**退回它本来的样子**，并补上 R8 记下的两个缺口。

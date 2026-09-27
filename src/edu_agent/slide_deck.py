@@ -121,6 +121,79 @@ def _items(slide: dict) -> list[str]:
     return items or [b["text"] for b in _blocks(slide)]
 
 
+#: 可编辑槽 → `clean_slides` 字段的映射（**唯一真相源**，R10）。
+#: 前端拿到 `boxes[].slot` 后，改动都回传到 `POST /api/slide/slot`，由这里的 `apply_slot` 落字段 ——
+#: 两边各写一套映射迟早会漂（改字段名时这里会红，前端只用 slot 字符串，不认字段名）。
+_SLOT_RE = re.compile(r"^(?P<base>title|subtitle|meta|label|closing|caption"
+                      r"|block:(?P<bi>\d+)(?::label)?"
+                      r"|(?P<side>left|right):(?:heading|bullet:(?P<ci>\d+)))$")
+
+
+def apply_slot(slide: dict, slot: str, text: str) -> dict:
+    """把"某个槽的新文字"落进一页 slide（返回同一份 dict，改完请再过 `clean_slides`）。
+
+    槽位命名（与 `ppt_svg` 打点、前端 `boxes[].slot` 完全一致）：
+      `title` / `subtitle` / `meta` / `label` / `closing` / `caption` /
+      `block:<i>` / `block:<i>:label` / `left:heading` / `left:bullet:<i>` / 同 `right:*`
+
+    边界（都不抛异常，返回 `{"ok": False, "error": ...}` 让调用方去报）：
+      · 不认识的槽 → 拒绝（不猜）；
+      · 越界的块/条目下标 → 补齐到该下标（老师加一块就等于加一个块）；
+      · 空文字 → 该块/条目删掉（清空即删除，避免留下空壳）。
+    """
+    slot = str(slot or "").strip()
+    m = _SLOT_RE.match(slot)
+    if not m:
+        return {"ok": False, "error": f"不认识的槽位：{slot or '(空)'}"}
+    text = str(text if text is not None else "").strip()
+    if text and len(text) > 400:                     # 与 clean_slides 的上限一致
+        text = text[:400]
+    base = m.group("base")
+
+    if base in ("title", "subtitle", "meta", "label", "closing", "caption"):
+        # 普通页的标题字段是 `name`，封面/结尾页是 `title`；两个都写，渲染时按版式取
+        if base == "title":
+            slide["title"] = text
+            slide["name"] = text
+        else:
+            slide[base] = text
+        return {"ok": True, "slot": slot, "text": text}
+
+    if base.startswith("block:"):
+        i = int(m.group("bi"))
+        blocks = _blocks(slide)
+        while len(blocks) <= i:
+            blocks.append({"label": "", "text": ""})     # 下标补齐到该位置（占位块）
+        if slot.endswith(":label"):
+            blocks[i]["label"] = text
+        else:
+            blocks[i]["text"] = text
+            if not text and not _text(blocks[i].get("label")):
+                del blocks[i]                            # 清空即删（但**只删被清的那一块**）
+        slide["blocks"] = blocks
+        slide.pop("bullets", None)                   # 统一走 blocks，避免两处数据打架
+        return {"ok": True, "slot": slot, "text": text}
+
+    side = m.group("side")
+    col = slide.get(side) if isinstance(slide.get(side), dict) else {}
+    heading, items = _text(col.get("heading")), [_text(x) for x in (col.get("bullets") or []) if _text(x)]
+    if slot.endswith(":heading"):
+        heading = text
+    else:
+        j = int(m.group("ci"))
+        while len(items) <= j:
+            items.append("")
+        if text:
+            items[j] = text
+        else:
+            del items[j]
+    if heading or items:
+        slide[side] = {"heading": heading, "bullets": [x for x in items if x]}
+    else:
+        slide.pop(side, None)
+    return {"ok": True, "slot": slot, "text": text}
+
+
 def pick_layout(slide: dict, index: int, total: int) -> str:
     """版式：显式 `layout` 优先；否则按位置推断（docs/19 §8.4）。
 
@@ -185,31 +258,42 @@ def to_slots(slide: dict, index: int, total: int, doc_title: str = "") -> tuple[
 # ---------------------------------------------------------------- 整册
 
 def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
-               tokens: dict | None = None) -> dict:
-    """渲染整册：返回 `{ok, theme_id, pages:[svg...], layouts, warnings, stats}`。
+               tokens: dict | None = None, *, annotate: bool = False) -> dict:
+    """渲染整册：返回 `{ok, theme_id, pages:[svg...], layouts, warnings, stats[, boxes]}`。
 
     **不落盘、不联网、不依赖 WPS**；`pages` 就是面板要显示、导出要转换的那份 SVG。
     `tokens` 给了就直接用（导入模板走这条：借它的配色/字体，版式仍用我们的 6 个）。
+
+    `annotate=True`（**只有预览用**）：给文字槽打 `data-slot` 并额外返回 `boxes`（每页一组可编辑盒子），
+    编辑器拿它做页内编辑；导出路径**不传它**，所以导出的 SVG 与以前逐字节一致。
     """
     t = tokens if tokens else theme(theme_id)
     items = [s for s in (slides or []) if isinstance(s, dict)]
     if not items:
         return {"ok": True, "theme_id": t["id"], "pages": [], "layouts": [],
-                "warnings": [], "stats": {"pages": 0, "chars": 0}}
+                "boxes": [], "warnings": [], "stats": {"pages": 0, "chars": 0}}
 
     total = len(items)
     warnings: list[str] = list(length_warnings(items))
     pages: list[str] = []
     layouts: list[str] = []
+    boxes_all: list[list[dict]] = []
     chars = 0
     for i, slide in enumerate(items):
         layout, slots = to_slots(slide, i, total, doc_title=_text(title))
         layouts.append(layout)
-        pages.append(ppt_svg.render_slide(t, layout, slots, index=i, total=total, warnings=warnings))
+        page_boxes: list[dict] | None = [] if annotate else None
+        pages.append(ppt_svg.render_slide(t, layout, slots, index=i, total=total, warnings=warnings,
+                                         boxes=page_boxes))
+        if page_boxes is not None:
+            boxes_all.append(page_boxes)
         chars += sum(len(str(v)) for v in (slide.get("bullets") or []))
-    return {"ok": True, "theme_id": t["id"], "pages": pages, "layouts": layouts,
-            "warnings": warnings,
-            "stats": {"pages": total, "chars": chars, "theme_name": t.get("name") or t["id"]}}
+    out = {"ok": True, "theme_id": t["id"], "pages": pages, "layouts": layouts,
+           "warnings": warnings,
+           "stats": {"pages": total, "chars": chars, "theme_name": t.get("name") or t["id"]}}
+    if annotate:
+        out["boxes"] = boxes_all
+    return out
 
 
 def slide_warnings(theme_id: str, slides: list[dict] | None, title: str = "") -> list[str]:

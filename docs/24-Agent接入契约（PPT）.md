@@ -80,17 +80,21 @@
   "lesson": { … },                      // 或 "session_id": "…"（用会话里那份）
   "mapping": [
     { "template_index": 1,
-      "fills": [ {"role": "title", "text": "情境导入"},
-                 {"role": "body",  "text": "投影五个实例"} ] }
+      "fills": [ {"shape_index": 5, "text": "投影五个实例"},   // ← 推荐：精确指槽
+                 {"role": "title",   "text": "情境导入"} ] }   // ← 老写法：只改该角色第一个槽
   ] }
 ```
 
 规则：
 
-1. 只认草案里**已有的** `template_index` 与 `role`，其余忽略（不报错，也不乱写）；
-2. 文字超容量的会被**适度压缩**（去括号补充 → 从末尾减分句 → 最后才硬截），并在 `adjustments` 里留痕；
-3. 没给到的页保持草案原样；
-4. 返回值里的 `checks`（内容零丢失 / 页数符合策略 / 容量自查）就是这次的验收结论。
+1. 只认草案里**已有的** `template_index`；`shape_index` 或 `role` 都认，其余忽略（不报错，也不乱写）；
+2. **`shape_index` 是精确指槽**（草案里每个 `fills[]` 都带它）：只改那一个框。
+   一页有多个同角色槽时**必须**用它 —— 按 `role` 只会改**第一个**（2026-09-27 收紧语义：
+   从前"给 role 就把该角色所有槽写成同一句"，卡片式模板一页 4 个正文框会被一次写满，属于 bug）；
+3. 文字超容量的会被**适度压缩**（去括号补充 → 从末尾减分句 → 最后才硬截），并在 `adjustments` 里留痕
+   （`by` 字段值由 `agent-mapping` 改为 `mapping`：同一套执行代码现在也给老师的页内编辑用）；
+4. 没给到的页保持草案原样；
+5. 返回值里的 `checks`（内容零丢失 / 页数符合策略 / 容量自查）就是这次的验收结论。
 
 ---
 
@@ -116,6 +120,8 @@
 | 版本 | 日期 | 变更 |
 |---|---|---|
 | `edu-agent.fill-plan.v1` | 2026-09-27 | 首版：`GET /api/slide/fill/plan`、`POST /api/slide/fill`（`mapping`）、`POST /api/slide/deck` |
+| `edu-agent.fill-plan.v1` | 2026-09-27 | `mapping` 细化：新增 **`shape_index` 精确指槽**；只给 `role` 时语义收紧为"该角色第一个槽"；`adjustments[].by` 由 `agent-mapping` 改为 `mapping`。⚠️ 若你在用只给 `role` 的写法**且依赖"一次改满同角色所有槽"**，请改成逐槽给 `shape_index`（那种行为会串格，是 bug 不是特性） |
+| — | 2026-09-27 | 新增编辑器用的读端：`POST /api/slide/render` 的 `annotate: true` → 响应多一个 `boxes`（每页 `[{slot,kind,x,y,w,h,size,align}]`，1280×720 设计像素）。**导出路径不传它**，所以导出的 SVG 不变 |
 
 ---
 

@@ -50,6 +50,12 @@ const THEMES = {
 const svgPage = (i) => '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">' +
   '<rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>' +
   '<text x="72" y="108" font-size="44" fill="#2B2B2B">第' + (i + 1) + '页</text></svg>';
+/* 预览用（annotate）：文字带 data-slot，前端编辑时要把它藏起来 */
+const svgPageAnnotated = (i, annotate) => '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">' +
+  '<rect x="0" y="0" width="1280" height="720" fill="#FFFFFF"/>' +
+  '<text x="72" y="108" font-size="40" fill="#2B2B2B"' + (annotate ? ' data-slot="title"' : '') + '>第' + (i + 1) + '页标题</text>' +
+  '<text x="96" y="268" font-size="24" fill="#2B2B2B"' + (annotate ? ' data-slot="block:0"' : '') + '>第一条要点</text>' +
+  '<text x="96" y="368" font-size="24" fill="#2B2B2B"' + (annotate ? ' data-slot="block:1"' : '') + '>第二条要点</text></svg>';
 
 /* 桩数据：一份"会话里的教案"（历史里带 meta.doc → 应用会自动把它当当前文档）。
    为什么要有它：以前这些用例**依赖服务器上"当前会话"里恰好有教案**，
@@ -81,6 +87,7 @@ function makeDom(opts) {
   const saves = [];
   const fills = [];
   const deletes = [];
+  const slots = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => { if (!/Could not load script/.test(e.message || '')) errors.push(e.message); });
   vc.on('error', (...a) => errors.push(a.join(' ')));
@@ -152,11 +159,21 @@ function makeDom(opts) {
         }
         if (p === '/api/slide/render') {
           if (o.slideFail) return new Response(JSON.stringify({ ok: false, error: 'stub down' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-          let n = 3;
-          try { n = (JSON.parse(op.body).slides || []).length || 3; } catch (e) {}
+          let n = 3, wantAnnotate = false, body0 = {};
+          try { body0 = JSON.parse(op.body); n = (body0.slides || []).length || 3;
+                wantAnnotate = !!body0.annotate; } catch (e) {}
           renderCalls.push(n);
+          /* 真实接口只在 annotate=true 时回 boxes —— 桩也照这个规矩来（免得测出一条假链路） */
+          const boxes = wantAnnotate
+            ? Array.from({ length: n }, () => ([
+                { slot: 'title', kind: 'text', align: 'start', x: 72, y: 60, w: 1136, h: 80, size: 40 },
+                { slot: 'block:0', kind: 'text', align: 'start', x: 96, y: 240, w: 1112, h: 60, size: 24 },
+                { slot: 'block:1', kind: 'text', align: 'start', x: 96, y: 340, w: 1112, h: 60, size: 24 },
+              ]))
+            : undefined;
           return new Response(JSON.stringify({ ok: true, enabled: true, theme_id: THEMES.default,
-            pages: Array.from({ length: n }, (_, i) => svgPage(i)),
+            pages: Array.from({ length: n }, (_, i) => svgPageAnnotated(i, wantAnnotate)),
+            ...(boxes ? { boxes } : {}),
             warnings: o.slideWarn ? ['第 2 页：模块 6 个 > 上限 5 → 建议拆页（本页只排了前 5 个，其余请另起一页）'] : [],
             layouts: [], stats: { pages: n } }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -181,6 +198,17 @@ function makeDom(opts) {
             ok: true, filename: '教案_3.3 幂函数_学校模板.pptx', outDir: 'D:\\out',
             download_url: '/api/wps/download?path=x', detail: '✅ 内容零丢失；✅ 容量自查',
             warnings: ['会话比模板少 8 页内容 → 默认删掉模板多余的内容页'],
+            /* 真实接口还回这两样：填充后的预览 SVG + 填充计划（盒子就来自 plan 的 fills[].geo） */
+            preview: [svgPage(0)],
+            plan: { template_id: '学校模板', pages: [{ template_index: 1, layout: '', copied: false,
+              fills: [
+                { role: 'title', shape_index: 2, text: '情境导入', capacity: 8, size_px: 40,
+                  geo: { x: 440, y: 7, w: 400, h: 100 }, sample: '示例标题' },
+                { role: 'body', shape_index: 5, text: '投影五个实例', capacity: 144, size_px: 16,
+                  geo: { x: 29, y: 380, w: 264, h: 160 }, sample: '示例正文' },
+                { role: 'decoration', shape_index: 9, text: '圆', capacity: 1, size_px: 36,
+                  geo: { x: 87, y: 139, w: 58, h: 68 }, sample: '圆' },
+              ] }] },
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
         if (p === '/api/session/get' && o.withDoc) {
@@ -205,6 +233,15 @@ function makeDom(opts) {
           return new Response(JSON.stringify({ ok: true, moved_to: 'content/ppt_templates/_trash/学校模板-stub' }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (p === '/api/slide/slot') {
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          slots.push(b);
+          return new Response(JSON.stringify({ ok: true, slot: b.slot, index: b.index,
+            slides: b.slides || DOC_STUB.slides, pages: (DOC_STUB.slides || []).length,
+            warnings: [], session_id: 'stub' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/save') {
           let b = {};
           try { b = JSON.parse(op.body); } catch (e) {}
@@ -218,7 +255,7 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots };
 }
 
 async function openDocPanel(doc) {
@@ -287,71 +324,99 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
   {
-    const { w, doc, errors, saves, renderCalls } = makeDom({ withDoc: true });
+    const { w, doc, errors, saves, renderCalls, slots } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
 
-    check('每页卡片都有编辑工具栏',
-      doc.querySelectorAll('#wzDocPane .dp-cardbar').length === doc.querySelectorAll('#wzDocPane .dp-slide').length,
-      doc.querySelectorAll('#wzDocPane .dp-cardbar').length + ' 条');
+    /* R11/R12：卡片没了，改成"页内点着改"。这一整段就是本轮的主验收。 */
+    check('卡片列表已经删掉（.dp-slide 数量为 0）',
+      doc.querySelectorAll('#wzDocPane .dp-slide').length === 0);
+    check('卡片工具栏/表单编辑器也没了',
+      !doc.querySelector('#wzDocPane .dp-cardbar') && !doc.querySelector('#wzDocPane .dp-edit'));
+    const boxes = doc.querySelectorAll('#wzDocPane .dp-boxlayer .dp-box');
+    check('页面上铺了可编辑盒子（服务端 boxes）', boxes.length > 0, boxes.length + ' 个');
+    check('盒子按设计像素定位（1280×720 坐标，不是屏幕坐标）',
+      !!boxes[0] && /left:\d/.test(boxes[0].getAttribute('style') || '') &&
+      parseFloat((boxes[0].style.width || '0')) <= 1280.5,
+      boxes[0] ? boxes[0].getAttribute('style').slice(0, 60) : '(无)');
 
-    /* ① 改标题（第 2 页） */
-    doc.querySelector('#wzDocPane [data-edit="1"]').click(); await sleep(500);
-    const box = doc.querySelector('#wzDocPane .dp-edit');
-    check('点「改」展开就地编辑器', !!box && box.dataset.editFor === '1');
-    const titleInp = box.querySelector('input[data-f="name"]');
-    check('编辑器里带出现有标题', !!titleInp && titleInp.value.length > 0, titleInp ? titleInp.value : '');
-    titleInp.value = '情境导入（改过的）';
-    titleInp.dispatchEvent(new w.Event('input', { bubbles: true }));
-    for (let i = 0; i < 14 && !saves.length; i++) await sleep(250);
-    const saved1 = saves[saves.length - 1] || {};
-    check('改字 700ms 后自动存回会话', saves.length > 0 && saved1.slides[1].name === '情境导入（改过的）',
-      saves.length + ' 次 · ' + (saved1.slides ? saved1.slides[1].name : ''));
-    check('卡片标题就地更新', /情境导入（改过的）/.test(txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4'))),
-      txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4')));
-    check('改完重新取了一份 SVG（预览跟着变）', renderCalls.length >= 2, renderCalls.join('/'));
+    /* ① 点页面上的字 → 直接改 → 回传 /api/slide/slot */
+    const target = Array.from(boxes).find((b) => b.dataset.slot === 'title') || boxes[0];
+    const slotName = target.dataset.slot;
+    target.click(); await sleep(300);
+    check('点一下就进入编辑态（同位置出现输入框）',
+      target.getAttribute('contenteditable') === 'true' && target.classList.contains('dp-editing'));
+    check('编辑时原来那行 SVG 文字被藏起来（不会重影）',
+      (() => { const t = doc.querySelector('#wzDocPane #dpCanvas svg [data-slot="' + slotName + '"]');
+               return !t || t.style.visibility === 'hidden'; })());
+    target.textContent = '页内改过的标题';
+    target.dispatchEvent(new w.Event('blur', { bubbles: true }));
+    for (let i = 0; i < 14 && !slots.length; i++) await sleep(250);
+    check('改完把**那一格**回传 /api/slide/slot（带槽位名与新文字）',
+      slots.length > 0 && slots[0].slot === slotName && slots[0].text === '页内改过的标题',
+      JSON.stringify(slots[0] || {}));
+    check('改完重新取了一份 SVG（页面跟着变）', renderCalls.length >= 2, renderCalls.join('/'));
 
-    /* ② 字数提示：超过 22 字要标出来 */
-    const ta = doc.querySelector('#wzDocPane .dp-edit textarea[data-f="text"]');
-    ta.value = '这是一条特别长的要点'.repeat(4);
-    ta.dispatchEvent(new w.Event('input', { bubbles: true }));
-    await sleep(200);
-    const cnt = doc.querySelector('#wzDocPane .dp-blk .dp-cnt');
-    check('字数计数实时更新', new RegExp(String(ta.value.length) + ' 字').test(txt(cnt)), txt(cnt));
-    check('超 22 字标红提示', cnt.classList.contains('dp-over'));
+    /* ② 撤销：把改前那句送回去 */
+    const undoBtn = doc.getElementById('dpUndo');
+    check('有撤销/重做按钮', !!undoBtn && !!doc.getElementById('dpRedo'));
+    const before = slots.length;
+    undoBtn.click();
+    for (let i = 0; i < 12 && slots.length === before; i++) await sleep(250);
+    check('撤销把改前的文字送回去了',
+      slots.length > before && slots[slots.length - 1].slot === slotName &&
+      slots[slots.length - 1].text !== '页内改过的标题',
+      JSON.stringify(slots[slots.length - 1] || {}));
 
-    /* ③ 加一块 / 删一块 */
-    const before = doc.querySelectorAll('#wzDocPane .dp-edit .dp-blk').length;
-    doc.querySelector('#wzDocPane [data-b-add]').click(); await sleep(400);
-    const afterAdd = doc.querySelectorAll('#wzDocPane .dp-edit .dp-blk').length;
-    check('「+ 加一块」生效', afterAdd === before + 1, before + ' → ' + afterAdd);
-    doc.querySelector('#wzDocPane .dp-edit [data-b-del]').click(); await sleep(400);
-    const afterDel = doc.querySelectorAll('#wzDocPane .dp-edit .dp-blk').length;
-    check('「删这块」生效', afterDel === afterAdd - 1, afterAdd + ' → ' + afterDel);
-
-    /* ④ 换版式 */
-    const lay = doc.querySelector('#wzDocPane [data-layout="1"]');
+    /* ③ 本页属性条：换版式 / 改时长 / 加一块 */
+    const lay = doc.getElementById('dpLayout');
+    check('有本页属性条（版式 / 时长 / 加一块）',
+      !!lay && !!doc.getElementById('dpMinutes') && !!doc.getElementById('dpAddBlock'));
+    await sleep(900);        /* 先等上一步那个 700ms 防抖存完，免得读到旧记录（踩过） */
     lay.value = 'two-col';
+    const nSaves = saves.length;                 /* ⚠️ 前面几步已经存过几次；要等"新的一次" */
     lay.dispatchEvent(new w.Event('change', { bubbles: true }));
-    await sleep(700);
-    const saved2 = saves[saves.length - 1] || {};
-    check('换版式写进数据并回存', saved2.slides && saved2.slides[1].layout === 'two-col',
-      saved2.slides ? String(saved2.slides[1].layout) : '');
+    for (let i = 0; i < 14 && saves.length <= nSaves; i++) await sleep(250);
+    const saved1 = saves[saves.length - 1] || {};
+    check('换版式写进数据并回存',
+      saves.length > nSaves && !!saved1.slides && saved1.slides[0].layout === 'two-col',
+      saves.length + ' 次 · ' + (saved1.slides ? String(saved1.slides[0].layout) : '(无 slides)'));
+    const nBlocks = doc.querySelectorAll('#wzDocPane .dp-boxlayer .dp-box').length;
+    doc.getElementById('dpAddBlock').click(); await sleep(900);
+    check('「＋加一块」生效（多出一个可编辑盒子）',
+      doc.querySelectorAll('#wzDocPane .dp-boxlayer .dp-box').length >= nBlocks,
+      nBlocks + ' → ' + doc.querySelectorAll('#wzDocPane .dp-boxlayer .dp-box').length);
 
-    /* ⑤ 排序 / 加页 / 删页 */
-    const first = txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="0"] h4'));
-    doc.querySelector('#wzDocPane [data-page-dn="0"]').click(); await sleep(600);
-    check('「↓」把第 1 页换到第 2 位',
-      txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4')) === first,
-      txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4')));
-    const n0 = doc.querySelectorAll('#wzDocPane .dp-slide').length;
-    doc.getElementById('dpAddPage').click(); await sleep(600);
-    check('「+ 加一页」生效', doc.querySelectorAll('#wzDocPane .dp-slide').length === n0 + 1,
-      n0 + ' → ' + doc.querySelectorAll('#wzDocPane .dp-slide').length);
-    doc.querySelector('#wzDocPane [data-page-del="0"]').click(); await sleep(600);
-    check('「删」掉一页', doc.querySelectorAll('#wzDocPane .dp-slide').length === n0,
-      String(doc.querySelectorAll('#wzDocPane .dp-slide').length));
+    /* ④ 左栏缩略图：页数、换页、页操作 */
+    const thumbs = doc.querySelectorAll('#wzLeft .wz-thumb');
+    check('左栏是页缩略图（数量 = 页数）', thumbs.length === (DOC_STUB.slides || []).length,
+      thumbs.length + ' 张');
+    check('缩略图里是真的 SVG（复用服务端那份）',
+      !!doc.querySelector('#wzLeft .wz-thumb .cv svg'));
+    doc.querySelectorAll('#wzLeft .wz-thumb')[2].click(); await sleep(500);
+    check('点缩略图换页', /第 3 \/ /.test(txt(doc.querySelector('#wzDocPane .dp-pagebar span'))),
+      txt(doc.querySelector('#wzDocPane .dp-pagebar span')));
+    const n0 = doc.querySelectorAll('#wzLeft .wz-thumb').length;
+    doc.querySelector('#wzLeft [data-thumb-dup="0"]').click(); await sleep(700);
+    check('缩略图上的「复制页」生效', doc.querySelectorAll('#wzLeft .wz-thumb').length === n0 + 1,
+      n0 + ' → ' + doc.querySelectorAll('#wzLeft .wz-thumb').length);
+    doc.querySelector('#wzLeft [data-thumb-del="0"]').click(); await sleep(700);
+    check('缩略图上的「删页」生效', doc.querySelectorAll('#wzLeft .wz-thumb').length === n0,
+      String(doc.querySelectorAll('#wzLeft .wz-thumb').length));
+    /* 页名（`.n` 里含页码"1 / 5 …"，比整串永远不等 —— 只比名字那一段） */
+    const nameOf = (el) => txt(el).replace(/^\d+\s*\/\s*\d+\s*/, '');
+    const firstName = nameOf(doc.querySelector('#wzLeft .wz-thumb[data-thumb="0"] .n'));
+    doc.querySelector('#wzLeft [data-thumb-dn="0"]').click(); await sleep(700);
+    check('缩略图上的「下移」生效',
+      nameOf(doc.querySelector('#wzLeft .wz-thumb[data-thumb="1"] .n')) === firstName,
+      firstName + ' → ' + nameOf(doc.querySelector('#wzLeft .wz-thumb[data-thumb="1"] .n')));
+
+    /* ⑤ 加页 */
+    const n1 = doc.querySelectorAll('#wzLeft .wz-thumb').length;
+    doc.getElementById('dpAddPage').click(); await sleep(700);
+    check('「+ 加一页」生效', doc.querySelectorAll('#wzLeft .wz-thumb').length === n1 + 1,
+      n1 + ' → ' + doc.querySelectorAll('#wzLeft .wz-thumb').length);
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -408,6 +473,37 @@ async function openDocPanel(doc) {
       txt(doc.getElementById('wzDocRes')).slice(0, 60));
     check('填充提示（如"删掉多余页"）显示在结果条',
       /删掉模板多余的内容页/.test(txt(doc.getElementById('wzDocRes'))));
+
+    /* R11：**模板填充页也能点着改**（老师要求"ppt 有关的编辑都要能编辑"）——
+       盒子来自填充计划的 fills[].geo；改完先记着、点「应用修改」才重填（重填要 3~6 秒）。 */
+    const fboxes = doc.querySelectorAll('#wzDocPane .dp-boxlayer .dp-box');
+    check('填充页上也有可编辑盒子（内容槽才有）', fboxes.length > 0, fboxes.length + ' 个');
+    check('填充页的盒子带 shape_index 槽位名（回写要用它精确指槽）',
+      Array.from(fboxes).every((b) => /^fill:\d+$/.test(b.dataset.slot)),
+      Array.from(fboxes).map((b) => b.dataset.slot).join(','));
+    const fbox = fboxes[0];
+    const fslot = fbox.dataset.slot;
+    fbox.click(); await sleep(300);
+    fbox.textContent = '填充页改过的字';
+    fbox.dispatchEvent(new w.Event('blur', { bubbles: true }));
+    await sleep(400);
+    const applyBtn = doc.getElementById('dpFillApply');
+    check('改完先"记着"（按钮上出现待应用数量，不立刻重填）',
+      !!applyBtn && applyBtn.disabled === false && /待应用/.test(txt(doc.getElementById('dpFillPending')) || '')
+        || /应用修改（\d+）/.test(txt(applyBtn)),
+      applyBtn ? txt(applyBtn) + ' / ' + txt(doc.getElementById('dpFillPending')) : '(无按钮)');
+    const nFills = fills.length;
+    applyBtn.click();
+    for (let i = 0; i < 16 && fills.length <= nFills; i++) await sleep(300);
+    const lastFill = fills[fills.length - 1] || {};
+    const rows = lastFill.mapping || [];
+    const hit = rows.reduce((acc, r) => acc.concat((r.fills || []).map((f) => ({ ...f, ti: r.template_index }))), []);
+    check('点「应用修改」→ 用 mapping 只回传改动的那一格',
+      fills.length > nFills && hit.length === 1 &&
+      String(hit[0].shape_index) === fslot.replace('fill:', '') && hit[0].text === '填充页改过的字',
+      JSON.stringify(hit[0] || {}));
+    check('重填后待应用清零', !/应用修改（\d+）/.test(txt(doc.getElementById('dpFillApply'))),
+      txt(doc.getElementById('dpFillApply')));
 
     /* R9：删掉导错的演示模板（两下确认 → 发一次 delete，列表回到"只借内置主题"） */
     const del = doc.getElementById('dpTplDel');
