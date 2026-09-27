@@ -401,46 +401,20 @@ async function openDocPanel(doc) {
     w.close();
   }
 
-  console.log('== PPT 优化区（桩后端） ==');
+  console.log('== R6-4/R6-5：PPT 优化不再作为独立模块 / 页面减肥 ==');
   {
-    const { w, doc } = makeDom();
+    const { w, doc, errors } = makeDom();
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(900);
-    check('优化区存在', !!doc.querySelector('.ppt-box'));
-    check('状态行报安装情况', /就绪/.test(txt(doc.querySelector('.ppt-state'))), txt(doc.querySelector('.ppt-state')));
-    check('导入按钮可用', doc.getElementById('pptPick').disabled === false);
-    const input = doc.getElementById('docPanelFile');
-    const file = new w.File([new Uint8Array([1, 2, 3])], '答辩稿.pptx',
-      { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
-    Object.defineProperty(input, 'files', { value: [file], configurable: true });
-    input.dispatchEvent(new w.Event('change', { bubbles: true }));
-    for (let i = 0; i < 12 && !doc.querySelector('.ppt-rep'); i++) await sleep(400);
-    check('体检报告出现', !!doc.querySelector('.ppt-rep'));
-    check('报告含规模/字体/字号层级',
-      /18 页/.test(txt(doc.querySelector('.ppt-rep'))) && /微软雅黑/.test(txt(doc.querySelector('.ppt-rep'))));
-    const acts = Array.from(doc.querySelectorAll('.ppt-box input[data-act]'));
-    check('动作默认只勾「统一字体」（保守）',
-      acts.length === 3 && acts.filter((c) => c.checked).map((c) => c.dataset.act).join() === 'font',
-      acts.map((c) => c.dataset.act + (c.checked ? '✓' : '')).join('/'));
-    check('未优化时下载按钮灰着', doc.getElementById('pptGet').disabled === true);
-    acts.forEach((c) => { if (c.dataset.act === 'strip-anim') c.checked = true; });
-    doc.getElementById('pptRun').click();
-    for (let i = 0; i < 12 && !/已优化|失败/.test(txt(doc.querySelector('.ppt-tip'))); i++) await sleep(400);
-    check('一键优化给出结果与内容校验', /已优化/.test(txt(doc.querySelector('.ppt-tip'))) && /内容校验：✅/.test(txt(doc.querySelector('.ppt-tip'))),
-      txt(doc.querySelector('.ppt-tip')).slice(0, 60));
-    check('优化后下载可用', doc.getElementById('pptGet').disabled === false);
-    w.close();
-  }
-
-  console.log('== 开关关掉时（桩：未开） ==');
-  {
-    const { w, doc } = makeDom({ pptOff: true });
-    await sleep(2500);
-    await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(800);
-    check('状态行说明为什么不可用', /已关闭/.test(txt(doc.querySelector('.ppt-state'))), txt(doc.querySelector('.ppt-state')));
-    check('导入按钮灰显', doc.getElementById('pptPick').disabled === true);
+    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    check('面板里不再有独立的「PPT 优化」模块', !doc.querySelector('.ppt-box'));
+    check('也不再有它的入口按钮', !doc.getElementById('pptPick') && !doc.getElementById('pptRun'));
+    const head = doc.querySelectorAll('#spBody .dp-slhead');
+    check('主题与模板合成一行（只剩一行头部控件）', head.length === 1, head.length + ' 行');
+    check('这一行里有主题、模板与两个按钮',
+      !!doc.getElementById('dpTheme') && !!doc.getElementById('dpTpl') &&
+      !!doc.getElementById('dpTplImport') && !!doc.getElementById('dpTplFill'));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
 

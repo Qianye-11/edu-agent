@@ -494,13 +494,27 @@ def export_deck_pptx(theme_id: str, slides: list[dict] | None, title: str = "", 
             status = json.loads(report.read_text(encoding="utf-8")).get("status", "")
         except Exception:  # noqa: BLE001 报告坏了不当失败
             status = ""
-    verify = verify_pptx(target, pages)
-    ok = verify["ok"] and (not status or status.startswith("passed"))
+    post = _postcheck(target, pages)                    # 内核：清动画 + 补 <a:ea> + 内容零丢失（必经）
+    verify = post.pop("verify", {})
+    ok = verify.get("ok", False) and (not status or status.startswith("passed"))
     return {"ok": ok, "backend": "native", "file": str(target), "filename": target.name,
             "outDir": str(target_dir), "job": str(job), "status": status,
             "pages": len(pages), "theme_id": built["theme_id"], "layouts": built["layouts"],
-            "verify": verify, "logs": logs,
-            "error": "" if ok else (f"转换报告 status={status or '（缺失）'}；" + verify["detail"])}
+            "verify": verify, "postcheck": post, "logs": logs,
+            "error": "" if ok else (f"转换报告 status={status or '（缺失）'}；" + verify.get("detail", ""))}
+
+
+def _postcheck(path: Path, pages: list[str]) -> dict:
+    """生成链路的**最后一道**（docs/23 §6.5 R6-4）：内核 + 内容零丢失。失败不影响产物交付，但要如实报出。"""
+    from . import ppt_polish
+
+    out: dict = {}
+    try:
+        out["normalize"] = ppt_polish.normalize_file(path)
+    except Exception as exc:  # noqa: BLE001 内核失败不该让产物不可用
+        out["normalize"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    out["verify"] = verify_pptx(path, pages)
+    return out
 
 
 if __name__ == "__main__":        # 冒烟：python -m edu_agent.slide_deck

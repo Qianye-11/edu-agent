@@ -3938,11 +3938,11 @@ svg{display:block}
       return '<option value="' + escHtml(t.id) + '"' + (t.id === docpTplGet() ? ' selected' : '') + '>' +
         escHtml(t.name) + '（' + (t.pages || 0) + ' 页）</option>';
     }).join('');
-    return '<div class="dp-slhead">' + (opts ? ('<label>主题</label><select id="dpTheme">' + opts + '</select>') : '') +
+    return '<div class="dp-slhead">' + (opts ? ('<select id="dpTheme" title="内置主题">' + opts + '</select>') : '') +
+      '<select id="dpTpl" title="演示模板（导入的 .pptx）">' + tplOpts + '</select>' +
+      '<button class="dp-mini" id="dpTplImport" title="导入 .pptx 当演示模板">模板+</button>' +
+      '<button class="dp-mini" id="dpTplFill"' + (docpTplGet() ? '' : ' disabled') + '>填充</button>' +
       '<span class="dp-slstat">' + docpSlideStat(sl) + '</span></div>' +
-      '<div class="dp-slhead"><label>模板</label><select id="dpTpl">' + tplOpts + '</select>' +
-      '<button class="dp-mini" id="dpTplImport">导入演示模板</button>' +
-      '<button class="dp-mini" id="dpTplFill"' + (docpTplGet() ? '' : ' disabled') + '>用模板填一遍</button>' +
       '<input type="file" id="dpTplFile" accept=".pptx,.pptm,.potx" style="display:none"></div>' +
       '<div id="dpWarnBox">' + warn + '</div>' +
       (DOCP_SL.fillPreview
@@ -4122,18 +4122,16 @@ svg{display:block}
   function docpRenderSlides(bd){
     var deck = docpBuildDeck(), sl = deck.slides || [];
     if(!sl.length){
-      bd.innerHTML = pptPolishHtml() + '<div class="dp-empty">' +
+      bd.innerHTML = '<div class="dp-empty">' +
         (DOCP.kind === 'rich' ? '导入的 .docx 没有环节结构，下载 PPT 会按板块标题成页'
                               : '没有解析出可成页的环节 / 板块') + '</div>';
-      pptPolishWire();
       return;
     }
     if(DOCP_PAGE >= sl.length) DOCP_PAGE = sl.length - 1;
     if(DOCP_PAGE < 0) DOCP_PAGE = 0;
     DOCP_SL.themeId = docpThemeGet();
-    bd.innerHTML = pptPolishHtml() + docpSlidesHtml(sl);
+    bd.innerHTML = docpSlidesHtml(sl);   /* R6-5：PPT 优化不再作为独立模块出现在面板（内核已并进导出/填充） */
     docpSlidesWire(bd, sl);
-    pptPolishWire();
     docpPaintStage(bd);                  /* 先出兜底内容（有缓存就直接是 SVG），避免空台 */
     docpThemesEnsure(function(){
       DOCP_SL.themeId = docpThemeGet();

@@ -421,6 +421,66 @@ def polish(job: dict, actions: list[str], *, target_ea: str = "", target_latin: 
     return report
 
 
+def normalize_file(path: Path, *, strip_anim: bool = True, fix_ea: bool = True,
+                   target_ea: str = "微软雅黑") -> dict:
+    """**把内核跑在一份成品上**（导出 / 填充的必经后处理，见 docs/23 §6.5 R6-4）。
+
+    与 `polish()` 的区别：这里是生成链路的最后一道 —— **不改设计、不改字号层级**，只做三件安全的事：
+
+    1. 去掉动画与转场（讲义型产物不需要，WPS/PPT 打开也更干净）；
+    2. 给**含中文但没写 `<a:ea>`** 的 run 补中文字体（不写就跟主题缺省走，中文环境会掉宋体）；
+    3. 统计产物实际用到的字体，供上层如实报出（**不改字体**：设计稿的字体是老师的）。
+    """
+    from pptx import Presentation
+    from pptx.oxml.ns import qn
+
+    path = Path(path)
+    if not path.is_file():
+        return {"ok": False, "error": f"产物不存在：{path}"}
+    prs = Presentation(str(path))
+    applied: list[dict] = []
+
+    if strip_anim:
+        try:
+            res = _action_strip_anim(prs, strip_transition=True)
+            applied.append({"action": "strip-anim", "label": "去掉动画 / 转场",
+                            "timing_removed": res.get("timing_removed", 0),
+                            "transition_removed": res.get("transition_removed", 0)})
+        except Exception as exc:  # noqa: BLE001 单个动作失败不该毁掉产物
+            applied.append({"action": "strip-anim", "label": "去掉动画 / 转场", "error": str(exc)})
+
+    def _has_ea(run) -> bool:
+        try:
+            rPr = run._r.find(qn("a:rPr"))                              # noqa: SLF001
+            return rPr is not None and rPr.find(qn("a:ea")) is not None
+        except Exception:  # noqa: BLE001 判断不了就当有，别乱改
+            return True
+
+    fonts: set[str] = set()
+    ea_fixed = 0
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if not getattr(shape, "has_text_frame", False):
+                continue
+            for para in shape.text_frame.paragraphs:
+                for run in para.runs:
+                    text = (run.text or "").strip()
+                    if not text:
+                        continue
+                    if run.font.name:
+                        fonts.add(run.font.name)
+                    if fix_ea and any(ord(ch) > 0x2E80 for ch in text) and not _has_ea(run):
+                        _set_ea_font(run, target_ea)
+                        ea_fixed += 1
+    if fix_ea:
+        applied.append({"action": "ea-font", "label": "补中文字体（<a:ea>）", "runs_fixed": ea_fixed})
+
+    prs.save(str(path))
+    return {"ok": True, "file": str(path), "applied": applied, "fonts": sorted(fonts),
+            "ea_fixed": ea_fixed,
+            "detail": "；".join(a.get("label", "") for a in applied)}
+
+
 def selftest(sample: Path | None = None) -> dict:
     """命令行自检：拿一份真 pptx 跑 体检 → 统一字体+清动画 → 内容校验。"""
     sample = sample or (Path(__file__).resolve().parents[2] / "content" / "plans" /

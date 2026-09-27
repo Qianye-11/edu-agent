@@ -357,10 +357,16 @@ def fill_pptx(template_id: str, slides: list[dict] | None, title: str = "", *,
 
     checks = _verify_fill(target, want, the_plan)
     ok = all(c["ok"] for c in checks if c.get("blocking", True))
+    post: dict = {}
+    try:                                            # 内核：清动画 + 补 <a:ea>（设计稿的字体一律不动）
+        post["normalize"] = ppt_polish.normalize_file(target)
+    except Exception as exc:  # noqa: BLE001 内核失败不该让产物不可用
+        post["normalize"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    post["checks"] = checks
     preview = preview_pages(target, job) if with_preview else []
     return {"ok": ok, "file": str(target), "filename": target.name, "outDir": str(target_dir),
             "template_id": template_id, "job": str(job), "plan": the_plan,
-            "checks": checks, "preview": preview, "preview_pages": len(preview),
+            "checks": checks, "preview": preview, "preview_pages": len(preview), "postcheck": post,
             "quality": {"fill": "ok" if ok else "fail", "template": "ok"},
             "detail": "；".join(f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in checks),
             "warnings": the_plan["warnings"] + the_plan["degraded"],
