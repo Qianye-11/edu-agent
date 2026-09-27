@@ -193,7 +193,8 @@ function makeDom(opts) {
           return new Response(JSON.stringify({ ok: true, enabled: true, theme_id: THEMES.default,
             pages: Array.from({ length: n }, (_, i) => svgPageAnnotated(i, wantAnnotate)),
             ...(boxes ? { boxes } : {}),
-            canvas: { w: 1280, h: 720, margin: 72 },
+            canvas: { w: 1280, h: 720, margin: 72, cols: 12, gutter: 24, content_w: 1136 },
+            fonts: ['微软雅黑', '黑体', '宋体', '楷体'],
             warnings: o.slideWarn ? ['第 2 页：模块 6 个 > 上限 5 → 建议拆页（本页只排了前 5 个，其余请另起一页）'] : [],
             layouts: [], stats: { pages: n } }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -535,6 +536,154 @@ async function openDocPanel(doc) {
         ' · 最近回传 ' + JSON.stringify(slots.slice(-2)));
     }
 
+    /* ②c R15：右栏属性 + 工具分组；R13：缩放 / 网格 / 浏览视图 */
+    {
+      const boxOf = (s) => doc.querySelector('#wzDocPane .dp-box[data-slot="' + s + '"]');
+      const lastPatch = () => (slots.filter((s) => s.patch).pop() || {}).patch || {};
+      const props = () => doc.querySelector('#wzDocPane #dpProps');
+
+      check('工具按 WPS 分了四组（开始/插入/设计/放映）',
+        Array.from(doc.querySelectorAll('#wzDocPane .dp-tt')).map((b) => txt(b)).join(',') ===
+        '开始,插入,设计,放映',
+        Array.from(doc.querySelectorAll('#wzDocPane .dp-tt')).map((b) => txt(b)).join('/'));
+      check('没做的组标了 data-soon（不放假按钮）',
+        !!doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"][data-soon]') &&
+        !!doc.querySelector('#wzDocPane .dp-tt[data-tool="show"][data-soon]'));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click(); await sleep(200);
+      check('点「插入」不切换、只说明第几轮做',
+        doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').classList.contains('on'));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);
+      check('「设计」组里有网格/适应窗口/放大缩小',
+        !!doc.getElementById('dpGrid2') && !!doc.getElementById('dpZoomFit2') &&
+        !!doc.getElementById('dpZoomIn') && !!doc.getElementById('dpZoomOut'));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(400);
+
+      /* 右栏：选中才出现，随选中切换 */
+      const b0 = boxOf('block:0');
+      b0.click(); await sleep(300);
+      check('选中后右栏出现（.dp-props）', !!props());
+      check('右栏能改位置/大小/字号/字体/颜色/对齐/行距',
+        ['dpPx', 'dpPy', 'dpPw', 'dpPh', 'dpPsize', 'dpPfont', 'dpPcolor', 'dpPlh', 'dpPbold', 'dpPitalic']
+          .every((id) => !!doc.getElementById(id)),
+        ['dpPx', 'dpPy', 'dpPw', 'dpPh', 'dpPsize', 'dpPfont', 'dpPcolor', 'dpPlh']
+          .filter((id) => !doc.getElementById(id)).join(',') || 'all');
+      check('右栏写着改的是哪一格', /block:0/.test(txt(props())), txt(props()).slice(0, 40));
+      check('字体下拉来自服务端清单（含「跟随主题」）',
+        Array.from(doc.getElementById('dpPfont').options).map((o) => o.value).join(',') ===
+        ',微软雅黑,黑体,宋体,楷体',
+        Array.from(doc.getElementById('dpPfont').options).map((o) => o.value).join('/'));
+      check('字号下拉是设计阶梯（来自 boxes 的 size）',
+        Array.from(doc.getElementById('dpPsize').options).map((o) => o.value).join(',') ===
+        '24,40,__c',
+        Array.from(doc.getElementById('dpPsize').options).map((o) => o.value).join('/'));
+
+      /* 改样式 → 回传 patch（与拖动同一条路） */
+      let n0 = slots.length;
+      doc.getElementById('dpPbold').click(); await sleep(400);
+      check('右栏点 B → 回传 bold', slots.length > n0 && lastPatch().bold === true,
+        JSON.stringify(lastPatch()));
+      n0 = slots.length;
+      doc.getElementById('dpPfont').value = '楷体';
+      doc.getElementById('dpPfont').dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(400);
+      check('右栏换字体 → 回传 font', slots.length > n0 && lastPatch().font === '楷体',
+        JSON.stringify(lastPatch()));
+      n0 = slots.length;
+      doc.querySelector('#dpProps [data-align="middle"]').click(); await sleep(400);
+      check('右栏点「中」→ 回传 align=middle', slots.length > n0 && lastPatch().align === 'middle',
+        JSON.stringify(lastPatch()));
+      n0 = slots.length;
+      const lh = doc.getElementById('dpPlh');
+      lh.value = '1.6'; lh.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(400);
+      check('右栏改行距 → 回传 lh', slots.length > n0 && Math.abs(lastPatch().lh - 1.6) < 0.01,
+        JSON.stringify(lastPatch()));
+      n0 = slots.length;
+      const psz = doc.getElementById('dpPsize');
+      psz.value = '__c'; psz.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(200);
+      check('字号选「自定义…」露出数字框',
+        doc.getElementById('dpPsizeCustom').style.display !== 'none');
+      const pnum = doc.getElementById('dpPsizeNum');
+      pnum.value = '37'; pnum.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(400);
+      check('自定义字号回传 size=37', slots.length > n0 && Math.abs(lastPatch().size - 37) < 0.01,
+        JSON.stringify(lastPatch()));
+      await sleep(600);
+      check('偏离设计阶梯要给提示（不阻断）', !!doc.getElementById('dpPoff'),
+        txt(doc.getElementById('dpPoff')));
+
+      /* 位置/大小：右栏给绝对值，覆盖里存偏移 */
+      n0 = slots.length;
+      const px = doc.getElementById('dpPx');
+      const xNow = parseFloat(boxOf('block:0').style.left);
+      px.value = String(Math.round(xNow) + 24);
+      px.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(400);
+      const dxNow = parseFloat(boxOf('block:0').dataset.dx || '0');
+      check('右栏改 X → 换算成 dx 回传', slots.length > n0 && Math.abs(lastPatch().dx - dxNow) < 0.6,
+        'x0=' + xNow + ' · dx=' + dxNow + ' · patch=' + JSON.stringify(lastPatch()));
+
+      /* 回到档位 / 本页复原 */
+      n0 = slots.length;
+      doc.getElementById('dpPreset').click(); await sleep(500);
+      check('「回档位」把这一格的覆盖清掉（字号/字体/颜色都回默认）',
+        slots.length > n0 && !!(lastPatch().size === 0 || lastPatch().size === undefined),
+        JSON.stringify(lastPatch()));
+      const nSaves0 = saves.length;
+      boxOf('block:0').click(); await sleep(200);
+      doc.getElementById('dpPresetPage').click();
+      for (let i = 0; i < 12 && saves.length <= nSaves0; i++) await sleep(250);
+      const lastSave = saves[saves.length - 1] || {};
+      check('「本页复原」把本页覆盖一次清掉并存回会话',
+        saves.length > nSaves0 && !((lastSave.slides || [])[0] || {}).slots,
+        JSON.stringify(((lastSave.slides || [])[0] || {}).slots || null));
+
+      /* R13：缩放 */
+      const wrap = () => doc.querySelector('#wzDocPane .dp-slidewrap');
+      check('缩放条默认是"适应窗口"（0.375）', wrap().dataset.scale === '0.3750', wrap().dataset.scale);
+      check('状态栏说了页码与缩放',
+        /第 \d+ \/ \d+ 页/.test(txt(doc.getElementById('wzStatusBar'))) &&
+        /38%/.test(txt(doc.getElementById('wzStatusBar'))),
+        txt(doc.getElementById('wzStatusBar')));
+      const zs = doc.getElementById('dpZoom');
+      zs.value = '150'; zs.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(300);
+      check('拖缩放条 → 画布 scale 变了并显示百分比',
+        wrap().dataset.scale === '1.5000' && /150%/.test(txt(doc.getElementById('dpZoomVal'))),
+        wrap().dataset.scale + ' / ' + txt(doc.getElementById('dpZoomVal')));
+      check('放大后容器可滚动（.dp-zoombox 撑出滚动区）',
+        !!doc.getElementById('dpZoomBox') && wrap().style.overflow === 'auto',
+        wrap().style.overflow + ' / ' + (doc.getElementById('dpZoomBox') || {}).style?.width);
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true }));
+      await sleep(300);
+      check('Ctrl+0 回到适应窗口', wrap().dataset.scale === '0.3750', wrap().dataset.scale);
+      doc.getElementById('dpZoomFit').click(); await sleep(200);
+      check('「适应窗口」按钮同样生效（并且按钮高亮）',
+        wrap().dataset.scale === '0.3750' && doc.getElementById('dpZoomFit').classList.contains('dark'));
+
+      /* R13：网格（Shift+F9） */
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'F9', shiftKey: true, bubbles: true }));
+      await sleep(300);
+      const gridCols = doc.querySelectorAll('#wzDocPane #dpCanvas .dp-grid .dp-gridcol').length;
+      check('Shift+F9 出参考线（安全边距框 + 12 栏 + 中线）',
+        !!doc.querySelector('#wzDocPane #dpCanvas .dp-grid .dp-gridbox') && gridCols === 12,
+        gridCols + ' 栏');
+      doc.getElementById('dpGrid').click(); await sleep(200);
+      check('再点「网格」关掉（不残留在页面上）',
+        !doc.querySelector('#wzDocPane #dpCanvas .dp-grid'));
+
+      /* R13：浏览视图 */
+      doc.getElementById('dpBrowse').click(); await sleep(600);
+      const cards = doc.querySelectorAll('#wzDocPane .dp-wall .dp-wallcard');
+      check('浏览视图是一屏缩略图墙', cards.length === 5 && !doc.querySelector('#wzDocPane #dpCanvas'),
+        cards.length + ' 张');
+      doc.querySelectorAll('#wzDocPane .dp-wall .dp-wallcard')[2].click(); await sleep(700);
+      check('点浏览里的第 3 页 → 回普通视图并跳到那一页',
+        !!doc.querySelector('#wzDocPane #dpCanvas') &&
+        /第 3 \//.test(txt(doc.querySelector('#wzDocPane #dpPgBar span'))),
+        txt(doc.querySelector('#wzDocPane #dpPgBar span')));
+      check('无运行时错误（R15/R13 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+      /* 回到第 1 页：下面的老用例（本页属性条那几条）默认在第 1 页上跑 */
+      doc.querySelector('#wzLeft .wz-thumb[data-thumb="0"]').click(); await sleep(600);
+      check('（收尾）回到第 1 页', /第 1 \//.test(txt(doc.querySelector('#wzDocPane #dpPgBar span'))),
+        txt(doc.querySelector('#wzDocPane #dpPgBar span')));
+    }
+
     /* ③ 本页属性条：换版式 / 改时长 / 加一块 */
     const lay = doc.getElementById('dpLayout');
     check('有本页属性条（版式 / 时长 / 加一块）',
@@ -547,7 +696,8 @@ async function openDocPanel(doc) {
     const saved1 = saves[saves.length - 1] || {};
     check('换版式写进数据并回存',
       saves.length > nSaves && !!saved1.slides && saved1.slides[0].layout === 'two-col',
-      saves.length + ' 次 · ' + (saved1.slides ? String(saved1.slides[0].layout) : '(无 slides)'));
+      saves.length + ' 次 · ' + (saved1.slides ? String(saved1.slides[0].layout) : '(无 slides)') +
+      ' · 第0页键 ' + (saved1.slides && saved1.slides[0] ? Object.keys(saved1.slides[0]).join(',') : '-'));
     const nBlocks = doc.querySelectorAll('#wzDocPane .dp-boxlayer .dp-box').length;
     doc.getElementById('dpAddBlock').click(); await sleep(900);
     check('「＋加一块」生效（多出一个可编辑盒子）',
@@ -561,8 +711,8 @@ async function openDocPanel(doc) {
     check('缩略图里是真的 SVG（复用服务端那份）',
       !!doc.querySelector('#wzLeft .wz-thumb .cv svg'));
     doc.querySelectorAll('#wzLeft .wz-thumb')[2].click(); await sleep(500);
-    check('点缩略图换页', /第 3 \/ /.test(txt(doc.querySelector('#wzDocPane .dp-pagebar span'))),
-      txt(doc.querySelector('#wzDocPane .dp-pagebar span')));
+    check('点缩略图换页', /第 3 \/ /.test(txt(doc.querySelector('#wzDocPane #dpPgBar span'))),
+      txt(doc.querySelector('#wzDocPane #dpPgBar span')));
     const n0 = doc.querySelectorAll('#wzLeft .wz-thumb').length;
     doc.querySelector('#wzLeft [data-thumb-dup="0"]').click(); await sleep(700);
     check('缩略图上的「复制页」生效', doc.querySelectorAll('#wzLeft .wz-thumb').length === n0 + 1,

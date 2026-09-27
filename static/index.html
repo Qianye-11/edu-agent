@@ -635,6 +635,45 @@ body.theme-dark .avt{color:#fff}
 .dp-h-sw{left:0;top:100%;cursor:nesw-resize}
 .dp-h-w{left:0;top:50%;cursor:ew-resize}
 .dp-objs{gap:6px}
+/* R15：工具分组（照 WPS 的菜单栏分组；没做的组灰掉并写明第几轮） */
+.dp-tooltabs{display:flex;align-items:center;gap:2px;border-bottom:.5px solid var(--line);padding:0 0 4px;margin-bottom:6px}
+.dp-tt{border:none;background:none;padding:4px 10px;border-radius:6px;font-size:12.5px;color:var(--ink-600);cursor:pointer;font-family:var(--font)}
+.dp-tt:hover{background:var(--soft)}
+.dp-tt.on{background:var(--soft);color:var(--ink-900);font-weight:600}
+.dp-tt[data-soon]{color:var(--ink-400);cursor:help}
+.dp-toolgroup{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.dp-toolgroup button{height:26px;padding:0 9px;border-radius:7px;border:.5px solid var(--line-strong);background:#fff;font-size:12px;font-family:var(--font);color:var(--ink-700);cursor:pointer}
+.dp-toolgroup button:hover{background:var(--soft)}
+.dp-toolgroup button.dark{background:var(--ink-900);color:#fff;border-color:var(--ink-900)}
+/* R15：画布 + 右栏属性 */
+.dp-stageflex{display:flex;align-items:flex-start;gap:8px}
+.dp-stageflex .dp-slidewrap{flex:1;min-width:0}
+.dp-props{width:196px;flex:0 0 196px;border:.5px solid var(--line);border-radius:8px;padding:8px;background:#fff;font-size:12px;display:flex;flex-direction:column;gap:5px}
+.dp-props>b{font-size:12px;color:var(--ink-900)}
+.dp-props-empty{color:var(--ink-500)}
+.dp-prow{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.dp-prow>span:first-child{width:34px;color:var(--ink-500);font-size:11.5px}
+.dp-pnum{width:56px;height:24px;border:.5px solid var(--line-strong);border-radius:6px;padding:0 4px;font-size:12px;font-family:var(--font)}
+.dp-props select{height:24px;border:.5px solid var(--line-strong);border-radius:6px;font-size:12px;font-family:var(--font);max-width:126px}
+.dp-props input[type=color]{width:34px;height:24px;border:.5px solid var(--line-strong);border-radius:6px;background:#fff;padding:0}
+.dp-props .dp-mini{height:24px;padding:0 7px;font-size:11.5px}
+.dp-props .dp-warn{font-size:11px;margin:0}
+.dp-zoom{width:104px}
+#dpZoomVal{font-size:11.5px;color:var(--ink-600);min-width:34px}
+/* R13：参考线（数值来自 tokens） */
+.dp-grid{position:absolute;left:0;top:0;width:1280px;height:720px;z-index:2;pointer-events:none}
+.dp-gridbox{position:absolute;border:1px dashed rgba(255,59,48,.55)}
+.dp-gridcol{position:absolute;background:rgba(47,107,255,.05);border-left:.5px dashed rgba(47,107,255,.25);border-right:.5px dashed rgba(47,107,255,.25)}
+.dp-gridline{position:absolute;background:rgba(47,107,255,.35)}
+/* R13：浏览视图（一屏看全册） */
+.dp-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;padding:2px 0 8px}
+.dp-wallcard{position:relative;border:.5px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;background:#fff}
+.dp-wallcard[data-on]{border-color:var(--blue);box-shadow:0 0 0 2px rgba(47,107,255,.18)}
+.dp-wallcard .cv{position:relative;aspect-ratio:16/9;overflow:hidden}
+.dp-wallcard .cv svg{width:100%;height:100%;display:block}
+.dp-wallcard .n{font-size:11.5px;color:var(--ink-600);padding:3px 6px;border-top:.5px solid var(--line)}
+/* 放大后要能滚（transform 不改变布局尺寸，靠 #dpZoomBox 撑出滚动区） */
+.dp-zoombox{position:relative}
 </style>
 <!-- 侧边面板的多格式渲染库：CDN 主用，加载失败自动落回本地 vendor（离线不白屏） -->
 <script defer src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js" onerror="this.onerror=null;this.src='/static/vendor/marked.min.js'"></script>
@@ -3142,8 +3181,10 @@ body.theme-dark .avt{color:#fff}
     }
     el.innerHTML = '<b>第 ' + (DOCP_PAGE + 1) + ' / ' + Math.max(1, sl.length) + ' 页</b>' +
       '<span>共 ' + sl.length + ' 页</span>' +
+      '<span>' + Math.round((DOCP_SL.zoom || DOCP_SL.fit || 0.375) * 100) + '%' +
+        (DOCP_SL.zoom ? '（手动）' : '（适应窗口）') + '</span>' +
       '<span>' + escHtml(docpThemeName(docpThemeGet()) || '学术蓝') + '</span>' +
-      '<span>' + (DOCP_SL.fail ? '纯文本预览' : '点页面上的字就能改 · Ctrl+Z 撤销') + '</span>' +
+      '<span>' + (DOCP_SL.fail ? '纯文本预览' : '单击选中 · 双击改字 · Ctrl+Z 撤销') + '</span>' +
       '<span class="sp"></span>' + saved;
   }
   /* 保存状态：改动时标"正在写入"，服务端确认后回"已保存"（顶栏那行字与状态栏同步） */
@@ -3963,8 +4004,10 @@ body.theme-dark .avt{color:#fff}
                   editing: -1, seq: 0, saveTimer: null, undo: [], redo: [],
                   tplId: '', tplList: [], tplLoaded: false, edited: false, fillPreview: false,
                   fillOverrides: {}, fillGeos: {},
-                  /* R14：选中 / 吸附 / 画布参数（margin 来自服务端 tokens，用于吸附参考线） */
-                  sel: '', snap: true, canvas: { w: 1280, h: 720, margin: 72 } };
+                  /* R14：选中 / 吸附 / 画布参数（margin 来自服务端 tokens，用于吸附参考线与网格） */
+                  sel: '', snap: true, canvas: { w: 1280, h: 720, margin: 72, cols: 12, gutter: 24 },
+                  /* R13/R15：缩放（0 = 适应窗口）、浏览视图、网格、工具分组、字体清单 */
+                  zoom: 0, fit: 0.375, browse: false, grid: false, group: 'home', fonts: [] };
   var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
                       ['two-col', '两栏'], ['media', '图文'], ['end', '结尾']];
   var CHARS_PER_BLOCK = 22;                     /* 与 slide_deck.CHARS_PER_BLOCK 对齐（只提示不截断） */
@@ -4171,7 +4214,8 @@ body.theme-dark .avt{color:#fff}
         if(d && d.ok && d.enabled !== false && (d.pages || []).length){
           DOCP_SL.pages = d.pages; DOCP_SL.warn = d.warnings || []; DOCP_SL.fail = false;
           DOCP_SL.boxes = d.boxes || [];
-          if(d.canvas) DOCP_SL.canvas = d.canvas;      /* 吸附参考线要用安全边距（服务端 tokens 同一份） */
+          if(d.canvas) DOCP_SL.canvas = d.canvas;      /* 吸附参考线/网格要用 tokens 的边距与栏数 */
+          if(d.fonts && d.fonts.length) DOCP_SL.fonts = d.fonts;   /* R15：右栏字体下拉 */
           DOCP_SL.sig = sig;
         }else{
           DOCP_SL.pages = []; DOCP_SL.boxes = []; DOCP_SL.fail = true;   /* 拿不到 SVG → 退化成纯文本，别白屏 */
@@ -4189,16 +4233,42 @@ body.theme-dark .avt{color:#fff}
       (bs.length ? '<ul>' + bs.map(function(x){ return '<li>' + escHtml(x) + '</li>'; }).join('') + '</ul>' : '') +
       '</div>';
   }
-  /* 等比缩放：内部固定 1280×720，按台子宽度算 scale；高度跟着 scale 走，不裁不拉 */
+  /* 等比缩放：内部固定 1280×720，按台子宽度算"适应窗口"的系数；老师手动缩放过就用他的。
+     **只改 scale 与容器尺寸，不重建 DOM**（滚动位置、选中状态都保住 —— R11/R14 踩过）。
+     `#dpZoomBox` 是给滚动条用的占位盒：transform 不改变布局尺寸，不铺它放大后就滚不动。 */
   function docpFitSlide(bd){
     var wrap = bd.querySelector('#dpSlideWrap');
     if(!wrap) return;
     var w = wrap.clientWidth || 480;
-    var sc = Math.max(0.15, Math.min(2, w / 1280));
-    wrap.style.height = Math.round(720 * sc) + 'px';
+    var fit = Math.max(0.15, Math.min(2, w / 1280));
+    DOCP_SL.fit = fit;
+    var sc = DOCP_SL.zoom ? Math.max(0.15, Math.min(2, DOCP_SL.zoom)) : fit;
+    var box = bd.querySelector('#dpZoomBox');
+    if(box){
+      box.style.width = Math.round(1280 * sc) + 'px';
+      box.style.height = Math.round(720 * sc) + 'px';
+    }
+    wrap.style.height = Math.round(720 * fit) + 'px';
+    wrap.style.overflow = (sc > fit + 0.001) ? 'auto' : 'hidden';
     var cv = bd.querySelector('#dpCanvas');
     if(cv) cv.style.transform = 'scale(' + sc + ')';
     wrap.dataset.scale = sc.toFixed(4);
+    var zl = bd.querySelector('#dpZoomVal');
+    if(zl) zl.textContent = Math.round(sc * 100) + '%';
+    var zs = bd.querySelector('#dpZoom');
+    if(zs && !DOCP_SL.zoomDragging) zs.value = String(Math.round(sc * 100));
+    var zoomWrap = bd.querySelector('#dpZoomWrap');
+    if(zoomWrap) zoomWrap.style.display = DOCP_SL.zoom ? 'block' : 'none';
+  }
+  /* 缩放：滑杆 / Ctrl+滚轮 / 「适应窗口」/ Ctrl+0 都走这一个口子 */
+  function docpZoomSet(bd, k){
+    DOCP_SL.zoom = (!k || Math.abs(k - DOCP_SL.fit) < 0.005) ? 0 : k;   /* 回到适应值 = 自动 */
+    docpFitSlide(bd);
+    var zs = bd.querySelector('#dpZoom');
+    if(zs) zs.value = String(Math.round((DOCP_SL.zoom || DOCP_SL.fit) * 100));
+    var fitBtn = bd.querySelector('#dpZoomFit');
+    if(fitBtn) fitBtn.classList.toggle('dark', !DOCP_SL.zoom);
+    wzStatusRender();
   }
   function docpSlideStat(sl){
     return sl.length + ' 页' +
@@ -4289,6 +4359,8 @@ body.theme-dark .avt{color:#fff}
     if(wb) wb.innerHTML = docpWarnHtml();         /* 渲染回来的提示（如"建议拆页"）要进 DOM */
     docpBoxesPaint(bd);                           /* R11：给这一页铺"可编辑盒子"叠加层 */
     docpFitSlide(bd);
+    docpGridPaint(bd);                            /* R13：参考线（叠在盒子下面，z-index 管） */
+    docpPropsPaint(bd);                           /* R15：右栏数值跟着重画刷新 */
   }
   /* ==== 页内编辑（R11 改字 / R14 选中·拖动·缩放·吸附·层级·删除）=========================
      做法：服务端在预览 SVG 里给每个文字槽打了 `data-slot` 并回传 `boxes`（设计像素 1280×720）。
@@ -4412,6 +4484,7 @@ body.theme-dark .avt{color:#fff}
     DOCP_SL.sel = slot || '';
     docpSelectPaint(bd);
     docpObjBarPaint(bd);
+    docpPropsPaint(bd);                          /* 右栏跟着选中走（R15） */
   }
   /* 选框 + 8 个手柄：位置直接取盒子的设计坐标（同一个被 scale 的容器里，天然对齐） */
   function docpSelectPaint(bd){
@@ -4547,6 +4620,16 @@ body.theme-dark .avt{color:#fff}
   function docpBindDrag(){
     document.addEventListener('mousemove', function(ev){ docpDragMove(ev); });
     document.addEventListener('mouseup', function(){ docpDragEnd(); });
+    /* Ctrl+滚轮缩放（R13）：只在幻灯片页签、且指针在预览台上时接管 —— 别抢页面本身的滚动 */
+    document.addEventListener('wheel', function(ev){
+      if(!(ev.ctrlKey || ev.metaKey)) return;
+      if(typeof WZ_TAB === 'string' && WZ_TAB !== 'slides') return;
+      var wrap = docpEl('dpSlideWrap');
+      if(!wrap || !wrap.contains(ev.target)) return;
+      ev.preventDefault();
+      var k = (DOCP_SL.zoom || DOCP_SL.fit) + (ev.deltaY < 0 ? 0.05 : -0.05);
+      docpZoomSet(docpEl('wzDocBody'), Math.max(0.15, Math.min(2, k)));
+    }, { passive: false });
   }
   /* 当前这一格的覆盖（用于撤销：记下改动前的样子） */
   function docpOverrideOf(bd, slot){
@@ -4578,8 +4661,9 @@ body.theme-dark .avt{color:#fff}
     if(!s.slots) s.slots = {};
     var next = Object.assign({}, s.slots[slot] || {}, patch);
     Object.keys(next).forEach(function(k){                   /* 归零 = 不留这个键（回版式原位） */
-      if((k === 'dx' || k === 'dy' || k === 'dw' || k === 'dh' || k === 'z') && !next[k]) delete next[k];
-      if(k === 'hidden' && !next[k]) delete next[k];
+      if(k === 'hidden'){ if(!next[k]) delete next[k]; return; }
+      if(!next[k] && next[k] !== 0) delete next[k];
+      if(next[k] === 0 && k !== 'z') delete next[k];
     });
     if(Object.keys(next).length) s.slots[slot] = next; else delete s.slots[slot];
     if(!Object.keys(s.slots).length) delete s.slots;
@@ -4589,6 +4673,10 @@ body.theme-dark .avt{color:#fff}
     DOCP_SL.sig = '';                                        /* 逼下一页重出 SVG（位置变了） */
     docpPagesEnsure(bd, (DOCP && DOCP.slides) || [], function(){ docpPaintStage(bd); docpRailMaybe(); });
     var seq = ++DOCP_SL.seq;
+    /* 回传的 patch **原样送**（含 0 与 ''）：0 = "回到版式原位"、'' = "取消这个覆盖" ——
+       服务端 `_clean_overrides` 会把 0/空值从合并结果里去掉，方向语义只有这一处。
+       ⚠️ 客户端**不许**先把 0 滤掉：那样"下移一层到 0 层 / 回原位"就永远清不掉服务端那份覆盖（踩过）。 */
+    if(!patch || !Object.keys(patch).length) return;
     spJson('/api/slide/slot', 'POST', { session_id: CUR || '', index: DOCP_PAGE, slot: slot,
                                         patch: patch, slides: (DOCP && DOCP.slides) || [],
                                         title: (DOCP && DOCP.title) || '' })
@@ -4635,6 +4723,20 @@ body.theme-dark .avt{color:#fff}
   }
   /* 方向键微调（1px；Shift = 10px）。绑在 document 上：盒子被重画也不丢。 */
   function docpNudge(ev){
+    /* R13/R15 的全局键：网格（Shift+F9）、适应窗口（Ctrl+0）、缩放（Ctrl+= / Ctrl+-） */
+    if(typeof WZ_TAB === 'string' && WZ_TAB === 'slides' && !DOCP_SL.browse){
+      var bd0 = docpEl('wzDocBody');
+      if(ev.shiftKey && ev.key === 'F9' && bd0){ ev.preventDefault(); docpGridToggle(bd0); return; }
+      if((ev.ctrlKey || ev.metaKey) && (ev.key === '0' || ev.key === ')') && bd0){
+        ev.preventDefault(); docpZoomSet(bd0, 0); return;
+      }
+      if((ev.ctrlKey || ev.metaKey) && (ev.key === '=' || ev.key === '+') && bd0){
+        ev.preventDefault(); docpZoomSet(bd0, (DOCP_SL.zoom || DOCP_SL.fit) + 0.1); return;
+      }
+      if((ev.ctrlKey || ev.metaKey) && ev.key === '-' && bd0){
+        ev.preventDefault(); docpZoomSet(bd0, Math.max(0.15, (DOCP_SL.zoom || DOCP_SL.fit) - 0.1)); return;
+      }
+    }
     if(!DOCP_SL.sel || WZ_EDIT.box) return;
     if(typeof WZ_TAB === 'string' && WZ_TAB !== 'slides') return;
     var ae = document.activeElement || {};
@@ -4647,6 +4749,18 @@ body.theme-dark .avt{color:#fff}
     else if(ev.key === 'Delete' || ev.key === 'Backspace'){
       ev.preventDefault(); docpObjDelete(docpEl('wzDocBody')); return;
     }else if(ev.key === 'Escape'){ docpSelect(docpEl('wzDocBody'), ''); return; }
+    else if((ev.ctrlKey || ev.metaKey) && (ev.key === 'b' || ev.key === 'B')){
+      ev.preventDefault();
+      var bd1 = docpEl('wzDocBody');
+      docpPropApply(bd1, { bold: !docpOverrideOf(bd1, DOCP_SL.sel).bold });
+      return;
+    }
+    else if((ev.ctrlKey || ev.metaKey) && (ev.key === 'i' || ev.key === 'I')){
+      ev.preventDefault();
+      var bd2 = docpEl('wzDocBody');
+      docpPropApply(bd2, { italic: !docpOverrideOf(bd2, DOCP_SL.sel).italic });
+      return;
+    }
     else return;
     ev.preventDefault();
     var bd = docpEl('wzDocBody');
@@ -4950,6 +5064,8 @@ body.theme-dark .avt{color:#fff}
       '<span class="dp-slstat">' + docpSlideStat(sl) + '</span></div>' +
       '<input type="file" id="dpTplFile" accept=".pptx,.pptm,.potx" style="display:none">' +
       (DOCP_SL.alignHtml || '') + '</div>' +
+      docpToolTabsHtml() +
+      docpToolGroupHtml() +
       '<div id="dpWarnBox">' + warn + '</div>' +
       (DOCP_SL.fillPreview
         ? '<div class="dp-slhead"><span class="dp-warn" style="margin:0">当前预览 = 按模板《' +
@@ -4960,24 +5076,181 @@ body.theme-dark .avt{color:#fff}
           (docpFillPendingCount() ? ('（' + docpFillPendingCount() + '）') : '') + '</button>' +
           '<button id="dpPreviewBack">切回我们的版式</button></div>'
         : '') +
-      '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-canvas" id="dpCanvas"></div></div>' +
-      '<div class="dp-pagebar dp-objs">' +
-      '<span>选中：<b id="dpSelName">未选中</b></span>' +
-      '<button id="dpSnap" title="拖动时对齐到边距/中线/其它文字（按住 Alt 临时关掉）">吸附：开</button>' +
-      '<button id="dpUp" disabled title="把选中的文字盖到上面一层">上移一层</button>' +
-      '<button id="dpDown" disabled title="把选中的文字压到下面一层">下移一层</button>' +
-      '<button id="dpReset" disabled title="回到版式原来的位置与大小">回原位</button>' +
-      '<button id="dpDel" disabled title="删掉这一处文字（Delete；Ctrl+Z 能撤回）">删除</button>' +
-      '<span style="flex:1"></span>' +
-      '<span class="dp-cnt">单击选中 · 双击改字 · 拖动摆位置 · 拖手柄改大小 · 方向键微调（Shift 10px）</span></div>' +
-      '<div class="dp-pagebar"><button data-pg="prev">上一页</button>' +
+      (DOCP_SL.browse ? docpWallHtml(sl)
+        : '<div class="dp-stageflex">' +
+          '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-zoombox" id="dpZoomBox">' +
+            '<div class="dp-canvas" id="dpCanvas"></div></div></div>' +
+          (DOCP_SL.sel ? docpPropsHtml() : '<div class="dp-props dp-props-empty">' +
+            '<b>属性</b><div class="dp-cnt">点一下页面上的文字，这里就能改<b>位置 / 大小 / 字号 / ' +
+            '字体 / 颜色 / 对齐 / 行距</b>。</div></div>') +
+          '</div>') +
+      (DOCP_SL.browse ? '' :
+        '<div class="dp-pagebar dp-objs">' +
+        '<span>选中：<b id="dpSelName">未选中</b></span>' +
+        '<button id="dpSnap" title="拖动时对齐到边距/中线/其它文字（按住 Alt 临时关掉）">吸附：开</button>' +
+        '<button id="dpUp" disabled title="把选中的文字盖到上面一层">上移一层</button>' +
+        '<button id="dpDown" disabled title="把选中的文字压到下面一层">下移一层</button>' +
+        '<button id="dpReset" disabled title="回到版式原来的位置与大小">回原位</button>' +
+        '<button id="dpDel" disabled title="删掉这一处文字（Delete；Ctrl+Z 能撤回）">删除</button>' +
+        '<span style="flex:1"></span>' +
+        '<span class="dp-cnt">单击选中 · 双击改字 · 拖动摆位置 · 拖手柄改大小 · 方向键微调（Shift 10px）</span></div>') +
+      '<div class="dp-pagebar" id="dpPgBar"><button data-pg="prev">上一页</button>' +
       '<button data-pg="next">下一页</button>' +
-      '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页　' +
-      '<b>点页面上的文字就能改</b>（左栏缩略图换页 · Ctrl+Z 撤销）</span></div>' +
+      '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页</span>' +
+      '<span class="sp"></span>' +
+      '<button id="dpZoomFit" title="缩放到刚好铺满（Ctrl+0）">适应窗口</button>' +
+      '<input id="dpZoom" class="dp-zoom" type="range" min="15" max="200" step="5" value="100" ' +
+        'title="缩放（Ctrl+滚轮也行）" aria-label="缩放百分比">' +
+      '<span id="dpZoomVal">100%</span>' +
+      '<button id="dpGrid" title="参考线：安全边距 / 栏 / 中线（Shift+F9）">网格</button>' +
+      '<button id="dpBrowse" title="一屏看全册（点哪页跳哪页）">浏览</button></div>' +
       docpPagePropsHtml() +
       '<div class="dp-pagebar"><button id="dpAddPage">+ 加一页</button>' +
       '<button id="dpUndo">撤销</button><button id="dpRedo">重做</button>' +
       '<span>改完自动存回会话；下载 ▾ 里的「新版式」就是这份</span></div>';
+  }
+  /* 工具分组（R15）：照 WPS 的菜单栏分组 —— 开始 / 插入 / 设计 / 放映。
+     没做的组**摆明写着第几轮做**（灰掉不骗人），别放一排点了没反应的按钮。 */
+  var DOCP_GROUPS = [['home', '开始'], ['insert', '插入'], ['design', '设计'], ['show', '放映']];
+  function docpToolTabsHtml(){
+    return '<div class="dp-tooltabs">' + DOCP_GROUPS.map(function(g){
+      var soon = (!DOCP_SL.fillPreview && (g[0] === 'insert' || g[0] === 'show'))
+        || (DOCP_SL.fillPreview && g[0] !== 'design');
+      return '<button class="dp-tt' + (DOCP_SL.group === g[0] ? ' on' : '') + '" data-tool="' + g[0] + '"' +
+        (soon ? ' data-soon="1"' : '') + ' title="' + (soon ? '这一组在后面的轮次里加进来' :
+          (g[0] === 'design' ? '主题 / 模板 / 网格 / 缩放' : '选中后改字与样式')) + '">' +
+        escHtml(g[1]) + '</button>';
+    }).join('') + '<span class="sp"></span>' +
+      '<span class="dp-cnt">' + (DOCP_SL.fillPreview ? '模板填充页：改了先记着，点【应用修改】才重填'
+        : '预览 = 导出（同一份 SVG）') + '</span></div>';
+  }
+  function docpToolGroupHtml(){
+    var g = DOCP_SL.group;
+    if(g === 'design'){
+      return '<div class="dp-toolgroup" data-group="design">' +
+        '<span class="dp-cnt">主题与模板在上面选；这里是视图辅助</span>' +
+        '<button id="dpGrid2" title="安全边距 / 栏 / 中线（Shift+F9）">网格</button>' +
+        '<button id="dpZoomFit2" title="Ctrl+0">适应窗口</button>' +
+        '<button id="dpZoomIn" title="放大（Ctrl+滚轮）">放大 +</button>' +
+        '<button id="dpZoomOut" title="缩小（Ctrl+滚轮）">缩小 −</button></div>';
+    }
+    if(g === 'insert' || g === 'show'){
+      var what = g === 'insert' ? '文本框 / 形状 / 图片' : '放映（F5）';
+      var when = g === 'insert' ? 'R21–R22' : 'R17';
+      return '<div class="dp-toolgroup" data-group="' + g + '">' +
+        '<span class="dp-cnt">' + what + '在 ' + when + ' 加进来 —— 这一组先占位，不放假按钮</span></div>';
+    }
+    /* 开始：选中后能改的样式（位置/大小在右栏，层级/删除在下面那条） */
+    return '<div class="dp-toolgroup" data-group="home">' +
+      '<span class="dp-cnt">选中一处文字后：</span>' +
+      '<button id="dpBold" title="加粗（Ctrl+B）">B</button>' +
+      '<button id="dpItalic" title="斜体（Ctrl+I）"><i>I</i></button>' +
+      '<button id="dpAlignL" title="左对齐">左</button>' +
+      '<button id="dpAlignC" title="居中">中</button>' +
+      '<button id="dpAlignR" title="右对齐">右</button>' +
+      '<button id="dpSizeDown" title="字号 −2">A−</button>' +
+      '<button id="dpSizeUp" title="字号 +2">A+</button>' +
+      '<span class="sp"></span>' +
+      '<span class="dp-cnt">改样式只影响选中的这一格；偏离设计阶梯只提示、不阻断</span></div>';
+  }
+  /* 浏览视图（R13）：一屏看全册，点哪页跳哪页 */
+  function docpWallHtml(sl){
+    var n = DOCP_SL.fillPreview ? Math.max((DOCP_SL.pages || []).length, sl.length) : sl.length;
+    var h = '<div class="dp-wall" id="dpWall">';
+    for(var i = 0; i < n; i++){
+      var svg = DOCP_SL.pages[i] || '';
+      h += '<div class="wz-thumb dp-wallcard" data-wall="' + i + '" role="button" tabindex="0"' +
+        (i === DOCP_PAGE ? ' data-on="1"' : '') + '>' +
+        '<div class="cv">' + (svg || '<div class="dp-empty">第 ' + (i + 1) + ' 页</div>') + '</div>' +
+        '<div class="n">' + (i + 1) + ' / ' + n + '</div></div>';
+    }
+    return h + '</div>';
+  }
+  /* 右栏属性（R15）：位置/大小/字号（档或自定义）/字体/颜色/对齐/行距 + 偏离提示 + 一键回档 */
+  function docpPropsHtml(){
+    var box = docpSelBoxData();
+    if(!box) return '';
+    var ov = docpOverrideOf(docpEl('wzDocBody'), DOCP_SL.sel) || {};
+    var sizes = docpSizeSteps();
+    var sizeCur = docpNum(ov.size, 0) || docpNum(box.size, 24);
+    var sizeOpts = sizes.map(function(s){
+      return '<option value="' + s + '"' + (Math.abs(s - sizeCur) < 0.01 ? ' selected' : '') + '>' +
+        s + 'px' + (docpIsStep(s) ? '' : '（自定义）') + '</option>';
+    }).join('') + '<option value="__c"' + (docpIsStep(sizeCur) ? '' : ' selected') + '>自定义…</option>';
+    var fontCur = ov.font || (DOCP_SL.fonts[0] || '');
+    var fontOpts = '<option value=""' + (ov.font ? '' : ' selected') + '>（跟随主题）</option>' +
+      DOCP_SL.fonts.map(function(f){
+        return '<option value="' + escHtml(f) + '"' + (f === ov.font ? ' selected' : '') + '>' +
+          escHtml(f) + '</option>';
+      }).join('') + (ov.font && DOCP_SL.fonts.indexOf(ov.font) < 0
+        ? '<option value="' + escHtml(ov.font) + '" selected>' + escHtml(ov.font) + '（不在清单里）</option>' : '');
+    var off = docpOffSteps(sizeCur, ov);
+    return '<div class="dp-props" id="dpProps"><b>属性 · ' + escHtml(docpSelLabel()) + '</b>' +
+      '<div class="dp-prow"><span>位置</span>' +
+        '<input id="dpPx" class="dp-pnum" type="number" step="1" value="' + Math.round(box.x) + '" title="X（设计像素）">' +
+        '<input id="dpPy" class="dp-pnum" type="number" step="1" value="' + Math.round(box.y) + '" title="Y">' +
+      '</div>' +
+      '<div class="dp-prow"><span>大小</span>' +
+        '<input id="dpPw" class="dp-pnum" type="number" step="1" value="' + Math.round(box.w) + '" title="宽">' +
+        '<input id="dpPh" class="dp-pnum" type="number" step="1" value="' + Math.round(box.h) + '" title="高">' +
+      '</div>' +
+      '<div class="dp-prow"><span>字号</span>' +
+        '<select id="dpPsize">' + sizeOpts + '</select></div>' +
+      '<div class="dp-prow" id="dpPsizeCustom"' + (docpIsStep(sizeCur) ? ' style="display:none"' : '') + '>' +
+        '<span></span><input id="dpPsizeNum" class="dp-pnum" type="number" min="8" max="200" step="1" value="' +
+        sizeCur + '" title="自定义字号（px）"></div>' +
+      '<div class="dp-prow"><span>字体</span><select id="dpPfont">' + fontOpts + '</select></div>' +
+      '<div class="dp-prow"><span>颜色</span>' +
+        '<input id="dpPcolor" type="color" value="' + (ov.color || '#2B2B2B') + '" title="文字颜色">' +
+        '<button class="dp-mini" id="dpPcolorReset" title="回到主题色">默认</button></div>' +
+      '<div class="dp-prow"><span>对齐</span>' +
+        '<button class="dp-mini' + (box.align === 'start' ? ' dark' : '') + '" data-align="start">左</button>' +
+        '<button class="dp-mini' + (box.align === 'middle' ? ' dark' : '') + '" data-align="middle">中</button>' +
+        '<button class="dp-mini' + (box.align === 'end' ? ' dark' : '') + '" data-align="end">右</button></div>' +
+      '<div class="dp-prow"><span>行距</span>' +
+        '<input id="dpPlh" class="dp-pnum" type="number" min="0.8" max="3" step="0.1" value="' +
+        (ov.lh || 1.3) + '" title="行距倍数"></div>' +
+      '<div class="dp-prow"><span>样式</span>' +
+        '<button class="dp-mini' + (ov.bold ? ' dark' : '') + '" id="dpPbold">B</button>' +
+        '<button class="dp-mini' + (ov.italic ? ' dark' : '') + '" id="dpPitalic"><i>I</i></button>' +
+        '<button class="dp-mini" id="dpPreset" title="这一格回到版式原位（含字号/颜色/行距）">回档位</button></div>' +
+      (off ? '<div class="dp-warn" id="dpPoff">偏离设计阶梯：字号 ' + sizeCur + 'px（档位 ' + sizes.join('/') +
+        '）—— 只提示，不改你的选择；点「回档位」可一键回去</div>' : '') +
+      '<div class="dp-prow"><span></span>' +
+        '<button class="dp-mini" id="dpPresetPage" title="本页所有改动回到版式原样">本页复原</button>' +
+        '<button class="dp-mini" id="dpPresetAll" title="整册所有改动回到版式原样（谨慎）">整册复原</button></div>' +
+      '<div class="dp-prow"><button class="dp-mini" id="dpPlayFrom" disabled title="放映这一页（R17 加进来）">从本页放映</button>' +
+        '<span class="dp-cnt">R17</span></div>' +
+      '</div>';
+  }
+  function docpSizeSteps(){
+    var steps = [];
+    (((DOCP_SL.boxes || [])[DOCP_PAGE]) || []).concat(docpFillBoxes() || []).forEach(function(b){
+      var s = docpNum(b && b.size, 0);
+      if(s > 0 && steps.indexOf(s) < 0) steps.push(s);
+    });
+    steps.sort(function(a, b){ return a - b; });
+    return steps.length ? steps : [16, 20, 24, 32, 40];
+  }
+  function docpIsStep(s){ return docpSizeSteps().some(function(x){ return Math.abs(x - s) < 0.5; }); }
+  function docpOffSteps(sizeCur, ov){
+    return (ov.size && !docpIsStep(sizeCur)) || ov.font ? 1 : 0;
+  }
+  function docpSelLabel(){
+    var slot = DOCP_SL.sel || '';
+    if(slot.indexOf('fill:') === 0) return '模板第 ' + slot.slice(5) + ' 号框';
+    return slot;
+  }
+  function docpSelBoxData(){
+    var b = docpSelBox(docpEl('wzDocBody'));
+    if(!b) return null;
+    return { x: docpNum(b.dataset.x, 0), y: docpNum(b.dataset.y, 0),
+             w: docpNum(b.dataset.w, 0), h: docpNum(b.dataset.h, 0),
+             size: docpNum(b.style.fontSize, 24), align: docpAlignOf(b), slot: DOCP_SL.sel };
+  }
+  function docpAlignOf(el){
+    var a = (el.style.textAlign || 'left');
+    return a === 'center' ? 'middle' : (a === 'right' ? 'end' : 'start');
   }
   /* 本页属性条（R12）：页内点着改覆盖不到的字段 —— 时长、版式、加一块。
      标题/正文都在页面上直接改，所以这里不重复放标题输入框。 */
@@ -5054,6 +5327,11 @@ body.theme-dark .avt{color:#fff}
     var del = bd.querySelector('#dpDel');
     if(del) del.addEventListener('click', function(){ docpObjDelete(bd); });
     docpObjBarPaint(bd);
+    /* R15/R13：工具分组、右栏属性、缩放、网格、浏览视图 */
+    docpToolWire(bd);
+    docpPropsWire(bd);
+    docpZoomWire(bd);
+    docpWallWire(bd);
     /* 本页属性：换版式 / 改时长 / 加一块（这三样页内编辑覆盖不到） */
     var lay = bd.querySelector('#dpLayout');
     if(lay) lay.addEventListener('change', function(){
@@ -5153,6 +5431,223 @@ body.theme-dark .avt{color:#fff}
     var fillApply = bd.querySelector('#dpFillApply');
     if(fillApply) fillApply.addEventListener('click', function(){ docpFillApply(bd); });
   }
+  /* ==== R15：工具分组 / 右栏属性 / R13：缩放·网格·浏览视图 ==========================
+     都长在同一份数据上：改样式 → `docpGeoCommit`（覆盖进 slides[i].slots 或填充页待应用）。
+     右栏的数值是**设计像素**（与拖动手柄同一套坐标），所以对得上账、也没有第二套口径。 */
+  function docpToolWire(bd){
+    Array.prototype.forEach.call(bd.querySelectorAll('.dp-tt'), function(t){
+      t.addEventListener('click', function(){
+        if(t.dataset.soon){
+          showToast('这组在后面的轮次里加进来（' + t.textContent.trim() + '）', false);
+          return;
+        }
+        DOCP_SL.group = t.dataset.tool;
+        docpRenderSlides(bd);
+      });
+    });
+    var map = { dpBold: 'bold', dpItalic: 'italic' };
+    Object.keys(map).forEach(function(id){
+      var el = bd.querySelector('#' + id);
+      if(!el) return;
+      el.addEventListener('click', function(){
+        var ov = docpOverrideOf(bd, DOCP_SL.sel);
+        docpPropApply(bd, (function(){ var p = {}; p[map[id]] = !ov[map[id]]; return p; })());
+      });
+    });
+    [['dpAlignL', 'start'], ['dpAlignC', 'middle'], ['dpAlignR', 'end']].forEach(function(pair){
+      var el = bd.querySelector('#' + pair[0]);
+      if(el) el.addEventListener('click', function(){ docpPropApply(bd, { align: pair[1] }); });
+    });
+    var down = bd.querySelector('#dpSizeDown');
+    if(down) down.addEventListener('click', function(){ docpSizeStep(bd, -2); });
+    var up = bd.querySelector('#dpSizeUp');
+    if(up) up.addEventListener('click', function(){ docpSizeStep(bd, 2); });
+  }
+  /* 字号档位上下走一档（找不到就按 2px 走） */
+  function docpSizeStep(bd, delta){
+    var box = docpSelBoxData();
+    if(!box){ showToast('先点一下要改的文字', false); return; }
+    var steps = docpSizeSteps();
+    var cur = docpNum((docpOverrideOf(bd, DOCP_SL.sel) || {}).size, 0) || box.size;
+    var next = null;
+    if(delta > 0) next = steps.filter(function(s){ return s > cur + 0.01; })[0];
+    else next = steps.filter(function(s){ return s < cur - 0.01; }).pop();
+    docpPropApply(bd, { size: next || Math.max(8, Math.min(200, cur + delta)) });
+  }
+  /* 改样式/位置/大小的统一出口：槽位层进覆盖并回传，填充页进"待应用" */
+  function docpPropApply(bd, patch){
+    var slot = DOCP_SL.sel;
+    if(!slot){ showToast('先点一下要改的文字', false); return; }
+    if(!patch || !Object.keys(patch).length) return;
+    docpGeoCommit(bd, slot, patch, docpOverrideOf(bd, slot));
+    docpPropsPaint(bd);
+  }
+  function docpPropsWire(bd){
+    var box = docpSelBoxData();
+    if(!box) return;
+    var bind = function(id, ev, fn){
+      var el = bd.querySelector('#' + id);
+      if(el) el.addEventListener(ev, fn);
+    };
+    /* 位置/大小：右栏给的是**绝对值**，覆盖里存的是"相对版式的偏移" → 换算成 dx/dy/dw/dh */
+    var setXY = function(){
+      var nx = docpNum((bd.querySelector('#dpPx') || {}).value, box.x);
+      var ny = docpNum((bd.querySelector('#dpPy') || {}).value, box.y);
+      var ov = docpOverrideOf(bd, DOCP_SL.sel);
+      docpPropApply(bd, { dx: docpRound1(docpNum(ov.dx, 0) + (nx - box.x)),
+                          dy: docpRound1(docpNum(ov.dy, 0) + (ny - box.y)) });
+    };
+    var setWH = function(){
+      var nw = docpNum((bd.querySelector('#dpPw') || {}).value, box.w);
+      var nh = docpNum((bd.querySelector('#dpPh') || {}).value, box.h);
+      var ov = docpOverrideOf(bd, DOCP_SL.sel);
+      docpPropApply(bd, { dw: docpRound1(docpNum(ov.dw, 0) + (nw - box.w)),
+                          dh: docpRound1(docpNum(ov.dh, 0) + (nh - box.h)) });
+    };
+    bind('dpPx', 'change', setXY); bind('dpPy', 'change', setXY);
+    bind('dpPw', 'change', setWH); bind('dpPh', 'change', setWH);
+    bind('dpPsize', 'change', function(){
+      var v = bd.querySelector('#dpPsize').value;
+      var cst = bd.querySelector('#dpPsizeCustom');
+      if(v === '__c'){ if(cst) cst.style.display = 'flex'; return; }
+      if(cst) cst.style.display = 'none';
+      docpPropApply(bd, { size: docpNum(v, box.size) });
+    });
+    bind('dpPsizeNum', 'change', function(){
+      var v = Math.max(8, Math.min(200, docpNum(bd.querySelector('#dpPsizeNum').value, box.size)));
+      docpPropApply(bd, { size: v });
+    });
+    bind('dpPfont', 'change', function(){ docpPropApply(bd, { font: bd.querySelector('#dpPfont').value }); });
+    bind('dpPcolor', 'change', function(){ docpPropApply(bd, { color: bd.querySelector('#dpPcolor').value }); });
+    bind('dpPcolorReset', 'click', function(){ docpPropApply(bd, { color: '' }); });
+    bind('dpPlh', 'change', function(){
+      docpPropApply(bd, { lh: Math.max(0.8, Math.min(3, docpNum(bd.querySelector('#dpPlh').value, 1.3))) });
+    });
+    bind('dpPbold', 'click', function(){
+      docpPropApply(bd, { bold: !(docpOverrideOf(bd, DOCP_SL.sel).bold) });
+    });
+    bind('dpPitalic', 'click', function(){
+      docpPropApply(bd, { italic: !(docpOverrideOf(bd, DOCP_SL.sel).italic) });
+    });
+    Array.prototype.forEach.call(bd.querySelectorAll('#dpProps [data-align]'), function(b){
+      b.addEventListener('click', function(){ docpPropApply(bd, { align: b.dataset.align }); });
+    });
+    bind('dpPreset', 'click', function(){
+      docpPropApply(bd, { dx: 0, dy: 0, dw: 0, dh: 0, z: 0, size: 0, lh: 0, bold: false, italic: false,
+                          font: '', color: '', align: 'start' });
+      showToast('这一格回到版式原位');
+    });
+    bind('dpPresetPage', 'click', function(){ docpResetScope(bd, 'page'); });
+    bind('dpPresetAll', 'click', function(){ docpResetScope(bd, 'all'); });
+  }
+  /* 一键复原（R15 §6.4 的四级里先做三级：本槽 / 本页 / 整册；"单对象"要等自由层 R21） */
+  function docpResetScope(bd, scope){
+    var sl = (DOCP && DOCP.slides) || [];
+    var n = 0;
+    sl.forEach(function(s, i){
+      if(scope === 'page' && i !== DOCP_PAGE) return;
+      if(s.slots && Object.keys(s.slots).length){ n += Object.keys(s.slots).length; delete s.slots; }
+    });
+    DOCP_SL.sel = '';
+    DOCP_SL.sig = '';
+    DOCP_SL.fillOverrides = {};
+    DOCP_SL.fillGeos = {};
+    docpRenderSlides(bd);
+    docpSaveSlides();                       /* 整份存回会话（不用逐槽回传） */
+    showToast(scope === 'page' ? ('本页复原了 ' + n + ' 处改动') : ('整册复原了 ' + n + ' 处改动'));
+  }
+  /* 右栏随选中切换：只换那一块 DOM，不重画整页（重画会丢滚动位置与焦点） */
+  function docpPropsPaint(bd){
+    var host = bd.querySelector('.dp-stageflex');
+    if(!host) return;
+    var old = host.querySelector('.dp-props');
+    var tmp = document.createElement('div');
+    tmp.innerHTML = docpPropsBoxHtml();
+    var next = tmp.firstChild;
+    if(!next) return;
+    if(old) host.replaceChild(next, old); else host.appendChild(next);
+    docpPropsWire(bd);
+  }
+  function docpPropsBoxHtml(){
+    return docpPropsHtml() || '<div class="dp-props dp-props-empty"><b>属性</b>' +
+      '<div class="dp-cnt">点一下页面上的文字，这里就能改<b>位置 / 大小 / 字号 / 字体 / 颜色 / 对齐 / 行距</b>。</div></div>';
+  }
+  /* 缩放：滑杆 / 适应窗口 / 放大缩小按钮 / Ctrl+滚轮（见 docpWheel） */
+  function docpZoomWire(bd){
+    var zs = bd.querySelector('#dpZoom');
+    if(zs){
+      zs.addEventListener('input', function(){ DOCP_SL.zoomDragging = true; });
+      zs.addEventListener('change', function(){
+        DOCP_SL.zoomDragging = false;
+        docpZoomSet(bd, docpNum(zs.value, 100) / 100);
+      });
+    }
+    var fit = bd.querySelector('#dpZoomFit');
+    if(fit) fit.addEventListener('click', function(){ docpZoomSet(bd, 0); });
+    var fit2 = bd.querySelector('#dpZoomFit2');
+    if(fit2) fit2.addEventListener('click', function(){ docpZoomSet(bd, 0); });
+    var zin = bd.querySelector('#dpZoomIn');
+    if(zin) zin.addEventListener('click', function(){
+      docpZoomSet(bd, (DOCP_SL.zoom || DOCP_SL.fit) + 0.1);
+    });
+    var zout = bd.querySelector('#dpZoomOut');
+    if(zout) zout.addEventListener('click', function(){
+      docpZoomSet(bd, Math.max(0.15, (DOCP_SL.zoom || DOCP_SL.fit) - 0.1));
+    });
+    var grid = bd.querySelector('#dpGrid');
+    if(grid) grid.addEventListener('click', function(){ docpGridToggle(bd); });
+    var grid2 = bd.querySelector('#dpGrid2');
+    if(grid2) grid2.addEventListener('click', function(){ docpGridToggle(bd); });
+    var br = bd.querySelector('#dpBrowse');
+    if(br) br.addEventListener('click', function(){ docpBrowseSet(bd, true); });
+    docpGridPaint(bd);
+  }
+  function docpGridToggle(bd){
+    DOCP_SL.grid = !DOCP_SL.grid;
+    docpGridPaint(bd);
+    var g = bd.querySelector('#dpGrid');
+    if(g) g.classList.toggle('dark', DOCP_SL.grid);
+    showToast(DOCP_SL.grid ? '参考线已开（安全边距 / 栏 / 中线）' : '参考线已关');
+  }
+  /* 参考线：安全边距框 + content_w + 每栏 + 中线（数值全来自 tokens，前端不写死） */
+  function docpGridPaint(bd){
+    var cv = bd.querySelector('#dpCanvas');
+    if(!cv) return;
+    Array.prototype.forEach.call(cv.querySelectorAll('.dp-grid'), function(n){ n.remove(); });
+    if(!DOCP_SL.grid) return;
+    var c = DOCP_SL.canvas || {};
+    var W = docpNum(c.w, 1280), H = docpNum(c.h, 720), m = docpNum(c.margin, 72);
+    var cols = Math.max(1, docpNum(c.cols, 12)), gut = docpNum(c.gutter, 24), cw = docpNum(c.content_w, W - 2 * m);
+    var colW = (cw - (cols - 1) * gut) / cols;
+    var h = '<div class="dp-gridbox" style="left:' + m + 'px;top:' + m + 'px;width:' + cw + 'px;height:' +
+      (H - 2 * m) + 'px"></div>';
+    for(var i = 0; i < cols; i++){
+      h += '<div class="dp-gridcol" style="left:' + (m + i * (colW + gut)) + 'px;top:' + m + 'px;width:' +
+        colW + 'px;height:' + (H - 2 * m) + 'px"></div>';
+    }
+    h += '<div class="dp-gridline" style="left:' + (W / 2) + 'px;top:0;width:1px;height:' + H + 'px"></div>';
+    h += '<div class="dp-gridline" style="top:' + (H / 2) + 'px;left:0;height:1px;width:' + W + 'px"></div>';
+    var d = document.createElement('div');
+    d.className = 'dp-grid';
+    d.innerHTML = h;
+    cv.appendChild(d);
+  }
+  /* 浏览视图：一屏看全册（用同一份 SVG，不重新渲染） */
+  function docpBrowseSet(bd, on){
+    DOCP_SL.browse = !!on;
+    DOCP_SL.sel = '';
+    docpRenderSlides(bd);
+  }
+  function docpWallWire(bd){
+    Array.prototype.forEach.call(bd.querySelectorAll('[data-wall]'), function(el){
+      el.addEventListener('click', function(){
+        DOCP_PAGE = parseInt(el.dataset.wall, 10) || 0;
+        DOCP_SL.browse = false;
+        docpRenderSlides(bd);
+        showToast('第 ' + (DOCP_PAGE + 1) + ' 页');
+      });
+    });
+  }
   /* 只换页：更新舞台 + 页码，**不重建 DOM**（重建会让页面滚动位置跳走 —— 踩过） */
   function docpPaintPage(bd){
     var sl = (DOCP && DOCP.slides) || [];
@@ -5161,9 +5656,9 @@ body.theme-dark .avt{color:#fff}
     if(DOCP_PAGE > total - 1) DOCP_PAGE = total - 1;
     DOCP_SL.sel = '';                          /* 换页 = 取消选中（同一格名在别的页上位置不同） */
     docpPaintStage(bd);
-    var bar = bd.querySelector('.dp-pagebar span');
-    if(bar) bar.textContent = '第 ' + (DOCP_PAGE + 1) + ' / ' + total + ' 页　点左栏缩略图换页';
-    wzStatusRender();                          /* 页码/主题只在状态栏说一次 */
+    var bar = bd.querySelector('#dpPgBar span');
+    if(bar) bar.textContent = '第 ' + (DOCP_PAGE + 1) + ' / ' + total + ' 页';
+    wzStatusRender();                          /* 页码/缩放/主题只在状态栏说一次 */
   }
   function docpRenderSlides(bd){
     var deck = docpBuildDeck(), sl = deck.slides || [];

@@ -117,7 +117,10 @@ def boxes_from_svg(svg: str) -> list[dict]:
                 x -= w
             y = _f(el.get("y")) - size * 0.8
             out.append({"tag": tag, "role": "text", "x": x, "y": y, "w": w, "h": size,
-                        "ink": w * size * 0.5, "fill": fill, "size": size, "text": s})
+                        "ink": w * size * 0.5, "fill": fill, "size": size, "text": s,
+                        "family": el.get("font-family") or "",
+                        "weight": int(_f(el.get("font-weight"), 400)),
+                        "italic": (el.get("font-style") or "") == "italic"})
     return out
 
 
@@ -172,13 +175,23 @@ def largest_empty_rect(boxes: list[dict], canvas_w: float, canvas_h: float, cell
 
 # ---------------------------------------------------------------- 单页审计
 
-def audit_page(theme: dict, svg: str, layout: str, page_no: int = 1) -> dict:
-    """审一页：返回 `{page, layout, metrics, findings}`。"""
+def audit_page(theme: dict, svg: str, layout: str, page_no: int = 1,
+               custom: dict | None = None) -> dict:
+    """审一页：返回 `{page, layout, metrics, findings}`。
+
+    `custom`（R15）= 这一页上**老师自己改过的**字号/字体（`{"sizes": {...}, "fonts": {...}}`）：
+    偏离 tokens 阶梯时**降级成 warn**（`font-scale-off` / `font-family-off`）——
+    老师自己要的样式不该被闸门拦住，但必须**留痕**（右栏据此显示"偏离设计阶梯"，可一键回档）。
+    版式自己漂出去的字号仍然是 **error**（那不是老师改的，是 bug）。
+    """
     cv = ppt_svg.Canvas(theme)
     canvas_w, canvas_h = float(cv.w), float(cv.h)
     boxes = boxes_from_svg(svg)
     texts = [b for b in boxes if b["role"] == "text"]
     findings: list[dict] = []
+    custom = custom or {}
+    c_sizes = {round(float(s), 2) for s in (custom.get("sizes") or [])}
+    c_fonts = {str(f) for f in (custom.get("fonts") or []) if str(f).strip()}
 
     def add(level: str, code: str, detail: str, fix: str) -> None:
         findings.append({"level": level, "code": code, "page": page_no, "detail": detail, "fix": fix})
@@ -266,13 +279,29 @@ def audit_page(theme: dict, svg: str, layout: str, page_no: int = 1) -> dict:
                     f"左右失衡 {imbalance['horizontal']:.0%}（上限 {LIMITS['imbalance_max']:.0%}）",
                     "把重的一侧分一点到另一侧（两栏/图文版式），或改用不对称但平衡的版式")
 
-    # 7) 字号阶梯（只许取 tokens 里的档）
+    # 7) 字号阶梯（只许取 tokens 里的档；**老师自己改过的降级成提示**，R15）
     allowed = {float(v) for k, v in cv.type.items() if k in ("cover", "title", "label", "body", "caption")}
     used = sorted({round(b["size"], 2) for b in texts})
     stray = [s for s in used if not any(abs(s - a) < 0.01 for a in allowed)]
-    if stray:
-        add("error", "font-scale", f"出现阶梯外的字号 {stray}（允许 {sorted(allowed)}）",
+    mine = [s for s in stray if any(abs(s - c) < 0.05 for c in c_sizes)]
+    drift = [s for s in stray if s not in mine]
+    if mine:
+        add("warn", "font-scale-off",
+            f"字号 {mine} 不在设计阶梯 {sorted(allowed)} 上（你在右栏改过）",
+            "要回设计档位：右栏点「回档位」；不改也行，只提示")
+    if drift:
+        add("error", "font-scale", f"出现阶梯外的字号 {drift}（允许 {sorted(allowed)}）",
             "字号一律取 tokens 的 type（docs/22 §3.3）")
+
+    # 7b) 字体（R15）：不是这套主题的字体 → 提示（老师自选的不阻断）
+    stack = {str(f) for f in ((theme.get("fonts") or {}).get("stack") or [])}
+    used_fonts = sorted({b["family"].split(",")[0].strip().strip('"\'')
+                         for b in texts if b["family"]})
+    off = [f for f in used_fonts if f and f not in stack]
+    if off:
+        add("warn", "font-family-off",
+            f"用到了主题外的字体 {off}（这套主题是 {sorted(stack) or '（未登记）'}）",
+            "换回主题字体（右栏「字体」）；WPS 里没有这个字体时会回退，排版会变")
 
     # 8) 主色占比 + 标题间距
     accent = tk.rgb(cv.marker)
@@ -316,11 +345,17 @@ def audit_page(theme: dict, svg: str, layout: str, page_no: int = 1) -> dict:
 
 # ---------------------------------------------------------------- 整册审计
 
-def audit_pages(theme_id: str, pages: list[str], layouts: list[str] | None = None) -> dict:
-    """审一组已经渲染好的 SVG（负样本就是这么喂进来的）。"""
+def audit_pages(theme_id: str, pages: list[str], layouts: list[str] | None = None,
+                custom: list[dict] | None = None) -> dict:
+    """审一组已经渲染好的 SVG（负样本就是这么喂进来的）。
+
+    `custom` 与 `pages` 同长（R15）：第 i 页老师自己改过的字号/字体，用来把"偏离阶梯"降级成提示。
+    """
     theme = slide_deck.theme(theme_id)
     lays = list(layouts or ["bullets"] * len(pages))
-    rows = [audit_page(theme, svg, lays[i] if i < len(lays) else "bullets", i + 1)
+    cust = list(custom or [])
+    rows = [audit_page(theme, svg, lays[i] if i < len(lays) else "bullets", i + 1,
+                       cust[i] if i < len(cust) else None)
             for i, svg in enumerate(pages)]
     errors = [f for r in rows for f in r["findings"] if f["level"] == "error"]
     warns = [f for r in rows for f in r["findings"] if f["level"] == "warn"]
@@ -330,11 +365,32 @@ def audit_pages(theme_id: str, pages: list[str], layouts: list[str] | None = Non
             "stats": {"pages": len(rows), "errors": len(errors), "warnings": len(warns), "infos": len(infos)}}
 
 
+def custom_marks(slides: list[dict] | None) -> list[dict]:
+    """从会话数据里取出"老师自己改过的字号/字体"（喂给 `audit_pages` 的 `custom`）。
+
+    为什么单独抽一个函数：审计要能分清"老师要的"和"版式漂的" —— 前者提示，后者报错。
+
+    ⚠️ 必须与 `build_deck` **同一套过滤**（只丢非 dict），**不能用 `clean_slides`**：
+    它会把"全空的一页"丢掉，那样下标就和渲染出来的页错位了 —— 自定义字号会算到别的页头上。
+    """
+    out: list[dict] = []
+    for raw in slides or []:
+        s = raw if isinstance(raw, dict) else {}
+        sizes, fonts = set(), set()
+        for val in (slide_deck._clean_overrides(s.get("slots")) or {}).values():   # noqa: SLF001
+            if val.get("size"):
+                sizes.add(round(float(val["size"]), 2))
+            if val.get("font"):
+                fonts.add(str(val["font"]))
+        out.append({"sizes": sorted(sizes), "fonts": sorted(fonts)})
+    return out
+
+
 def audit_deck(theme_id: str, slides: list[dict] | None = None, title: str = "") -> dict:
     """渲染一份 deck 再审计（默认用示例教案）。"""
     slides = slides if slides is not None else slide_deck.SAMPLE_DECK
     built = slide_deck.build_deck(theme_id, slides, title=title or "3.3 幂函数")
-    out = audit_pages(theme_id, built["pages"], built["layouts"])
+    out = audit_pages(theme_id, built["pages"], built["layouts"], custom=custom_marks(slides))
     out["render_warnings"] = built["warnings"]
     return out
 

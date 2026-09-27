@@ -101,6 +101,57 @@ class NegativeSampleTest(unittest.TestCase):
         self.assertTrue({"collision", "overflow"} & codes, codes)
 
 
+class CustomStyleTest(unittest.TestCase):
+    """R15：老师自己改的字号/字体**留痕但不阻断**（warn）；版式自己漂出去的字号仍然 error。"""
+
+    def test_custom_size_is_warn_not_error(self):
+        deck = [dict(slide_deck.SAMPLE_DECK[1], slots={"title": {"size": 37}})]
+        rep = aud.audit_deck("tech-editorial", deck, "自定义字号")
+        self.assertEqual(rep["stats"]["errors"], 0, rep["errors"])
+        codes = {f["code"]: f for f in rep["warnings"]}
+        self.assertIn("font-scale-off", codes, rep["warnings"])
+        self.assertIn("37", codes["font-scale-off"]["detail"])
+        self.assertIn("右栏", codes["font-scale-off"]["fix"])
+
+    def test_unexplained_stray_size_is_still_error(self):
+        """没人改过的 37 号字 = 版式漂了 → 照旧报 error（闸门不能因为 R15 就松）。"""
+        theme = tk.load("tech-editorial")
+        cv = ppt_svg.Canvas(theme)
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+               + ppt_svg.text(cv, 100, 300, "漂出去的字号", size=37) + "</svg>")
+        rep = aud.audit_pages("tech-editorial", [svg], ["bullets"])
+        self.assertEqual([f["code"] for f in rep["errors"]], ["font-scale"], rep["errors"])
+
+    def test_custom_font_is_warn(self):
+        deck = [dict(slide_deck.SAMPLE_DECK[1], slots={"title": {"font": "楷体"}})]
+        rep = aud.audit_deck("tech-editorial", deck, "自定义字体")
+        self.assertEqual(rep["stats"]["errors"], 0, rep["errors"])
+        hit = [f for f in rep["warnings"] if f["code"] == "font-family-off"]
+        self.assertTrue(hit, rep["warnings"])
+        self.assertIn("楷体", hit[0]["detail"])
+
+    def test_custom_marks_reads_slots(self):
+        marks = aud.custom_marks([dict(slide_deck.SAMPLE_DECK[1],
+                                       slots={"title": {"size": 37, "font": "楷体"},
+                                              "block:0": {"dx": 40}})])
+        self.assertEqual(marks[0]["sizes"], [37.0])
+        self.assertEqual(marks[0]["fonts"], ["楷体"])
+
+    def test_custom_marks_keeps_index_alignment(self):
+        """下标必须和渲染出来的页一一对应（`clean_slides` 会丢页，所以这里不能走它）。"""
+        slides = [{"layout": "cover", "title": "封面"},
+                  {"layout": "bullets", "name": "中间页", "blocks": [{"text": "一条要点"}]},
+                  dict(slide_deck.SAMPLE_DECK[1], slots={"title": {"size": 37}})]
+        marks = aud.custom_marks(slides)
+        self.assertEqual(len(marks), 3, "一页都不许少")
+        self.assertEqual(marks[0], {"sizes": [], "fonts": []})
+        self.assertEqual(marks[2]["sizes"], [37.0])
+        rep = aud.audit_deck("tech-editorial", slides, "对齐")
+        self.assertEqual(rep["stats"]["errors"], 0, rep["errors"])
+        self.assertTrue([f for f in rep["warnings"] if f["code"] == "font-scale-off"
+                         and f["page"] == 3], rep["warnings"])
+
+
 class BoxTest(unittest.TestCase):
     def test_text_box_follows_anchor(self):
         theme = tk.load("tech-editorial")

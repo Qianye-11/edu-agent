@@ -96,12 +96,16 @@
 3. **`shape_index` 是精确指槽**（草案里每个 `fills[]` 都带它）：只改那一个框。
    一页有多个同角色槽时**必须**用它 —— 按 `role` 只会改**第一个**（2026-09-27 收紧语义：
    从前"给 role 就把该角色所有槽写成同一句"，卡片式模板一页 4 个正文框会被一次写满，属于 bug）；
-4. 一条 fill 能带的键（R14 新增后三个）：
+4. 一条 fill 能带的键（R14 新增后三个，R15 再加样式）：
    | 键 | 含义 |
    |---|---|
    | `text` | 换成这段文字；`""` = 清空这一格；**不给 `text` 键 = 不改字**（只挪位置不会把字抹掉） |
    | `dx` `dy` `dw` `dh` | 拖动/改大小，**设计像素**（1280×720 坐标系），落到 pptx 时按模板画布自动换算 |
    | `hidden` | 等价于 `text: ""`（清空这处文字） |
+   | `z` | 层级：相对步数（±9），在 `p:spTree` 里上移/下移几层 |
+   | `size` | 字号，**设计像素**；落到 pptx 时 `pt = px × (EMU/px) ÷ 12700` |
+   | `font` `color` `align` `lh` `bold` `italic` | 字体名 / `#RRGGBB` / `start\|middle\|end` / 行距 0.8–3 / 加粗 / 斜体 |
+   | `0` 与 `""` 的语义 | **`dx:0` = 回版式原位、`size:0` = 取消字号覆盖、`font:""` = 跟随主题**（服务端会把它们从合并结果里去掉）；要"取消"就给 0/空串 |
 5. 文字超容量的会被**适度压缩**（去括号补充 → 从末尾减分句 → 最后才硬截），并在 `adjustments` 里留痕
    （`by` 字段值由 `agent-mapping` 改为 `mapping`：同一套执行代码现在也给老师的页内编辑用）。
    ⚠️ `kind` 为 `decoration`/`page-number` 的**装饰槽不压缩**（页码/设计标签就几个字，压出来的不是你要的）；
@@ -139,6 +143,7 @@
 | `edu-agent.fill-plan.v1` | 2026-09-27 | R14：`mapping[]` 新增 **`page`（成品页号，推荐）**；一条 fill 新增 `dx/dy/dw/dh`（拖动/改大小）与 `hidden`（清空）；`fills[]` 新增 `kind`（`decoration`/`page-number`），装饰槽也进 `fills`（默认原样不动）。**旧写法全部继续可用**（`template_index` 取该母版页的第一张成品页；只改字不影响几何） |
 | — | 2026-09-27 | 新增编辑器用的读端：`POST /api/slide/render` 的 `annotate: true` → 响应多一个 `boxes`（每页 `[{slot,kind,x,y,w,h,size,align}]`，1280×720 设计像素）。**导出路径不传它**，所以导出的 SVG 不变 |
 | — | 2026-09-27 | R14：`POST /api/slide/slot` 新增可选 `patch`（`{dx,dy,dw,dh,size,color,align,lh,z,hidden}`，落进 `slides[i].slots[槽位]`）；`text` 变成可选（**不给 = 只改样子、不改字**；给 `""` = 清空那一格）。`boxes[]` 在老师调过层级时多一个 `z` |
+| — | 2026-09-27 | R15：`mapping[].fills[]` 追加样式键 `size/font/color/align/lh/bold/italic`；`POST /api/slide/render` 的响应追加 `fonts`（右栏字体清单，主题栈在前）与 `canvas` 的 `cols/gutter/content_w`（网格与吸附用）。**`0`/`""` 的语义**：`dx:0` = 回版式原位、`size:0` = 取消字号覆盖、`font:""` = 跟随主题（服务端从合并结果里去掉这些键）。代码审计新增两条 **warn**（不阻断）：`font-scale-off`（字号不在设计阶梯）、`font-family-off`（非主题字体） |
 
 ---
 

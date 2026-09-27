@@ -183,12 +183,16 @@ def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int 
     x, y, size, fill, anchor, draw = cv.apply(slot, x, y, size, fill, anchor)
     if not draw:
         return ""
+    o = cv.ov(slot) if slot else {}
+    weight = 700 if o.get("bold") else int(weight if weight is not None else 400)
     attrs = [
         f'x="{round(x, 2)}"', f'y="{round(y, 2)}"',
-        f'font-family="{esc(cv.family)}"', f'font-size="{round(size, 2)}"',
-        f'font-weight="{int(weight if weight is not None else 400)}"',
+        f'font-family="{esc(o.get("font") or cv.family)}"', f'font-size="{round(size, 2)}"',
+        f'font-weight="{weight}"',
         f'fill="{fill or cv.color("text")}"',
     ]
+    if o.get("italic"):
+        attrs.append('font-style="italic"')
     if anchor != "start":
         attrs.append(f'text-anchor="{anchor}"')
     if cv.ls:

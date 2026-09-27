@@ -652,6 +652,43 @@ class EditableDecorationTest(_FillCase):
                          (prs0.slides[i].shapes[shape].width, prs0.slides[i].shapes[shape].height),
                          "只拖不缩：宽高不许变")
 
+    def test_style_patch_lands_on_the_shape(self):
+        """R15：右栏改的字号/字体/颜色/对齐/加粗要真的落到 pptx 的 run/段落上。"""
+        from pptx import Presentation
+
+        tid = st.import_pptx(self._labelled_template(), name="标签模板")["id"]
+        the_plan = sf.plan(tid, DECK, "样式")
+        i, _page, lab = self._deco_page(the_plan)
+        shape = lab["shape_index"]
+        sf.apply_mapping(the_plan, [{"page": i, "fills": [{"shape_index": shape, "font": "楷体",
+                                                           "size": 40, "color": "#B45309",
+                                                           "bold": True, "align": "middle",
+                                                           "lh": 1.5}]}])
+        prs = Presentation(str(self._fill_with(the_plan, tid)))
+        sh = prs.slides[i].shapes[shape]
+        para = sh.text_frame.paragraphs[0]
+        runs = list(para.runs)
+        self.assertTrue(runs, "形状上应该还有 run")
+        f = runs[0].font
+        self.assertEqual(f.name, "楷体")
+        self.assertTrue(f.bold)
+        self.assertEqual(str(f.color.rgb), "B45309")
+        k = prs.slide_width / 1280.0                     # 设计像素 → pt：×（EMU/px）÷ 12700
+        self.assertAlmostEqual(f.size.pt, 40 * k / 12700.0, delta=0.2)
+        self.assertEqual(str(para.alignment), "CENTER (2)")
+        self.assertAlmostEqual(float(para.line_spacing), 1.5, places=2)
+
+    def test_no_style_patch_leaves_format_alone(self):
+        from pptx import Presentation
+
+        tid = st.import_pptx(self._labelled_template(), name="标签模板")["id"]
+        prs0 = Presentation(str(self._fill_with(sf.plan(tid, DECK, "样式"), tid)))
+        base = prs0.slides[0].shapes[0].text_frame.paragraphs[0].runs[0].font
+        before = (base.name, base.size, base.bold)
+        prs1 = Presentation(str(self._fill_with(sf.plan(tid, DECK, "样式"), tid)))
+        same = prs1.slides[0].shapes[0].text_frame.paragraphs[0].runs[0].font
+        self.assertEqual((same.name, same.size, same.bold), before, "没点名改的样式一个字都不许动")
+
     # -- 小工具：把**算好并改过的计划**落成 pptx（走与 `fill_pptx` 同一条 `_apply`）
 
     def _fill_with(self, the_plan: dict, tid: str) -> Path:

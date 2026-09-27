@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import subprocess
 import sys
 import time
@@ -754,6 +755,7 @@ def _fill_slide(slide, page: dict, want: list[str], *, scale: float = 1.0) -> No
             continue
         _apply_geo(shape, fill, scale)
         _apply_z(shape, int(fill.get("z") or 0))
+        _apply_style(shape, fill, scale)      # 样式先落：文字原样时也要能改颜色/字体（R15）
         text = fill.get("text") or ""
         if not text and not fill.get("clear"):
             continue                            # 没内容且不需要清空 → 不动模板的框
@@ -784,6 +786,46 @@ def _apply_geo(shape, fill: dict, scale: float = 1.0) -> None:
             shape.height = max(1, int(shape.height + round(dh * k)))
     except (AttributeError, ValueError, TypeError):
         pass                                     # 图片占位符之类的形状没有 left/width：不动它就是
+
+
+def _apply_style(shape, fill: dict, scale: float = 1.0) -> None:
+    """把右栏改的字号/字体/颜色/对齐/行距/粗斜体落到形状的 run/段落上（R15）。
+
+    只动**老师点名改过**的那些键（不点名就不碰模板格式）。字号存的是**设计像素**
+    （1280×720 下的 px），换算：`pt = px × (EMU/px) ÷ 12700` —— 对 13.3 英寸的常见画布正好是 ×0.75。
+
+    段落级（`para.font`）与 run 级都设：模板里有的段落一个 run 都没有，只设 run 级会漏
+    （写文字时才生成 run，那时才吃段落级的默认值）。
+    """
+    keys = ("size", "font", "bold", "italic", "color", "align", "lh")
+    if not any(k in fill for k in keys):
+        return
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN
+    from pptx.util import Pt
+
+    align_map = {"start": PP_ALIGN.LEFT, "middle": PP_ALIGN.CENTER, "end": PP_ALIGN.RIGHT}
+    pt = (float(fill["size"]) * (float(scale) or 1.0) / 12700.0) if fill.get("size") else 0.0
+    rgb = RGBColor.from_string(str(fill["color"]).lstrip("#")) if fill.get("color") else None
+    try:
+        for para in shape.text_frame.paragraphs:
+            if fill.get("align") in align_map:
+                para.alignment = align_map[fill["align"]]
+            if fill.get("lh"):
+                para.line_spacing = float(fill["lh"])
+            for f in [para.font] + [r.font for r in para.runs]:
+                if fill.get("bold"):
+                    f.bold = True
+                if fill.get("italic"):
+                    f.italic = True
+                if fill.get("font"):
+                    f.name = str(fill["font"])
+                if pt:
+                    f.size = Pt(max(6.0, pt))
+                if rgb is not None:
+                    f.color.rgb = rgb
+    except (AttributeError, ValueError, TypeError):
+        pass                                     # 形状没有字体属性（图片之类）：跳过，不报错
 
 
 def _apply_z(shape, steps: int) -> None:
@@ -1055,6 +1097,38 @@ def _apply_fill_patch(fill: dict, patch: dict, the_plan: dict) -> bool:
             moved = True
         else:
             fill.pop("z", None)
+    # 样式（R15）：字号/字体/颜色/对齐/行距/粗斜体 —— 与槽位层同一套键，落到 pptx 的 run/段落上
+    if "size" in patch:
+        try:
+            size = round(max(8.0, min(200.0, float(patch["size"]))), 1)
+        except (TypeError, ValueError):
+            size = 0.0
+        if size:
+            fill["size"] = size
+            moved = True
+    if "lh" in patch:
+        try:
+            lh = round(max(0.8, min(3.0, float(patch["lh"]))), 2)
+        except (TypeError, ValueError):
+            lh = 0.0
+        if lh:
+            fill["lh"] = lh
+            moved = True
+    font = slide_deck.clean_font(patch.get("font"))
+    if font:
+        fill["font"] = font
+        moved = True
+    if patch.get("align") in slide_deck.SLOT_ALIGNS:
+        fill["align"] = patch["align"]
+        moved = True
+    m = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(patch.get("color") or ""))
+    if m:
+        fill["color"] = "#" + m.group(1).upper()
+        moved = True
+    for flag in ("bold", "italic"):
+        if patch.get(flag):
+            fill[flag] = True
+            moved = True
     return moved
 
 
@@ -1079,6 +1153,8 @@ def plan_payload(template_id: str, slides: list[dict] | None, title: str = "") -
                       "指页用 page（成品第几页，0 起）最稳；template_index 是母版页号，"
                       "续页会和首页撞号，只按它会改错页（R14）",
                       "一条 fill 除了 text 还能给 dx/dy/dw/dh（拖动/改大小，设计像素）与 hidden（= 清空这处文字）",
+                      "样式（R15）：size（设计像素，按画布换算成 pt）/font/color(#RRGGBB)/align(start|middle|end)"
+                      "/lh(0.8~3)/bold/italic 都能给，只动你点名改的那些键",
                       "fills 里的 kind='decoration'/'page-number' 是模板自带的设计标签与页码："
                       "默认原样不动，老师改了/清空了才写",
                       "超容量的文字会被适度压缩（去括号补充、从末尾减分句），并在 adjustments 里留痕"],

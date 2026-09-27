@@ -290,6 +290,17 @@ def to_slots(slide: dict, index: int, total: int, doc_title: str = "") -> tuple[
 
 # ---------------------------------------------------------------- 整册
 
+def canvas_info(t: dict) -> dict:
+    """给面板的画布参数（吸附参考线、网格、缩放都用它，**与服务端同一份数值**）。
+
+    `margin/content_w/cols/gutter` 全来自 tokens 的 canvas —— 前端不许自己写死 72 / 12。
+    """
+    c = t["canvas"]
+    return {"w": CANVAS_W, "h": CANVAS_H, "margin": float(c.get("margin") or 72),
+            "cols": int(c.get("cols") or 12), "gutter": float(c.get("gutter") or 24),
+            "content_w": float((c.get("content_w") or [0, 1136])[1])}
+
+
 def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
                tokens: dict | None = None, *, annotate: bool = False) -> dict:
     """渲染整册：返回 `{ok, theme_id, pages:[svg...], layouts, warnings, stats[, boxes]}`。
@@ -304,7 +315,9 @@ def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
     items = [s for s in (slides or []) if isinstance(s, dict)]
     if not items:
         return {"ok": True, "theme_id": t["id"], "pages": [], "layouts": [],
-                "boxes": [], "warnings": [], "stats": {"pages": 0, "chars": 0}}
+                "boxes": [], "warnings": [], "fonts": font_choices(t),
+                "canvas": canvas_info(t),
+                "stats": {"pages": 0, "chars": 0}}
 
     total = len(items)
     warnings: list[str] = list(length_warnings(items))
@@ -323,7 +336,8 @@ def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
         chars += sum(len(str(v)) for v in (slide.get("bullets") or []))
     out = {"ok": True, "theme_id": t["id"], "pages": pages, "layouts": layouts,
            "warnings": warnings,
-           "canvas": {"w": CANVAS_W, "h": CANVAS_H, "margin": float(t["canvas"].get("margin") or 72)},
+           "canvas": canvas_info(t),
+           "fonts": font_choices(t),          # R15：右栏字体下拉（主题栈在前 + 常见中文字体）
            "stats": {"pages": total, "chars": chars, "theme_name": t.get("name") or t["id"]}}
     if annotate:
         out["boxes"] = boxes_all
@@ -368,9 +382,9 @@ def fit_height(container_w: float) -> int:
     return int(math.floor(CANVAS_H * fit_scale(container_w) + 0.5))
 
 
-#: 老师改过的样子（`slides[i].slots`）里认的键与取值范围（R14）：
-#: 位置/大小是"相对版式原位的偏移"（设计像素），字号/颜色/对齐是语义覆盖，hidden = 删掉这一处，
-#: `z` = 层级（正数往上盖，画的时候往后排）。
+#: 老师改过的样子（`slides[i].slots`）里认的键与取值范围（R14/R15）：
+#: 位置/大小是"相对版式原位的偏移"（设计像素），字号/颜色/字体/对齐是语义覆盖，hidden = 删掉这一处，
+#: `z` = 层级（正数往上盖，画的时候往后排），`bold`/`italic` = 加粗/斜体。
 #: **认不出的一律丢**（不悄悄改字、也不让越界值进来 —— 越界由审计去报，不在这里静默夹掉太狠）。
 SLOT_OVERRIDE = {
     "dx": (-200.0, 200.0), "dy": (-200.0, 200.0),
@@ -380,6 +394,32 @@ SLOT_OVERRIDE = {
 #: 层级上下限：老师拖一块到另一块上面，用「上移一层/下移一层」调，值就是整数层号
 SLOT_Z_RANGE = (-9, 9)
 SLOT_ALIGNS = ("start", "middle", "end")
+#: 右栏字体清单（R15）：前 3 个是主题自带的栈，其余是 Windows/常见中文字体。
+#: **一份来源**给前后端用（前端从这个列表出下拉，服务端只认这个列表里的 + 主题栈）。
+SLOT_FONTS = ("微软雅黑", "黑体", "宋体", "楷体", "等线", "思源黑体", "Noto Sans SC")
+#: 字体名上限（防手滑粘一整段）
+FONT_MAX_CHARS = 40
+
+
+def clean_font(name: object) -> str:
+    """字体名收口：去空白、限长；空/超长一律当"没设"（服务端不猜）。"""
+    s = str(name or "").strip().strip('"\'')
+    if not s or len(s) > FONT_MAX_CHARS:
+        return ""
+    return s if all(ch not in s for ch in ("<", ">", "&", ";")) else ""
+
+
+def font_choices(theme: dict | None = None) -> list[str]:
+    """右栏字体下拉的清单：**主题栈在前**（默认值来源），其余是常见中文字体（去重）。"""
+    out: list[str] = []
+    for f in ((theme or {}).get("fonts") or {}).get("stack") or []:
+        f = clean_font(f)
+        if f and f.lower() not in ("sans-serif", "serif", "arial") and f not in out:
+            out.append(f)
+    for f in SLOT_FONTS:
+        if f not in out:
+            out.append(f)
+    return out
 
 
 def _clean_overrides(raw) -> dict:
@@ -395,9 +435,12 @@ def _clean_overrides(raw) -> dict:
         for k, (lo, hi) in SLOT_OVERRIDE.items():
             if k in val:
                 try:
-                    item[k] = round(max(lo, min(hi, float(val[k]))), 1)
+                    raw = float(val[k])
                 except (TypeError, ValueError):
                     continue
+                if not raw:
+                    continue           # 0 = "没改"（**不是**"夹到下限"：size:0 曾被夹成 8px —— 踩过）
+                item[k] = round(max(lo, min(hi, raw)), 1)
         if "z" in val:
             try:
                 z = int(round(float(val["z"])))
@@ -410,6 +453,12 @@ def _clean_overrides(raw) -> dict:
         m = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(val.get("color") or ""))
         if m:
             item["color"] = "#" + m.group(1).upper()
+        font = clean_font(val.get("font"))
+        if font:
+            item["font"] = font
+        for flag in ("bold", "italic"):        # R15：加粗/斜体（R18 的 Ctrl+B/I 也走这条）
+            if val.get(flag):
+                item[flag] = True
         if val.get("hidden"):
             item["hidden"] = True
         for k in [k for k, v in item.items() if k in SLOT_OVERRIDE and not float(v or 0)]:

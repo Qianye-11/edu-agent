@@ -196,6 +196,47 @@ class OverrideTest(unittest.TestCase):
         self.assertEqual(got["slots"]["block:0"], {"dx": 12.0, "z": 1})
         self.assertEqual(got["notes"], "讲慢一点")
 
+    def test_style_keys_are_whitelisted(self):
+        """R15：字号/字体/颜色/对齐/行距/粗斜体进覆盖；乱写的字体名丢掉。"""
+        got = slide_deck._clean_overrides({
+            "title": {"size": 37, "font": "楷体", "bold": True, "italic": True,
+                      "color": "#B45309", "align": "middle", "lh": 1.5},
+            "block:0": {"font": "  微软雅黑  "},
+            "block:1": {"font": "坏<>字体"},
+            "block:2": {"font": "字" * 60},
+            "block:3": {"bold": False, "italic": False},
+        })
+        self.assertEqual(got["title"], {"size": 37.0, "lh": 1.5, "font": "楷体", "bold": True,
+                                        "italic": True, "align": "middle", "color": "#B45309"})
+        self.assertEqual(got["block:0"]["font"], "微软雅黑", "两侧空白要去掉")
+        self.assertNotIn("block:1", got, "带尖括号的字体名要丢（会进 SVG 属性）")
+        self.assertNotIn("block:2", got, "超长字体名要丢")
+        self.assertNotIn("block:3", got, "bold/italic = False 不算覆盖")
+
+    def test_font_choices_theme_first(self):
+        choices = slide_deck.font_choices(slide_deck.theme("tech-editorial"))
+        self.assertEqual(choices[0], "微软雅黑", "主题栈里的中文字体排第一（默认值来源）")
+        self.assertIn("楷体", choices)
+        self.assertEqual(len(choices), len(set(choices)), "不许重复")
+        self.assertNotIn("Arial", choices, "西文栈不列进中文下拉（它跟着主题走）")
+
+    def test_font_bold_italic_land_in_svg(self):
+        page = slide_deck.build_deck("tech-editorial",
+                                     [dict(DECK[1], slots={"block:0": {"font": "楷体", "bold": True,
+                                                                       "italic": True}})],
+                                     "x")["pages"][0]
+        self.assertIn('font-family="楷体"', page)
+        self.assertIn('font-weight="700"', page)
+        self.assertIn('font-style="italic"', page)
+        plain = slide_deck.build_deck("tech-editorial", [DECK[1]], "x")["pages"][0]
+        self.assertNotIn("italic", plain, "没改过就一个字节都不加")
+
+    def test_deck_exposes_fonts_and_canvas(self):
+        out = slide_deck.build_deck("tech-editorial", DECK, "x")
+        self.assertIn("微软雅黑", out["fonts"])
+        self.assertEqual(out["canvas"]["w"], 1280)
+        self.assertGreater(out["canvas"]["margin"], 0)
+
     def test_override_moves_box_and_hides_slot(self):
         moved = slide_deck.build_deck("tech-editorial",
                                       [dict(DECK[1], slots={"block:0": {"dx": 60, "dy": -20}}),
