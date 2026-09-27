@@ -83,6 +83,17 @@ function makeDom(opts) {
       }
       if (!window.requestIdleCallback) window.requestIdleCallback = (fn) => setTimeout(fn, 0);
       if (!window.scrollTo) window.scrollTo = () => {};
+      /* R8 用例要用到的两种"开机状态"：学生角色 / 浏览器里还留着老编排数据 */
+      try {
+        if (o.role === 'student') window.localStorage.setItem('edu_role', 'student');
+        if (o.legacyDesign) {
+          window.localStorage.setItem('edu_design_v1', JSON.stringify({
+            title: '老课题', grade: '',
+            steps: [{ name: '导入', minutes: 5, points: '老要点一\n老要点二' },
+                    { name: '新知', minutes: 10, points: '老要点三' }],
+          }));
+        }
+      } catch (e) { /* localStorage 不可用就让用例自己失败，别静默 */ }
       if (o.innerWidth) {
         Object.defineProperty(window, 'innerWidth', { value: o.innerWidth, configurable: true });
         Object.defineProperty(window, 'outerWidth', { value: o.innerWidth, configurable: true });
@@ -149,6 +160,11 @@ function makeDom(opts) {
             warnings: ['会话比模板少 8 页内容 → 默认删掉模板多余的内容页'],
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (p === '/api/session/get' && (o.legacyDesign || o.emptyHistory)) {
+          /* 迁移用例要一个"干净会话"：不然历史里那份文档会先把 DOCP 占上，迁移就不该发生 */
+          return new Response(JSON.stringify({ ok: true, id: 'stub', title: '', messages: [], last_html: '' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/save') {
           let b = {};
           try { b = JSON.parse(op.body); } catch (e) {}
@@ -166,8 +182,13 @@ function makeDom(opts) {
 }
 
 async function openDocPanel(doc) {
-  doc.querySelector('#spQuad .qbtn[data-v="doc"]').click();
+  const btn = doc.querySelector('#spQuad .qbtn[data-v="doc"]');
+  if (btn) btn.click();
   await sleep(900);
+  /* 没有文档时入口会落到「教案」页签（合理）——下面这些用例都假定已有文档，
+     所以这里补一次「直接切文档页签」，避免整段用例因为落点不同而误报。 */
+  const t = doc.querySelector('#wzTabs .wz-tab[data-wz="doc"]');
+  if (t && !doc.querySelector('#wzDocPane .dp-word')) { t.click(); await sleep(900); }
 }
 
 (async () => {
@@ -180,21 +201,25 @@ async function openDocPanel(doc) {
     check('没有旧的独立面板 #docPanel', !doc.getElementById('docPanel'));
     check('「文档」入口在侧边面板里', !!doc.querySelector('#spQuad .qbtn[data-v="doc"]'));
     await openDocPanel(doc);
-    check('点它进文档视图', doc.getElementById('sidePanel').classList.contains('sp-doc'));
-    const ed = doc.querySelector('#spBody .dp-word[contenteditable="true"]');
+    check('点它进教案工作台的文档页签（R8：文档搬家了）',
+      doc.getElementById('view-design').classList.contains('active') &&
+      doc.getElementById('wzDocPane').style.display !== 'none' &&
+      !!doc.querySelector('#wzDocPane .dp-bd'),
+      (doc.querySelector('#wzTabs .wz-tab.wz-on') || {}).textContent || '(无页签)');
+    const ed = doc.querySelector('#wzDocPane .dp-word[contenteditable="true"]');
     check('文档页签可直接编辑', !!ed);
     check('编辑工具栏显示', doc.getElementById('docPanelFmt').style.display === 'flex');
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(900);
-    check('幻灯片页签有 16:9 预览台（.dp-canvas）', !!doc.querySelector('#spBody .dp-canvas'));
-    check('旧的深蓝预览台已退役', !doc.querySelector('#spBody .dp-stage'));
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(900);
+    check('幻灯片页签有 16:9 预览台（.dp-canvas）', !!doc.querySelector('#wzDocPane .dp-canvas'));
+    check('旧的深蓝预览台已退役', !doc.querySelector('#wzDocPane .dp-stage'));
     check('预览台里是服务端给的 SVG（不是前端拼的 h4+ul）',
-      !!doc.querySelector('#spBody .dp-canvas svg'), (doc.querySelector('#spBody .dp-canvas') || {}).innerHTML?.slice(0, 40));
-    const wrap = doc.querySelector('#spBody .dp-slidewrap');
+      !!doc.querySelector('#wzDocPane .dp-canvas svg'), (doc.querySelector('#wzDocPane .dp-canvas') || {}).innerHTML?.slice(0, 40));
+    const wrap = doc.querySelector('#wzDocPane .dp-slidewrap');
     check('等比缩放按 1280 宽度算（jsdom 量不到宽度 → 兜底 480px ⇒ 0.375）',
       !!wrap && wrap.dataset.scale === '0.3750', wrap ? wrap.dataset.scale : '(no wrap)');
     check('预览台高度跟着缩放走（720×0.375=270px）',
       !!wrap && wrap.style.height === '270px', wrap ? wrap.style.height : '(no wrap)');
-    const cv = doc.querySelector('#spBody .dp-canvas');
+    const cv = doc.querySelector('#wzDocPane .dp-canvas');
     check('内部固定 1280×720、只用均匀缩放',
       !!cv && /scale\(0\.375\)/.test(cv.style.transform || ''), cv ? cv.style.transform : '(no canvas)');
     const sel = doc.getElementById('dpTheme');
@@ -203,9 +228,9 @@ async function openDocPanel(doc) {
     sel.value = 'hand-drawn';
     sel.dispatchEvent(new w.Event('change', { bubbles: true }));
     await sleep(700);
-    check('换主题会重新要一份 SVG', doc.querySelector('#spBody .dp-canvas svg') !== null &&
+    check('换主题会重新要一份 SVG', doc.querySelector('#wzDocPane .dp-canvas svg') !== null &&
       /手绘墨/.test(txt(doc.querySelector('.dp-slstat'))), txt(doc.querySelector('.dp-slstat')));
-    check('提示小字仍在', /右侧为内存预览效果/.test(txt(doc.querySelector('.dp-note'))));
+    check('提示小字仍在', /内存预览效果/.test(txt(doc.querySelector('.dp-note'))), txt(doc.querySelector('.dp-note')));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -215,15 +240,15 @@ async function openDocPanel(doc) {
     const { w, doc, errors, saves, renderCalls } = makeDom();
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
 
     check('每页卡片都有编辑工具栏',
-      doc.querySelectorAll('#spBody .dp-cardbar').length === doc.querySelectorAll('#spBody .dp-slide').length,
-      doc.querySelectorAll('#spBody .dp-cardbar').length + ' 条');
+      doc.querySelectorAll('#wzDocPane .dp-cardbar').length === doc.querySelectorAll('#wzDocPane .dp-slide').length,
+      doc.querySelectorAll('#wzDocPane .dp-cardbar').length + ' 条');
 
     /* ① 改标题（第 2 页） */
-    doc.querySelector('#spBody [data-edit="1"]').click(); await sleep(500);
-    const box = doc.querySelector('#spBody .dp-edit');
+    doc.querySelector('#wzDocPane [data-edit="1"]').click(); await sleep(500);
+    const box = doc.querySelector('#wzDocPane .dp-edit');
     check('点「改」展开就地编辑器', !!box && box.dataset.editFor === '1');
     const titleInp = box.querySelector('input[data-f="name"]');
     check('编辑器里带出现有标题', !!titleInp && titleInp.value.length > 0, titleInp ? titleInp.value : '');
@@ -233,30 +258,30 @@ async function openDocPanel(doc) {
     const saved1 = saves[saves.length - 1] || {};
     check('改字 700ms 后自动存回会话', saves.length > 0 && saved1.slides[1].name === '情境导入（改过的）',
       saves.length + ' 次 · ' + (saved1.slides ? saved1.slides[1].name : ''));
-    check('卡片标题就地更新', /情境导入（改过的）/.test(txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4'))),
-      txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4')));
+    check('卡片标题就地更新', /情境导入（改过的）/.test(txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4'))),
+      txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4')));
     check('改完重新取了一份 SVG（预览跟着变）', renderCalls.length >= 2, renderCalls.join('/'));
 
     /* ② 字数提示：超过 22 字要标出来 */
-    const ta = doc.querySelector('#spBody .dp-edit textarea[data-f="text"]');
+    const ta = doc.querySelector('#wzDocPane .dp-edit textarea[data-f="text"]');
     ta.value = '这是一条特别长的要点'.repeat(4);
     ta.dispatchEvent(new w.Event('input', { bubbles: true }));
     await sleep(200);
-    const cnt = doc.querySelector('#spBody .dp-blk .dp-cnt');
+    const cnt = doc.querySelector('#wzDocPane .dp-blk .dp-cnt');
     check('字数计数实时更新', new RegExp(String(ta.value.length) + ' 字').test(txt(cnt)), txt(cnt));
     check('超 22 字标红提示', cnt.classList.contains('dp-over'));
 
     /* ③ 加一块 / 删一块 */
-    const before = doc.querySelectorAll('#spBody .dp-edit .dp-blk').length;
-    doc.querySelector('#spBody [data-b-add]').click(); await sleep(400);
-    const afterAdd = doc.querySelectorAll('#spBody .dp-edit .dp-blk').length;
+    const before = doc.querySelectorAll('#wzDocPane .dp-edit .dp-blk').length;
+    doc.querySelector('#wzDocPane [data-b-add]').click(); await sleep(400);
+    const afterAdd = doc.querySelectorAll('#wzDocPane .dp-edit .dp-blk').length;
     check('「+ 加一块」生效', afterAdd === before + 1, before + ' → ' + afterAdd);
-    doc.querySelector('#spBody .dp-edit [data-b-del]').click(); await sleep(400);
-    const afterDel = doc.querySelectorAll('#spBody .dp-edit .dp-blk').length;
+    doc.querySelector('#wzDocPane .dp-edit [data-b-del]').click(); await sleep(400);
+    const afterDel = doc.querySelectorAll('#wzDocPane .dp-edit .dp-blk').length;
     check('「删这块」生效', afterDel === afterAdd - 1, afterAdd + ' → ' + afterDel);
 
     /* ④ 换版式 */
-    const lay = doc.querySelector('#spBody [data-layout="1"]');
+    const lay = doc.querySelector('#wzDocPane [data-layout="1"]');
     lay.value = 'two-col';
     lay.dispatchEvent(new w.Event('change', { bubbles: true }));
     await sleep(700);
@@ -265,18 +290,18 @@ async function openDocPanel(doc) {
       saved2.slides ? String(saved2.slides[1].layout) : '');
 
     /* ⑤ 排序 / 加页 / 删页 */
-    const first = txt(doc.querySelector('#spBody .dp-slide[data-pg="0"] h4'));
-    doc.querySelector('#spBody [data-page-dn="0"]').click(); await sleep(600);
+    const first = txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="0"] h4'));
+    doc.querySelector('#wzDocPane [data-page-dn="0"]').click(); await sleep(600);
     check('「↓」把第 1 页换到第 2 位',
-      txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4')) === first,
-      txt(doc.querySelector('#spBody .dp-slide[data-pg="1"] h4')));
-    const n0 = doc.querySelectorAll('#spBody .dp-slide').length;
+      txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4')) === first,
+      txt(doc.querySelector('#wzDocPane .dp-slide[data-pg="1"] h4')));
+    const n0 = doc.querySelectorAll('#wzDocPane .dp-slide').length;
     doc.getElementById('dpAddPage').click(); await sleep(600);
-    check('「+ 加一页」生效', doc.querySelectorAll('#spBody .dp-slide').length === n0 + 1,
-      n0 + ' → ' + doc.querySelectorAll('#spBody .dp-slide').length);
-    doc.querySelector('#spBody [data-page-del="0"]').click(); await sleep(600);
-    check('「删」掉一页', doc.querySelectorAll('#spBody .dp-slide').length === n0,
-      String(doc.querySelectorAll('#spBody .dp-slide').length));
+    check('「+ 加一页」生效', doc.querySelectorAll('#wzDocPane .dp-slide').length === n0 + 1,
+      n0 + ' → ' + doc.querySelectorAll('#wzDocPane .dp-slide').length);
+    doc.querySelector('#wzDocPane [data-page-del="0"]').click(); await sleep(600);
+    check('「删」掉一页', doc.querySelectorAll('#wzDocPane .dp-slide').length === n0,
+      String(doc.querySelectorAll('#wzDocPane .dp-slide').length));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -286,10 +311,10 @@ async function openDocPanel(doc) {
     const { w, doc, errors } = makeDom({ slideWarn: true });
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1200);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
     check('服务端的"建议拆页"提示显示出来了',
-      /建议拆页/.test(txt(doc.querySelector('#spBody .dp-warn'))), txt(doc.querySelector('#spBody .dp-warn')));
-    check('提示是提示、内容没被截断', /其余请另起一页|只排了前 5 个/.test(txt(doc.querySelector('#spBody .dp-warn'))));
+      /建议拆页/.test(txt(doc.querySelector('#wzDocPane .dp-warn'))), txt(doc.querySelector('#wzDocPane .dp-warn')));
+    check('提示是提示、内容没被截断', /其余请另起一页|只排了前 5 个/.test(txt(doc.querySelector('#wzDocPane .dp-warn'))));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -299,7 +324,7 @@ async function openDocPanel(doc) {
     const { w, doc, errors, fills } = makeDom();
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1200);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
     const tpl = doc.getElementById('dpTpl');
     check('模板下拉存在且列出导入的模板', !!tpl && tpl.options.length === 2,
       tpl ? Array.from(tpl.options).map((o) => o.textContent).join('/') : '(none)');
@@ -342,7 +367,7 @@ async function openDocPanel(doc) {
     const { w, doc, errors, exports } = makeDom();
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
     const items = Array.from(doc.querySelectorAll('#docPanelMenu [data-dl]')).map((b) => b.dataset.dl);
     check('下载菜单 = Word + 新旧两条 PPT + HTML',
       items.join(',') === 'docx,pptx-deck,pptx,html', items.join(','));
@@ -370,7 +395,7 @@ async function openDocPanel(doc) {
     const { w, doc, errors } = makeDom({ wpsFallback: true });
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
     doc.getElementById('docPanelDownBtn').click();
     doc.querySelector('[data-dl="pptx-deck"]').click();
     await sleep(900);
@@ -384,13 +409,13 @@ async function openDocPanel(doc) {
     const { w, doc, errors } = makeDom({ innerWidth: 320 });
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
     const pw = doc.documentElement.style.getPropertyValue('--docp-w');
     check('面板宽度被夹到下限 360px', pw === '360px', pw || '(empty)');
-    const wrap = doc.querySelector('#spBody .dp-slidewrap');
+    const wrap = doc.querySelector('#wzDocPane .dp-slidewrap');
     check('窄屏下缩放系数仍为正数', !!wrap && parseFloat(wrap.dataset.scale) > 0,
       wrap ? wrap.dataset.scale : '(no wrap)');
-    check('窄屏下预览台仍在（没被隐藏）', !!doc.querySelector('#spBody .dp-canvas'));
+    check('窄屏下预览台仍在（没被隐藏）', !!doc.querySelector('#wzDocPane .dp-canvas'));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -400,8 +425,8 @@ async function openDocPanel(doc) {
     const { w, doc, errors } = makeDom({ slideFail: true });
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1200);
-    check('渲染失败仍显示内容（纯文本兜底）', !!doc.querySelector('#spBody .dp-plain'));
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
+    check('渲染失败仍显示内容（纯文本兜底）', !!doc.querySelector('#wzDocPane .dp-plain'));
     check('状态里说明用的是纯文本预览', /纯文本预览/.test(txt(doc.querySelector('.dp-slstat'))),
       txt(doc.querySelector('.dp-slstat')));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
@@ -413,10 +438,10 @@ async function openDocPanel(doc) {
     const { w, doc, errors } = makeDom();
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
     check('面板里不再有独立的「PPT 优化」模块', !doc.querySelector('.ppt-box'));
     check('也不再有它的入口按钮', !doc.getElementById('pptPick') && !doc.getElementById('pptRun'));
-    const head = doc.querySelectorAll('#spBody .dp-slhead');
+    const head = doc.querySelectorAll('#wzDocPane .dp-slhead');
     check('主题与模板合成一行（只剩一行头部控件）', head.length === 1, head.length + ' 行');
     check('这一行里有主题、模板与两个按钮',
       !!doc.getElementById('dpTheme') && !!doc.getElementById('dpTpl') &&
@@ -430,7 +455,7 @@ async function openDocPanel(doc) {
     const { w, doc, errors } = makeDom();
     await sleep(2500);
     await openDocPanel(doc);
-    doc.querySelector('#spBody .dp-tab[data-dp="slides"]').click(); await sleep(1000);
+    doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
     const tpl2 = doc.getElementById('dpTpl');
     tpl2.value = '学校模板';
     tpl2.dispatchEvent(new w.Event('change', { bubbles: true }));
@@ -462,6 +487,92 @@ async function openDocPanel(doc) {
     check('计划卡片不渲染', doc.querySelectorAll('.plan-choice').length === 0);
     const btns = Array.from(doc.querySelectorAll('.pill-btn')).map(txt);
     check('历史回答带【生成文档】', btns.filter((x) => x === '生成文档').length > 0, btns.filter((x) => x === '生成文档').length + ' 个');
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  console.log('== R8：文档并进教案工作台（页签 / MD 源码预览 / 环节写回 / 学生下载 / 老数据迁移） ==');
+  {
+    /* ① 四个页签 + 左栏随页签切换 */
+    const { w, doc, errors, saves } = makeDom();
+    await sleep(2500);
+    const tabs = Array.from(doc.querySelectorAll('#wzTabs .wz-tab')).map(txt);
+    check('教案工作台有 4 个页签（教案/文档/Markdown/幻灯片）',
+      tabs.join(',') === '教案,文档,Markdown,幻灯片', tabs.join(' | '));
+    check('默认停在「教案」页签（还没进文档）',
+      /教案/.test(txt(doc.querySelector('#wzTabs .wz-tab.wz-on'))), txt(doc.querySelector('#wzTabs .wz-tab.wz-on')));
+    check('教案页签有左栏（环节目录）', !!doc.querySelector('#wzLeft .wz-rail-h'));
+    check('教案页签的舞台是环节编辑器', !!doc.querySelector('#wzPlanPane #dzSteps'));
+
+    /* ② 环节编辑 = 改会话里那份 slides（不再有第二套本地数据） */
+    const nameInp = doc.querySelector('#wzPlanPane #dzSteps input.name');
+    const hasSteps = !!nameInp;
+    if (hasSteps) {
+      nameInp.value = '导入（改过的）';
+      nameInp.dispatchEvent(new w.Event('input', { bubbles: true }));
+      for (let i = 0; i < 14 && !saves.length; i++) await sleep(250);
+      const s0 = (saves[saves.length - 1] || {}).slides || [];
+      check('改环节名写回会话的 slides（唯一数据源）', s0[0] && s0[0].name === '导入（改过的）',
+        s0[0] ? s0[0].name : '(无)');
+    } else {
+      check('改环节名写回会话的 slides（唯一数据源）', false, '教案页签没有环节编辑器（没有文档？）');
+    }
+
+    /* ③ Markdown 页签：源码 / 预览 两个视图 */
+    doc.querySelector('#wzTabs .wz-tab[data-wz="md"]').click(); await sleep(900);
+    check('Markdown 是并列页签（不是折叠面板）',
+      /Markdown/.test(txt(doc.querySelector('#wzTabs .wz-tab.wz-on'))));
+    const sw = doc.getElementById('wzMdSwitch');
+    check('Markdown 页签自带「源码 | 预览」按钮', !!sw && sw.style.display !== 'none',
+      sw ? sw.style.display : '(无)');
+    check('默认是源码视图（可编辑 textarea）', !!doc.querySelector('#wzDocPane .dp-mdta'));
+    const srcTa = doc.querySelector('#wzDocPane .dp-mdta');
+    const srcText = srcTa ? srcTa.value.slice(0, 20) : '';
+    sw.querySelector('[data-mdv="view"]').click(); await sleep(500);
+    check('点「预览」切到渲染视图（不再是 textarea）',
+      !doc.querySelector('#wzDocPane .dp-mdta') && !!doc.querySelector('#wzDocPane .dp-mdview'));
+    sw.querySelector('[data-mdv="src"]').click(); await sleep(500);
+    const backTa = doc.querySelector('#wzDocPane .dp-mdta');
+    check('切回源码内容不丢（同一份 markdown）', !!backTa && backTa.value.slice(0, 20) === srcText,
+      backTa ? backTa.value.slice(0, 20) : '(无)');
+    check('文档/Markdown 页签收起左栏（把宽度让给正文）',
+      doc.getElementById('wzGrid').classList.contains('wz-noRail'));
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  {
+    /* ④ 学生角色：那条按钮是「下载 Word」且真的走导出 */
+    const { w, doc, errors, exports } = makeDom({ role: 'student' });
+    await sleep(2600);
+    const btns = Array.from(doc.querySelectorAll('.pill-btn')).map(txt);
+    check('学生看到的是「下载 Word」（不是【生成文档】）',
+      btns.includes('下载 Word') && !btns.includes('生成文档'),
+      btns.filter((x) => /下载|生成文档/.test(x)).join('/') || '(无)');
+    const wBtn = Array.from(doc.querySelectorAll('.pill-btn')).find((b) => txt(b) === '下载 Word');
+    if (wBtn) {
+      wBtn.click();
+      for (let i = 0; i < 12 && !exports.length; i++) await sleep(250);
+      check('点它直接走 /api/wps/export（kind=docx）', exports.length > 0 && exports[0].kind === 'docx',
+        exports.length ? exports[0].kind : '(没发请求)');
+    } else {
+      check('点它直接走 /api/wps/export（kind=docx）', false, '没找到按钮');
+    }
+    check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
+    w.close();
+  }
+
+  {
+    /* ⑤ 老编排数据（edu_design_v1）一次性迁进会话 + 留备份（D10） */
+    const { w, doc, errors, saves } = makeDom({ legacyDesign: true });
+    await sleep(2800);
+    const legacy = w.localStorage.getItem('edu_design_v1');
+    const bak = w.localStorage.getItem('edu_design_v1.bak');
+    check('老数据已迁走（原键删掉）', !legacy, legacy ? '还在' : '(已删)');
+    check('留了备份键 edu_design_v1.bak', !!bak && /步骤|导入/.test(bak || ''), (bak || '').slice(0, 40));
+    const last = (saves[saves.length - 1] || {}).slides || [];
+    check('迁进来的环节写回了会话', last.length >= 2 && last[0].name === '导入',
+      last.length + ' 页 · ' + (last[0] ? last[0].name : ''));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }

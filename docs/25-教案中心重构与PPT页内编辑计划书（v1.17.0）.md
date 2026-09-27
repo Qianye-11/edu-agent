@@ -379,11 +379,42 @@ node tools/uicheck/panel_check.js
 
 | 轮 | 内容 | 交付 | 状态 |
 |---|---|---|---|
-| **R8** | 渲染目标改嫁（含 **Markdown 作为并列页签**）+ 四条入口重接 + 数据统一 + 旧 localStorage 迁移（D10，留备份） | 教案中心能干活（文档/MD/幻灯片都在里面），面板仍在（双跑对拍） | 待开工 |
-| **R9** | 面板回退 4 钮 + 清理重复定义 + localStorage 清单 + UI 检查脚本改造 + 文案/开关 + **学生按钮改「下载 Word」**（D9） | 侧边面板恢复原样 | 待开工 |
+| **R8** | 渲染目标改嫁（含 **Markdown 作为并列页签**）+ 四条入口重接 + 数据统一 + 旧 localStorage 迁移（D10，留备份） | 教案中心能干活（文档/MD/幻灯片都在里面），面板仍在（双跑对拍） | ✅ **已完成 2026-09-27**（交付记录见 §4.3） |
+| **R9** | 面板回退 4 钮 + 清理重复定义 + localStorage 清单 + UI 检查脚本改造 + 文案/开关（**学生按钮已随 R8 做完**）+ 建议顺带：只读调试钩子、演示模板删除入口 | 侧边面板恢复原样 | 待开工 |
 | **R10** | 服务端 `boxes`/`data-slot`（`annotate` 开关）+ 新单测 | 接口可供编辑器 | 待开工 |
 | **R11** | 页内编辑交互（叠加层/撤销/缩略图/页操作）+ **填充页编辑（`shape_index` + `mapping`）** + `apply_mapping` 修精确指槽 + 面板检查 | 能像 WPS 那样改字（含模板页） | 待开工 |
 | **R12** | 删卡片、属性右栏、填充页点槽、MD 源码/预览切换收口、全量验收、文档/CHANGELOG | 交付 | 待开工 |
+
+### 8.1 R8 交付记录（2026-09-27）
+
+**改了什么**
+
+| 落点 | 内容 |
+|---|---|
+| `static/index.html` | ① `#view-design` 重建为**教案工作台**：顶栏（课题/学情/骨架/保存/导出/位置）+ 4 个页签 + 左栏 + 舞台 + 状态行；② 文档外壳（标题行/导入/下载▾/编辑工具栏/正文/结果条）从 `spRenderDoc()` 搬到 `docShellHtml()` + `wzMountDoc()`，**docp\* 那上百个函数一行没改**；③ 新增 `wzTabSet / wzMountDoc / wzRailSteps / wzRailThumbs / wzMdSwitchPaint / wzBoot / wzDocChanged / wzMigrateLegacy / wzLegacyToSlides`；④ `dzRender / dzPayload / dzExportHTML` 改为读**会话里那份 slides**；⑤ `docpOpen / docpCollapse / docpClear / spRender('doc')` 与侧边面板解耦（面板的「文档」圆钮变成"送进工作台"）；⑥ `#dzPreview`（预览 PPT）按钮取消 —— 页签本身就是预览；⑦ 删掉 4 个死函数（`dzBlank/dzSanitize/dzLoad/dzPersist`）与迷你卡渲染；⑧ 清掉 `dzOutDirGet/Set`、`syncOutDirInput` 的重复定义；⑨ Markdown 页签新增 `[源码 \| 预览]`（`docpRenderMdSrc` / `docpRenderMdView`）；⑩ 学生那条按钮改「下载 Word」（D9） |
+| `tools/uicheck/panel_check.js` | ① 40 多条"文档在 `#spBody`"的断言改成"在 `#wzDocPane`"（**位置搬了、行为没变** —— 这就是对拍的意义）；② 新增 5 组 R8 用例：4 页签与左栏 / 环节改名写回会话 / MD 源码↔预览内容一致 / 学生看到「下载 Word」且真走 `kind=docx` / 老数据迁移并留备份；③ `makeDom` 支持 `role:'student'`、`legacyDesign:true` |
+| `tools/ppt_smoke.py` | 收尾清理改用**库函数**：原来 POST 的 `/api/slide/template/delete` 根本不存在 → 404 → 体检每跑一次就给老师多留两套假模板 |
+| `tools/jscheck.py`（新） | 把内联脚本抠出来跑 `node --check`：单文件前端改完 JS，1 秒就知道括号配没配平 |
+
+**验收**：单测 459 全绿 · 面板检查 **92/92**（原 73 + 新 19）· 体检 **49/49** · 审计 `--gate` error 0 · 模板库干净（只剩老师自己那套）。
+
+**这一轮踩到的两个坑（写下来免得再踩）**
+
+1. **`var` 提升**：`wzBoot()` 一开始放在 `dzBind()` 里调，而它用到的 `DOCP_SL` / `DOCP_TAB` 在文件更下面才声明 →
+   运行时是 `undefined` → `Cannot read properties of undefined (reading 'saveTimer')`。
+   **首屏要跑工作区的代码必须放到脚本最后（`appInit`）**。
+2. **`</body>` 不是唯一的**：`dzExportHTML()` 的 JS 字符串里也有 `</body></html>`；
+   用 `str.replace` 注入截图脚本会把代码插进那个字符串 → 主脚本语法错误 → **整个应用不启动**。
+   要注入就插**最后一个** `</body>`。
+
+**已知限制（没做完的，如实记）**
+
+- **工作区的自动截图还没打通**：应用逻辑全在 IIFE 里，`switchView` 不是全局函数，无头截图没法"先切到工作台再拍"；
+  而 `#view-design` 在 DOM 里排在 chat 之后，两者同时 `display:block` 时截到的是聊天页。
+  → 建议 R9 顺手加一个**只读调试钩子**（`window.__edu = {switchView, wzTabSet, dzRender}`，不参与业务逻辑），
+  以后每次改造都能自动出图；在那之前，工作区长什么样**以老师自己点开看为准**。
+- **演示模板没有删除入口**：API 只有导入/对齐，没有删除（这轮清库是直接调库函数做的）。
+  老师导错一份 .pptx 就只能一直留着 → 建议 R9/R12 补 `POST /api/slide/template/delete` + 模板行上一个「删」。
 
 **第 0 步（开工前，10 分钟）：文档指向**
 `docs/14`、`docs/15`、`docs/16` 顶部各加一段「**本文所述的"文档预览在侧边面板"已于 v1.17.0 并入教案中心，

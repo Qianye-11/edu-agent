@@ -243,8 +243,17 @@ def main() -> int:
     print("\n[12] 收尾：别把体检模板留在老师的模板库里")
     tpl_before = {t["id"] for t in (c.get("/api/slide/templates").json().get("imported") or [])}
     leftover = sorted({tpl_new, fj.get("id") or ""} - {""})
-    for tid in leftover:
-        c.post("/api/slide/template/delete", json={"template_id": tid})
+    # 注意：**没有** /api/slide/template/delete 这个接口（演示模板只支持导入）——
+    # 早先这里照着"教案模板"的接口名写了，结果 404、模板留在库里，跑一次体检多两套假模板（踩过）。
+    # 体检脚本跟服务跑在同一台机器上，所以直接调库里的删除函数（软删进 _trash，能找回来）。
+    try:
+        sys.path.insert(0, str(_ROOT / "src"))
+        from edu_agent import slide_template as _st
+
+        for tid in leftover:
+            _st.delete_template(tid)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! 清理失败（{type(exc).__name__}: {exc}）")
     tpl_after = {t["id"] for t in (c.get("/api/slide/templates").json().get("imported") or [])}
     check("体检用过的模板已清掉（不污染老师的选择列表）",
           not (tpl_after & set(leftover)), f"清理 {len(leftover)} 套；剩余 {len(tpl_after)} 套")
