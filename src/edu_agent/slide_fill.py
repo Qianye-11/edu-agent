@@ -284,6 +284,9 @@ def _plan_page_numbers(out: dict, tpl_pages: list[dict]) -> None:
     老师看到的就是"模板原来的内容没清除"。页码本来就应该跟着页走。
 
     注意：计划页里**不带** `slots`（只有 fills/kept），所以这里拿 `tpl_pages[template_index]` 去查。
+
+    R14：装饰槽现在也在 `fills` 里（`kind: 'decoration'`），**原地改那一条**，别再追加一条
+    （追加会让同一个形状被写两遍，明细里也会出现两行）。
     """
     by_index = {p.get("index"): p for p in tpl_pages or []}
     pages = out.get("pages") or []
@@ -299,9 +302,17 @@ def _plan_page_numbers(out: dict, tpl_pages: list[dict]) -> None:
             text = st.page_number_text(sample, i, total)
             if text == sample:
                 continue
+            hit = next((f for f in (page.get("fills") or [])
+                        if f.get("shape_index") == slot.get("shape_index")
+                        and str(f.get("kind") or "") in ("decoration", "page-number")), None)
+            if hit is not None:
+                hit["text"] = text
+                hit["kind"] = "page-number"
+                hit["clear"] = True
+                continue
             page.setdefault("fills", []).append(
                 {"role": "decoration", "capacity": int(slot.get("capacity") or 0), "text": text,
-                 "clear": False, "kind": "page-number", "shape_index": slot.get("shape_index"),
+                 "clear": True, "kind": "page-number", "shape_index": slot.get("shape_index"),
                  "size_px": slot.get("size_px") or 0,
                  "design_capacity": int(slot.get("design_capacity") or 0),
                  "sample": sample, "geo": slot.get("geo") or {}})
@@ -319,9 +330,9 @@ def _warn_kept_texts(out: dict) -> None:
         return
     shown = "、".join("「%s」" % t[:10] for t in kept[:4])
     out["warnings"].append(
-        f"模板里保留了 {len(kept)} 处**设计文字**（没填、也没清）：{shown}"
-        f"{'…' if len(kept) > 4 else ''} —— 这些是页码/章节号一类的版式元素；"
-        f"想改它们用「对齐」把它们标成正文，或到幻灯片页签上点着改")
+        f"模板里保留了 {len(kept)} 处**设计文字**（原样没动）：{shown}"
+        f"{'…' if len(kept) > 4 else ''} —— 这些是页码/章节号一类的版式元素，"
+        f"要改要删就在幻灯片页签上点它（现在点得着了）")
 
 
 def _slot_rank(slot: dict) -> tuple[float, float, float]:
@@ -424,11 +435,24 @@ def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -
     if minutes:
         out.setdefault("notes", []).append(f"第 {tpl_page.get('index', 0) + 1} 页时长 {minutes} 分钟"
                                            f"（模板没有时间槽，写进备注即可）")
+    # ③ 装饰槽（页码、设计标签）：**默认一个字都不动**，但要让老师点得着、改得动（R14 硬要求）。
+    #    所以照样进 `fills`（`kind: 'decoration'`、`text` = 模板原样），只是不填我们的内容；
+    #    老师改了/清空了才生效 —— "模板残留看不见也改不掉"从根上没了。
+    for slot in deco:
+        sample = str(slot.get("sample") or "")
+        if not sample.strip():
+            continue
+        fills.append({"role": "decoration", "kind": "decoration",
+                      "capacity": int(slot.get("capacity") or 0), "text": sample, "clear": True,
+                      "shape_index": slot.get("shape_index"), "size_px": slot.get("size_px") or 0,
+                      "design_capacity": int(slot.get("design_capacity") or 0),
+                      "sample": sample, "geo": slot.get("geo") or {}})
     return {"template_index": tpl_page.get("index", 0), "layout": tpl_page.get("layout") or "",
             "copied": copied, "fills": fills,
             "kept": [s.get("sample") for s in deco if s.get("sample")],
             "replaced": [{"sample": f.get("sample"), "text": f["text"]}
-                         for f in fills if f["text"] and f.get("sample")]}
+                         for f in fills if f["text"] and f.get("sample")
+                         and f["text"] != f.get("sample")]}
 
 
 # ---------------------------------------------------------------- 真正写文件
@@ -595,6 +619,11 @@ def _apply(prs, the_plan: dict, want: list[str]) -> None:
         clone_of[id(page)] = new
 
     # 2) 再写文字：用模板现有页的按 template_index 落位，克隆页写进各自的克隆件
+    scale = 1.0
+    try:                                             # 模板自己的画布尺寸 → 设计像素的换算比
+        scale = float(prs.slide_width) / float(slide_deck.CANVAS_W)
+    except (TypeError, ValueError, ZeroDivisionError):
+        scale = 1.0
     for page in fills:
         target = clone_of.get(id(page))
         if target is None:
@@ -602,7 +631,7 @@ def _apply(prs, the_plan: dict, want: list[str]) -> None:
             if ti is None or ti >= len(slides):
                 continue
             target = slides[ti]
-        _fill_slide(target, page, want)
+        _fill_slide(target, page, want, scale=scale)
 
     # 3) 最终顺序 = 计划顺序（复制页用刚建的那张），其余模板页删掉
     order = []
@@ -690,12 +719,17 @@ def _remap_rels(donor, new) -> None:
             el.set(name, new_rid)
 
 
-def _fill_slide(slide, page: dict, want: list[str]) -> None:
+def _fill_slide(slide, page: dict, want: list[str], *, scale: float = 1.0) -> None:
     """把一页的填充内容写进这张幻灯片：**按 `shape_index` 精确落位**（槽位分类时记下的位置）。
 
     为什么要按 index 而不是"再猜一次角色"：填充与导入读的是同一个文件，形状顺序一致；
     按 index 落位能保证"计划里说要填那个框"和"实际填的就是那个框"，也避免二次猜测带来的漂移。
     `sample` 用来核对没拿错框（模板被改过时退化为按角色找）。
+
+    R14 两件事：
+    · **几何**（`dx/dy/dw/dh`，设计像素）先落到形状上：老师拖过/改过大小就照他说的来；
+    · **装饰字原样时一个字都不写**（`text == sample`）—— 重写会把「06」和「/ 10」两段样式并成一段，
+      模板设计就走样了；老师改过（不一样）才写。
     """
     shapes = list(slide.shapes)
     used: set[int] = set()                  # 本页已经写过的形状下标（退路不许抢刚写过的框）
@@ -709,6 +743,8 @@ def _fill_slide(slide, page: dict, want: list[str]) -> None:
                 if not fill.get("sample") or sample == fill["sample"] or not sample:
                     shape, _ = cand, used.add(idx)
         if shape is None:                       # 退路：按顺序找第一个没用过的文本框
+            if (fill.get("role") or "") == "decoration":
+                continue                        # 装饰槽**绝不**抢别人的框（宁可不动）
             for k, shp in enumerate(shapes):
                 if k in used or not getattr(shp, "has_text_frame", False):
                     continue
@@ -716,10 +752,71 @@ def _fill_slide(slide, page: dict, want: list[str]) -> None:
                 break
         if shape is None:
             continue
+        _apply_geo(shape, fill, scale)
+        _apply_z(shape, int(fill.get("z") or 0))
         text = fill.get("text") or ""
         if not text and not fill.get("clear"):
             continue                            # 没内容且不需要清空 → 不动模板的框
+        if text and text == (fill.get("sample") or ""):
+            continue                            # 原样（装饰/页码没变）→ 一个字都不动
         _write_text(shape, text, want, fill)
+
+
+def _apply_geo(shape, fill: dict, scale: float = 1.0) -> None:
+    """把老师的拖动/改大小落到形状上（设计像素 × 模板缩放 = EMU）。
+
+    为什么要有 `scale`：`geo` 与 `dx/dy` 都是**1280×720 设计坐标**，而老师的模板可能是
+    别的尺寸（比如 960×540 或 1920×1080）；不换算就会出现"拖 60px，落下去只有 45px"。
+    """
+    dx, dy = float(fill.get("dx") or 0), float(fill.get("dy") or 0)
+    dw, dh = float(fill.get("dw") or 0), float(fill.get("dh") or 0)
+    if not any((dx, dy, dw, dh)):
+        return
+    try:
+        k = float(scale) or 1.0
+        if dx or dw:
+            shape.left = int(shape.left + round(dx * k))
+        if dy or dh:
+            shape.top = int(shape.top + round(dy * k))
+        if dw:
+            shape.width = max(1, int(shape.width + round(dw * k)))
+        if dh:
+            shape.height = max(1, int(shape.height + round(dh * k)))
+    except (AttributeError, ValueError, TypeError):
+        pass                                     # 图片占位符之类的形状没有 left/width：不动它就是
+
+
+def _apply_z(shape, steps: int) -> None:
+    """把形状在幻灯片里往上/往下挪 `steps` 层（WPS 的「上移一层 / 下移一层」）。
+
+    为什么用"相对步数"而不是绝对层号：每一次填充都是从**模板原稿**重新开始的，
+    相对步数因此在每次填充里都指向同一个结果（绝对层号会在页与页之间漂）。
+    实现就是 `p:spTree` 里换位置 —— 往后放 = 盖在最上面，往前插 = 压到下一个兄弟之前。
+    """
+    if not steps:
+        return
+    try:
+        el = shape._element                                            # noqa: SLF001
+        tree = el.getparent()
+        kids = list(tree)[2:]                    # 前两个是 nvGrpSpPr / grpSpPr，不参与层序
+        for _ in range(abs(int(steps))):
+            if el not in kids:
+                break
+            i = kids.index(el)
+            if steps > 0:
+                if i == len(kids) - 1:
+                    break
+                tree.remove(el)
+                kids[-1].addnext(el)
+                kids.append(kids.pop(i))
+            else:
+                if i == 0:
+                    break
+                tree.remove(el)
+                kids[i - 1].addprevious(el)
+                kids.insert(i - 1, kids.pop(i))
+    except (AttributeError, ValueError, TypeError):
+        pass
 
 
 def _write_text(shape, text: str, want: list[str], fill: dict | None = None) -> None:
@@ -853,9 +950,18 @@ def apply_mapping(the_plan: dict, mapping: list[dict] | None) -> dict:
 
     `mapping` 形状（与 `plan["pages"]` 同构，可以只给一部分页）：
 
-        [{"template_index": 1, "fills": [{"shape_index": 5, "text": "改后的正文"}]}]
+        [{"page": 2, "fills": [{"shape_index": 5, "text": "改后的正文"}]}]
+        [{"template_index": 1, "fills": [{"shape_index": 5, "dx": 40, "dy": -12}]}]     # 只挪不改字
 
-    两条写法：
+    指哪一页（**R14 修正**）：
+    · **`page` = 成品第几页（0 起，计划顺序）** —— 页内编辑一律用这个。
+      为什么必须补它（真踩过）：续页是**整页克隆母版**出来的，于是"第 1 页"和"第 3 页"的
+      `template_index` 都是 0；只按 `template_index` 找，改第 1 页会落到第 3 页上
+      （老师看到的就是"我改的地方没变、别处变了"）。
+    · `template_index`（老写法，外部 agent 用的）：取该模板页的**第一张**成品页；重复的那几页
+      请改用 `page` 精确指。
+
+    两条指槽写法：
 
     · **`shape_index` 精确指槽**（页内编辑与"一页多个同角色槽"必须用这个）：
       只改那一个框。为什么必须有它（R7 发现的真问题）：卡片式模板一页有 4 个 `body` 槽，
@@ -864,48 +970,92 @@ def apply_mapping(the_plan: dict, mapping: list[dict] | None) -> dict:
 
     规则：只认计划里已有的模板页；文字超容量仍走 `_fit_text` 适度压缩并记 `adjustments`；
     没给到的页保持草案原样（所以"只改一页"是合法的）。
+
+    R14 追加：一条 fill 里除了 `text` 还能给 `dx/dy/dw/dh`（拖动/改大小，设计像素；范围与
+    槽位层同源 = `slide_deck.SLOT_OVERRIDE`）和 `hidden`（= 清空，等价于"删掉这处文字"）。
+    **没给 `text` 键 = 不改字**（`text: ""` 才是"清空这一格"）—— 只挪位置不会把字抹掉。
     """
     if not isinstance(mapping, list) or not mapping:
         return the_plan
-    by_index = {p.get("template_index"): p for p in the_plan.get("pages") or []}
+    pages = the_plan.get("pages") or []
+    by_ti: dict = {}
+    for p in pages:
+        by_ti.setdefault(p.get("template_index"), p)      # 老写法取第一张（后补 page 精确指）
     touched = 0
     for row in mapping:
         if not isinstance(row, dict):
             continue
-        page = by_index.get(row.get("template_index"))
+        page = None
+        if isinstance(row.get("page"), int) and 0 <= int(row["page"]) < len(pages):
+            page = pages[int(row["page"])]
+        else:
+            page = by_ti.get(row.get("template_index"))
         if page is None:
             continue
-        by_shape: dict[int, str] = {}
-        by_role: dict[str, str] = {}
+        by_shape: dict[int, dict] = {}
+        by_role: dict[str, dict] = {}
         for f in (row.get("fills") or []):
             if not isinstance(f, dict):
                 continue
             if isinstance(f.get("shape_index"), int):
-                by_shape[int(f["shape_index"])] = str(f.get("text") or "")
+                by_shape[int(f["shape_index"])] = f
             elif f.get("role"):
-                by_role.setdefault(str(f["role"]), str(f.get("text") or ""))
+                by_role.setdefault(str(f["role"]), f)
         for fill in page.get("fills") or []:
             role = fill.get("role") or "body"
             shape = fill.get("shape_index")
             if isinstance(shape, int) and shape in by_shape:
-                wanted = by_shape[shape]               # 精确指槽（页内编辑走这条）
+                patch = by_shape[shape]                # 精确指槽（页内编辑走这条）
             elif role in by_role:
-                wanted = by_role.pop(role)             # 只给 role：**只动第一个**同角色槽
+                patch = by_role.pop(role)              # 只给 role：**只动第一个**同角色槽
             else:
                 continue
-            text = wanted.strip()
-            cap = int(fill.get("capacity") or 0)
-            if text and cap > 0 and len(text) > cap:
-                text, changed = _fit_text(text, cap)
-                if changed:
-                    the_plan.setdefault("adjustments", []).append(
-                        {"action": "trim", "by": "mapping", "cap": cap,
-                         "before": len(wanted), "after": len(text), "text": text[:24]})
-            fill["text"] = text
-            fill["clear"] = not text
-            touched += 1
+            if _apply_fill_patch(fill, patch, the_plan):
+                touched += 1
     the_plan["mapping_applied"] = touched
     return the_plan
+
+
+def _apply_fill_patch(fill: dict, patch: dict, the_plan: dict) -> bool:
+    """把一条 mapping 落到一条 fill 上（文字 + 几何 + 删除）；返回是否真的动了它。"""
+    moved = False
+    if "text" in patch or patch.get("hidden"):     # hidden = 清空这处文字（"删"的语义）
+        wanted = "" if patch.get("hidden") else str(patch.get("text") or "")
+        text = wanted.strip()
+        cap = int(fill.get("capacity") or 0)
+        # 装饰槽（页码/设计标签）**不压缩**：它就那么几个字，压出来的不是老师要的；
+        # 写不下会被审计报出来（宁可见报，也别悄悄改老师的话）。
+        if text and cap > 0 and len(text) > cap and (fill.get("role") or "") != "decoration":
+            text, changed = _fit_text(text, cap)
+            if changed:
+                the_plan.setdefault("adjustments", []).append(
+                    {"action": "trim", "by": "mapping", "cap": cap,
+                     "before": len(wanted), "after": len(text), "text": text[:24]})
+        fill["text"] = text
+        fill["clear"] = not text
+        moved = True
+    for key, (lo, hi) in slide_deck.SLOT_OVERRIDE.items():     # 数值范围与槽位层同源
+        if key not in patch or key in ("size", "lh"):
+            continue
+        try:
+            val = round(max(lo, min(hi, float(patch[key]))), 1)
+        except (TypeError, ValueError):
+            continue
+        if val:
+            fill[key] = val
+            moved = True
+    if "z" in patch:                                           # 层级：相对步数（±9）
+        try:
+            z = int(round(float(patch["z"])))
+        except (TypeError, ValueError):
+            z = 0
+        z = max(slide_deck.SLOT_Z_RANGE[0], min(slide_deck.SLOT_Z_RANGE[1], z))
+        if z:
+            fill["z"] = z
+            moved = True
+        else:
+            fill.pop("z", None)
+    return moved
 
 
 def plan_payload(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
@@ -926,6 +1076,11 @@ def plan_payload(template_id: str, slides: list[dict] | None, title: str = "") -
             "draft": the_plan,
             "notes": ["draft 是我们按规则算出来的草案；你可以改 pages[].fills[].text 后回传给 /api/slide/fill",
                       "只给要改的页也可以（没给到的页保持草案）",
+                      "指页用 page（成品第几页，0 起）最稳；template_index 是母版页号，"
+                      "续页会和首页撞号，只按它会改错页（R14）",
+                      "一条 fill 除了 text 还能给 dx/dy/dw/dh（拖动/改大小，设计像素）与 hidden（= 清空这处文字）",
+                      "fills 里的 kind='decoration'/'page-number' 是模板自带的设计标签与页码："
+                      "默认原样不动，老师改了/清空了才写",
                       "超容量的文字会被适度压缩（去括号补充、从末尾减分句），并在 adjustments 里留痕"],
             "error": err}
 

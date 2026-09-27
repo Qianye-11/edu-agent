@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import re
+
 from . import ppt_tokens as tk
 
 #: 版式 id（与 docs/22 §5、docs/19 §8.4 一致）
@@ -32,7 +34,8 @@ class Canvas:
     不用自己去量像素（jsdom / SVG 量尺寸都不可靠）。
     """
 
-    def __init__(self, t: dict, boxes: list[dict] | None = None):
+    def __init__(self, t: dict, boxes: list[dict] | None = None,
+                 overrides: dict | None = None):
         c = t["canvas"]
         self.t = t
         self.w = int(c["w"])
@@ -50,6 +53,46 @@ class Canvas:
         self.ls = float(self.type.get("letter_spacing") or 0)
         self.right = self.margin + self.content_w
         self.boxes = boxes
+        self.overrides = overrides or {}
+
+    def ov(self, slot: str) -> dict:
+        """这个槽的"老师改过的样子"（拖到哪儿、多大、什么字号颜色…）；没改过就是空 dict。"""
+        return (self.overrides or {}).get(slot) or {}
+
+    def zof(self, slot: str) -> int:
+        """这一格的层级（老师用「上移一层/下移一层」调过才有；没调过 = 0）。"""
+        try:
+            return int((self.ov(slot) or {}).get("z") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @property
+    def has_z(self) -> bool:
+        """这一页有没有人调过层级。**没有就别碰出图顺序**（导出要逐字节一致）。"""
+        return any(self.zof(s) for s in (self.overrides or {}))
+
+    def apply(self, slot: str, x: float, y: float, size: float,
+              fill: str | None, anchor: str) -> tuple[float, float, float, str | None, str, bool]:
+        """把覆盖套到一次文字发射上：返回 (x, y, size, fill, anchor, 是否要画)。
+
+        `hidden` 用来"删掉这一处文字"（老师的删除就是清空 + 不再画）。对齐按**版心宽/content_w**
+        作为参照居中或右对齐（单行槽在发射时还不知道自己的框宽，用版心是最不容易出错的近似）。
+        """
+        o = self.ov(slot) if slot else {}
+        if not o:
+            return x, y, size, fill, anchor, True
+        if o.get("hidden"):
+            return x, y, size, fill, anchor, False
+        al = o.get("align")
+        if al in ("start", "middle", "end") and al != anchor:
+            ref = float(o.get("dw") or 0) or self.content_w
+            if anchor == "start":                 # 原来按左边界给的 x → 换算成新的锚点
+                if al == "middle":
+                    x, anchor = x + ref / 2, "middle"
+                elif al == "end":
+                    x, anchor = x + ref, "end"
+        return (x + float(o.get("dx") or 0), y + float(o.get("dy") or 0),
+                float(o.get("size") or size), o.get("color") or fill, anchor, True)
 
     def box(self, slot: str, x: float, y: float, w: float, h: float, size: float,
             *, kind: str = "text", align: str = "start") -> None:
@@ -58,23 +101,36 @@ class Canvas:
         **同一个槽只留一个盒子**（保留面积更大的那个）：`text()` 会自动给单行做个小盒子，
         而版式里往往随后又显式给一个"整行/整块"的大盒子（点击区更友好）—— 两个都留会让前端
         画出两块重叠的点击区（踩过：`title` 出现两次）。
+        **覆盖要在这里套上**（拖动/改大小长在盒子上），这样前端画的框与服务端画的字永远一致。
         """
         if self.boxes is None or not slot:
             return
+        o = self.ov(slot)
+        if o:
+            if o.get("hidden"):
+                return
+            x += float(o.get("dx") or 0)
+            y += float(o.get("dy") or 0)
+            w = max(40.0, w + float(o.get("dw") or 0))
+            h = max(24.0, h + float(o.get("dh") or 0))
+            size = float(o.get("size") or size)
+            if o.get("align") in ("start", "middle", "end"):
+                align = o["align"]
         area = float(w) * float(h)
+        entry = {"slot": slot, "kind": kind, "align": align,
+                 "x": round(float(x), 1), "y": round(float(y), 1),
+                 "w": round(float(w), 1), "h": round(float(h), 1),
+                 "size": round(float(size), 1)}
+        z = int(o.get("z") or 0) if o else 0
+        if z:
+            entry["z"] = z                            # 层级只在老师调过时才给（老数据形状不变）
         for i, b in enumerate(self.boxes):
             if b.get("slot") != slot:
                 continue
             if area > float(b.get("w") or 0) * float(b.get("h") or 0):
-                self.boxes[i] = {"slot": slot, "kind": kind, "align": align,
-                                 "x": round(float(x), 1), "y": round(float(y), 1),
-                                 "w": round(float(w), 1), "h": round(float(h), 1),
-                                 "size": round(float(size), 1)}
+                self.boxes[i] = entry
             return
-        self.boxes.append({"slot": slot, "kind": kind, "align": align,
-                           "x": round(float(x), 1), "y": round(float(y), 1),
-                           "w": round(float(w), 1), "h": round(float(h), 1),
-                           "size": round(float(size), 1)})
+        self.boxes.append(entry)
 
     # -- 字号 / 颜色 / 字重
     def size(self, key: str) -> float:
@@ -113,13 +169,19 @@ def esc(s: object) -> str:
 
 
 def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int | None = None,
-         fill: str | None = None, anchor: str = "start", slot: str = "") -> str:
+         fill: str | None = None, anchor: str = "start", slot: str = "", zkey: str = "") -> str:
     """一行文字（给的是**基线** y；不用 dominant-baseline，转 pptx 时口径一致）。
 
     `slot` 给了就顺手记一个可编辑盒子（高 = 一行；宽 = 这行文字的实际宽度），
     并给元素打上 `data-slot` 方便前端"编辑时隐藏这一槽"。
+
+    `zkey` 是**层级归属**：多行文字的后续行 `slot` 是空的（盒子只记一次），但它们必须跟着
+    第一行一起换层，所以层级记号单独用 `zkey` 传（渲染完由 `order_z` 洗掉）。
     """
     if s is None or str(s) == "":
+        return ""
+    x, y, size, fill, anchor, draw = cv.apply(slot, x, y, size, fill, anchor)
+    if not draw:
         return ""
     attrs = [
         f'x="{round(x, 2)}"', f'y="{round(y, 2)}"',
@@ -131,6 +193,9 @@ def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int 
         attrs.append(f'text-anchor="{anchor}"')
     if cv.ls:
         attrs.append(f'letter-spacing="{cv.ls}em"')
+    zk = zkey or slot
+    if zk and cv.has_z and cv.zof(zk):
+        attrs.append(f'data-zslot="{esc(zk)}"')     # 层级记号：order_z 会读它、然后洗掉
     if slot and cv.boxes is not None:               # ⚠️ 只在 annotate 时打点：导出要逐字节一致
         attrs.append(f'data-slot="{esc(slot)}"')
         w = sum(char_w(ch, size) for ch in str(s))
@@ -201,12 +266,28 @@ def paragraph(cv: Canvas, x: float, y: float, s: object, *, size: float, max_w: 
 
     `slot` 给了就记**一个盒子盖住整块**（宽 = 版心宽，高 = 行数 × 行距）——
     点哪儿都能进编辑，比逐行小盒子好用（R10）。
+    **覆盖（拖动/改宽/字号色/对齐）在每一行上生效**：行内对齐按块的宽度算，所以居中/右对齐不会跑偏。
     """
+    o = cv.ov(slot) if slot else {}
+    if o.get("hidden"):
+        return "", y
+    size = float(o.get("size") or size)
+    fill = o.get("color") or fill
+    max_w = max(40.0, max_w + float(o.get("dw") or 0))
+    dx, dy = float(o.get("dx") or 0), float(o.get("dy") or 0)
     lines = wrap(s, max_w, size)
     step = size * lh
-    svg = "".join(text(cv, x, y + i * step, ln, size=size, weight=weight, fill=fill,
-                       slot=(slot if i == 0 else ""))
-                  for i, ln in enumerate(lines))
+    out = []
+    for i, ln in enumerate(lines):
+        lx = x + dx
+        anchor = "start"
+        if o.get("align") == "middle":
+            lx, anchor = lx + max_w / 2, "middle"
+        elif o.get("align") == "end":
+            lx, anchor = lx + max_w, "end"
+        out.append(text(cv, lx, y + dy + i * step, ln, size=size, weight=weight, fill=fill,
+                        anchor=anchor, slot=(slot if i == 0 else ""), zkey=slot))
+    svg = "".join(out)
     if slot and lines:
         cv.box(slot, x, y - size * 0.86, max_w, max(1, len(lines)) * step + size * 0.2, size)
     return svg, y + max(1, len(lines)) * step
@@ -466,19 +547,70 @@ _RENDERERS = {"cover": _cover, "section": _section, "bullets": _bullets,
 
 # ---------------------------------------------------------------- 对外接口
 
+#: 出图元素（够用的最小集合：正文只可能是这四种）
+_EL_RE = re.compile(r"<(?P<tag>text|rect|line|polyline)\b[^>]*?(?:/>|>.*?</(?P=tag)>)", re.S)
+_ZATTR_RE = re.compile(r'\s+data-zslot="[^"]*"')
+
+
+def order_z(cv: Canvas, body: str) -> str:
+    """按「层级」重排出图顺序，然后把层级记号洗掉（R14）。
+
+    做法（为什么不改六个版式函数）：发射时给"老师调过层级"的元素打一个 `data-zslot` 记号，
+    这里把**所有文字元素**按 `(层级, 原来的先后)` 稳定排序后填回**文字元素占的那些位置** ——
+    静态图元（底纹/短横线/圆点）不动，只有文字之间换层，正是老师"把这块盖到那块上面"的意思。
+    **没有 z 覆盖时一个字节都不碰**（`cv.has_z` 为假直接返回），导出与老版本逐字节一致。
+
+    ⚠️ 元素正则在正文里找 `<text|rect|line|polyline>`：文字内容都过了 `esc()`，
+    正文里不可能再出现 `<`，所以这样切是安全的（也正因如此才不引入 XML 解析器）。
+    """
+    if not cv.has_z:
+        return body
+    spans = list(_EL_RE.finditer(body))
+    texts = [i for i, m in enumerate(spans) if m.group("tag") == "text"]
+    if len(texts) < 2:
+        return _ZATTR_RE.sub("", body) if "data-zslot=" in body else body
+    zs: dict[str, int] = {}
+    items: list[tuple[int, int, str]] = []
+    for order, i in enumerate(texts):
+        el = spans[i].group(0)
+        key = re.search(r'data-zslot="([^"]*)"', el)
+        z = 0
+        if key:
+            if key.group(1) not in zs:
+                zs[key.group(1)] = cv.zof(key.group(1))
+            z = zs[key.group(1)]
+        items.append((z, order, el))
+    items.sort(key=lambda t: (t[0], t[1]))           # 稳定：同层保持原来的先后
+    els = [m.group(0) for m in spans]
+    for i, (_, _, el) in zip(texts, items, strict=False):
+        els[i] = el
+    pieces: list[str] = []
+    prev = 0
+    for m, el in zip(spans, els, strict=False):
+        pieces.append(body[prev:m.start()])
+        pieces.append(el)
+        prev = m.end()
+    pieces.append(body[prev:])
+    return _ZATTR_RE.sub("", "".join(pieces))
+
+
 def render_slide(t: dict, layout: str, slots: dict | None = None, *, index: int = 0, total: int = 1,
-                 warnings: list[str] | None = None, boxes: list[dict] | None = None) -> str:
+                 warnings: list[str] | None = None, boxes: list[dict] | None = None,
+                 overrides: dict | None = None) -> str:
     """渲染一页，返回完整 SVG 文本（画布底色 + 版式 + 页脚；封面不画页码）。
 
     `boxes` 给了一个列表（`annotate`）时：给每个文字槽打 `data-slot` 并收集**可编辑盒子**
     （设计像素 1280×720）。**导出路径不传它** —— 导出用的 SVG 与以前逐字节一致（`docs/25` D8）。
+
+    `overrides` 是老师改过的样子（`slides[i].slots`）：`{槽位: {dx,dy,dw,dh,size,color,align,lh,z,hidden}}`，
+    在发射时套上 —— **预览与导出走同一条路**，所以"看到什么样，导出就是什么样"。
     """
     if layout not in _RENDERERS:
         raise ValueError(f"没有这个版式：{layout}（可选：{', '.join(LAYOUTS)}）")
-    cv = Canvas(t, boxes)
+    cv = Canvas(t, boxes, overrides)
     warn = warnings if warnings is not None else []
     sl = slots or {}
-    body = _RENDERERS[layout](cv, sl, index, total, warn)
+    body = order_z(cv, _RENDERERS[layout](cv, sl, index, total, warn))
     tail = "" if layout == "cover" else footer(cv, index, total)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{cv.w}" height="{cv.h}" '
             f'viewBox="0 0 {cv.w} {cv.h}">' + rect(0, 0, cv.w, cv.h, fill=cv.bg) + body + tail + "</svg>")

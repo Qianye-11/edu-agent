@@ -5,12 +5,15 @@
 1. **每个可编辑槽都有盒子**，且坐标在设计画布（1280×720）内、字号就是 tokens 的阶梯值；
 2. **槽位命名 ↔ `clean_slides` 字段一一对应** —— 改字段名这里的用例会红（映射只有 `apply_slot` 一份）；
 3. **`annotate=False`（导出路径）时 SVG 里没有 `data-slot`** —— 导出与以前逐字节一致（`docs/25` D8）；
-4. **填充页的盒子**：`role=decoration` 的槽不生成盒子（老师用「对齐」标成装饰的，不许被改）。
+4. **填充页的盒子**：装饰槽也进 `fills`（R14 起老师点得着、改得动），默认值 = 模板原文字。
+
+R14 追加：槽位覆盖（拖动/改大小/层级/删除）的边界收口、`z` 的排序、以及"覆盖后预览=导出"。
 """
 
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -154,6 +157,99 @@ class ApplySlotTest(unittest.TestCase):
                          "上限跟 clean_slides 一致（400 字），别一边 400 一边 900")
 
 
+class OverrideTest(unittest.TestCase):
+    """R14 槽位覆盖：拖动/改大小/层级/删除的**收口**（认不出的丢、越界的夹、不悄悄改字）。"""
+
+    def test_clean_overrides_clamps_and_drops_unknown(self):
+        got = slide_deck._clean_overrides({
+            "block:0": {"dx": 9999, "dy": -9999, "dw": -9999, "dh": 9999, "size": 400,
+                        "lh": 9, "z": 99, "nope": 1, "align": "middle", "color": "2f6bff"},
+            "乱写的槽": {"dx": 10},
+            "title": {"dx": 0},
+        })
+        self.assertEqual(set(got), {"block:0"}, "认不出的槽位要丢；全零覆盖不留空壳")
+        item = got["block:0"]
+        self.assertEqual((item["dx"], item["dy"]), (200.0, -200.0), "位置夹到 ±200")
+        self.assertEqual((item["dw"], item["dh"]), (-400.0, 400.0), "宽高夹到 ±400")
+        self.assertEqual(item["size"], 200.0)
+        self.assertEqual(item["lh"], 3.0)
+        self.assertEqual(item["z"], 9, "层级夹到 ±9")
+        self.assertEqual(item["align"], "middle")
+        self.assertEqual(item["color"], "#2F6BFF", "颜色只认 #RRGGBB")
+        self.assertNotIn("nope", item)
+
+    def test_apply_override_merges_and_cancels_hidden(self):
+        s: dict = {}
+        slide_deck.apply_override(s, "block:1", {"dx": 40, "hidden": True})
+        self.assertEqual(s["slots"]["block:1"], {"dx": 40, "hidden": True})
+        slide_deck.apply_override(s, "block:1", {"hidden": False})
+        self.assertEqual(s["slots"]["block:1"], {"dx": 40}, "取消隐藏是把这个键去掉，不是留 False")
+        slide_deck.apply_override(s, "block:1", {"dx": 0})
+        self.assertNotIn("block:1", s.get("slots") or {}, "全零 = 回版式原位，不留覆盖")
+        bad = slide_deck.apply_override({}, "乱写的槽", {"dx": 1})
+        self.assertFalse(bad["ok"])
+        self.assertFalse(slide_deck.apply_override({}, "title", {})["ok"], "空 patch 要明确拒绝")
+
+    def test_clean_slides_keeps_slots_and_notes(self):
+        got = slide_deck.clean_slides([dict(DECK[1], slots={"block:0": {"dx": 12, "z": 1}},
+                                           notes="讲慢一点")])[0]
+        self.assertEqual(got["slots"]["block:0"], {"dx": 12.0, "z": 1})
+        self.assertEqual(got["notes"], "讲慢一点")
+
+    def test_override_moves_box_and_hides_slot(self):
+        moved = slide_deck.build_deck("tech-editorial",
+                                      [dict(DECK[1], slots={"block:0": {"dx": 60, "dy": -20}}),
+                                       dict(DECK[2], slots={"left:heading": {"hidden": True}})],
+                                      title="x", annotate=True)
+        boxes = {b["slot"]: b for b in moved["boxes"][0]}
+        plain = {b["slot"]: b for b in slide_deck.build_deck(
+            "tech-editorial", [DECK[1]], title="x", annotate=True)["boxes"][0]}
+        self.assertAlmostEqual(boxes["block:0"]["x"] - plain["block:0"]["x"], 60.0, places=1)
+        self.assertAlmostEqual(boxes["block:0"]["y"] - plain["block:0"]["y"], -20.0, places=1)
+        self.assertNotIn("left:heading", {b["slot"] for b in moved["boxes"][1]},
+                         "删掉的槽不该再有编辑框")
+        self.assertNotIn("共同点", moved["pages"][1], "删掉就该看不见（字还在数据里，能撤销）")
+
+
+class ZOrderTest(unittest.TestCase):
+    """R14 层级：`z` 只改**文字之间**的出图先后；没调过层级时一个字节都不许变。"""
+
+    SLIDE = {"layout": "bullets", "name": "要点",
+             "blocks": [{"label": "", "text": f"第{i}块"} for i in range(3)]}
+
+    def _base(self) -> str:
+        return slide_deck.build_deck("tech-editorial", [self.SLIDE], "x")["pages"][0]
+
+    def test_no_z_override_is_byte_identical(self):
+        zero = slide_deck.build_deck("tech-editorial", [dict(self.SLIDE, slots={"block:0": {"z": 0}})],
+                                     "x")["pages"][0]
+        self.assertEqual(zero, self._base(), "z=0 不算覆盖（老数据形状不变）")
+
+    def test_z_moves_text_to_the_end_and_leaves_no_marker(self):
+        top = slide_deck.build_deck("tech-editorial", [dict(self.SLIDE, slots={"block:0": {"z": 3}})],
+                                    "x")["pages"][0]
+        self.assertNotIn("data-zslot", top, "记号必须洗完（导出会被转换器看到）")
+        self.assertNotEqual(top, self._base())
+        self.assertLess(self._base().index("第0块"), self._base().index("第2块"))
+        self.assertGreater(top.index("第0块"), top.index("第2块"), "z=3 要盖到别人上面（画得更晚）")
+
+    def test_preview_and_export_have_the_same_text_order(self):
+        deck = [dict(self.SLIDE, slots={"block:1": {"z": -2}})]
+        preview = slide_deck.build_deck("tech-editorial", deck, "x", annotate=True)["pages"][0]
+        export = slide_deck.build_deck("tech-editorial", deck, "x")["pages"][0]
+        order = lambda svg: re.findall(r">([^<>]+)</text>", svg)   # noqa: E731
+        self.assertEqual(order(preview), order(export), "预览=导出（同一份渲染）")
+        self.assertNotIn("data-slot", export)
+
+    def test_boxes_carry_z_only_when_changed(self):
+        out = slide_deck.build_deck("tech-editorial",
+                                    [dict(self.SLIDE, slots={"block:0": {"z": 2}})],
+                                    "x", annotate=True)
+        zs = {b["slot"]: b.get("z") for b in out["boxes"][0]}
+        self.assertEqual(zs.get("block:0"), 2)
+        self.assertIsNone(zs.get("block:1"), "没调过的槽不带 z 字段")
+
+
 class RenderAnnotateFlagTest(unittest.TestCase):
     """`/api/slide/render` 的 annotate 开关（接口层）。"""
 
@@ -193,6 +289,19 @@ class RenderAnnotateFlagTest(unittest.TestCase):
             self.assertTrue(doc.get("slides_edited"))
             bad = ws.api_slide_slot(ws.SlideSlotReq(session_id=sid, index=99, slot="title", text="x"))
             self.assertEqual(getattr(bad, "status_code", 200), 400, "页号越界要明确报错")
+            # R14：只给 patch（拖动/删除）**不许碰文字** —— 没给 text ≠ 给空 text
+            p = ws.api_slide_slot(ws.SlideSlotReq(session_id=sid, index=1, slot="block:0",
+                                                  patch={"dx": 44, "dy": -8}))
+            self.assertTrue(p.get("ok"), p.get("error"))
+            self.assertEqual(p["slides"][1]["blocks"][0]["text"], "改过的第一块", "只挪位置不许改字")
+            self.assertEqual(p["slides"][1]["slots"]["block:0"], {"dx": 44.0, "dy": -8.0})
+            h = ws.api_slide_slot(ws.SlideSlotReq(session_id=sid, index=1, slot="block:1",
+                                                  patch={"hidden": True}))
+            self.assertTrue(h["slides"][1]["slots"]["block:1"]["hidden"])
+            self.assertEqual(ws._store.get_session_doc(sid)["slides"][1]["slots"]["block:1"],
+                             {"hidden": True}, "要真的存回会话（刷新后还在）")
+            empty = ws.api_slide_slot(ws.SlideSlotReq(session_id=sid, index=1, slot="block:0"))
+            self.assertEqual(getattr(empty, "status_code", 200), 400, "text 和 patch 都不给要拒绝")
         finally:
             if old is None:
                 os.environ.pop("EDU_DATA_DIR", None)
@@ -202,7 +311,7 @@ class RenderAnnotateFlagTest(unittest.TestCase):
 
 @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx 当模板")
 class FillBoxesTest(unittest.TestCase):
-    """模板填充页的盒子：**内容槽可编辑、装饰槽不生成盒子**（D5）。"""
+    """模板填充页的盒子：内容槽 + **装饰槽**（R14 起装饰槽也进 `fills`，默认值=模板原文字）。"""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="edu_fillbox_")
@@ -266,10 +375,14 @@ class FillBoxesTest(unittest.TestCase):
             self.assertLessEqual(float(geo["x"]) + float(geo["w"]), 1280.5)
             self.assertLessEqual(float(geo["y"]) + float(geo["h"]), 720.5)
             self.assertIn("capacity", f, "容量要带上（右栏要显示「能放多少字」，前端才好提示）")
-        # 装饰槽**不进 fills**（前端不给它画编辑框），只在 kept 里留着原文字
+        # R14：装饰槽**也进 fills**（带 kind='decoration'、text = 模板原样），前端才画得出编辑框；
+        # 默认一个字都不动（老师不碰 = 模板原样），改了/清空了才生效。
         self.assertIn("圆", page.get("kept") or [], "「圆」这种设计标签应该被判成装饰并保留")
-        self.assertFalse([f for f in page["fills"] if f.get("sample") == "圆"],
-                         "装饰槽不该出现在可编辑的 fills 里")
+        deco = [f for f in page["fills"] if f.get("kind") == "decoration" and f.get("sample") == "圆"]
+        self.assertEqual(len(deco), 1, "装饰槽要在 fills 里出现一次（可点着改/删）")
+        self.assertEqual(deco[0]["text"], "圆", "装饰槽默认值就是模板原文字（不填我们的内容）")
+        self.assertTrue(deco[0]["clear"], "装饰槽被清空时要真的清掉（删除语义）")
+        self.assertEqual(deco[0]["role"], "decoration")
 
     def test_mapping_by_shape_index_hits_exactly_one_slot(self):
         """多个同角色槽时，按 shape_index 只改一格 —— R7 发现的真问题（按 role 会把 4 格写成同一句）。"""

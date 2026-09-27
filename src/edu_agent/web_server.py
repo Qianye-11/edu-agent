@@ -1063,12 +1063,17 @@ class SlideRenderReq(BaseModel):
 
 
 class SlideSlotReq(BaseModel):
-    """页内编辑一格：改哪个槽、改成什么（槽位命名见 `slide_deck.apply_slot`）。"""
+    """页内编辑一格：改哪个槽、改成什么（槽位命名见 `slide_deck.apply_slot`）。
+
+    `patch`（R14）是"这一格被拖动/改过大小/改过层级/被删掉"的样子：
+    `{dx, dy, dw, dh, size, color, align, lh, z, hidden}` —— 与 `text` 可以一起给，也可以只给一个。
+    """
 
     session_id: str = ""
     index: int = 0                   # 第几页（0 起）
     slot: str = ""                   # 如 title / block:1 / left:bullet:0
-    text: str = ""
+    text: str | None = None          # 不给 = 只改样子（拖动/改大小/层级/删除）
+    patch: dict | None = None        # R14：几何/样式/层级/删除（只给 patch 就是"只挪字不改字"）
     slides: list[dict] | None = None  # 不给就取会话里那份
     title: str = ""
 
@@ -1295,9 +1300,19 @@ def api_slide_slot(body: SlideSlotReq):
     if not (0 <= idx < len(slides)):
         return JSONResponse({"ok": False, "error": f"页号越界：第 {idx + 1} 页（共 {len(slides)} 页）"},
                             status_code=400)
-    res = _deck.apply_slot(slides[idx], str(body.slot or ""), str(body.text or ""))
-    if not res.get("ok"):
-        return JSONResponse(res, status_code=400)
+    if body.text is None and not body.patch:
+        return JSONResponse({"ok": False, "error": "要给我 text（改字）或 patch（改样子）"}, status_code=400)
+    res: dict = {"ok": True, "slot": str(body.slot or "")}
+    if body.text is not None:                  # ⚠️ 没给 text ≠ 给空 text：空 text 是"清空/删除这一格"
+        res = _deck.apply_slot(slides[idx], str(body.slot or ""), str(body.text))
+        if not res.get("ok"):
+            return JSONResponse(res, status_code=400)
+    if body.patch:
+        # R14：拖动/改大小/层级/删除走 `slots` 覆盖（与改文字分开落，互不干扰）
+        pres = _deck.apply_override(slides[idx], str(body.slot or ""), dict(body.patch))
+        if not pres.get("ok"):
+            return JSONResponse(pres, status_code=400)
+        res["slots"] = pres.get("slots") or {}
     cleaned = _deck.clean_slides(slides)
     # ⚠️ 读-改-写：`set_session_doc` 是**整份替换**，直接塞 {"slides":…} 会把 title / markdown /
     #    md_sig / slides_edited 一起抹掉（"正文改过没"的判断就废了）。

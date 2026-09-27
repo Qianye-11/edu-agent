@@ -14,6 +14,8 @@ import time
 
 import httpx
 
+sys.stdout.reconfigure(encoding="utf-8")      # 控制台是 GBK 时 ✅/中文会 UnicodeEncodeError（踩过）
+
 BASE = "http://127.0.0.1:5174"
 TID = sys.argv[1] if len(sys.argv) > 1 else "红领巾小课堂：趣味学习乐园"
 MD = """# 3.3 幂函数

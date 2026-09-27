@@ -79,22 +79,37 @@
 { "template_id": "…", "confirm": true,
   "lesson": { … },                      // 或 "session_id": "…"（用会话里那份）
   "mapping": [
-    { "template_index": 1,
-      "fills": [ {"shape_index": 5, "text": "投影五个实例"},   // ← 推荐：精确指槽
-                 {"role": "title",   "text": "情境导入"} ] }   // ← 老写法：只改该角色第一个槽
+    { "page": 3,                                                    // ← 推荐：成品第几页（0 起）
+      "fills": [ {"shape_index": 5, "text": "投影五个实例"},          // ← 推荐：精确指槽
+                 {"shape_index": 5, "dx": 40, "dy": -12},           // 只挪位置，不改字
+                 {"shape_index": 7, "hidden": true},                // 清空这处文字（= 删）
+                 {"role": "title",   "text": "情境导入"} ] }          // ← 老写法：只改该角色第一个槽
   ] }
 ```
 
 规则：
 
-1. 只认草案里**已有的** `template_index`；`shape_index` 或 `role` 都认，其余忽略（不报错，也不乱写）；
-2. **`shape_index` 是精确指槽**（草案里每个 `fills[]` 都带它）：只改那一个框。
+1. 指页：**`page` = 成品第几页（0 起，草案 `pages[]` 的顺序）**，最稳。
+   `template_index` 是**母版页号**，仍然认，但"续页"是整页克隆母版来的 —— 第 1 页和第 3 页的
+   `template_index` 可能都是 0，只按它会改到**另一张**成品页上（R14 修的真问题）。重复母版页请用 `page`。
+2. 一条 `fills[]` 里 `shape_index` 或 `role` 都认，其余忽略（不报错，也不乱写）；
+3. **`shape_index` 是精确指槽**（草案里每个 `fills[]` 都带它）：只改那一个框。
    一页有多个同角色槽时**必须**用它 —— 按 `role` 只会改**第一个**（2026-09-27 收紧语义：
    从前"给 role 就把该角色所有槽写成同一句"，卡片式模板一页 4 个正文框会被一次写满，属于 bug）；
-3. 文字超容量的会被**适度压缩**（去括号补充 → 从末尾减分句 → 最后才硬截），并在 `adjustments` 里留痕
-   （`by` 字段值由 `agent-mapping` 改为 `mapping`：同一套执行代码现在也给老师的页内编辑用）；
-4. 没给到的页保持草案原样；
-5. 返回值里的 `checks`（内容零丢失 / 页数符合策略 / 容量自查）就是这次的验收结论。
+4. 一条 fill 能带的键（R14 新增后三个）：
+   | 键 | 含义 |
+   |---|---|
+   | `text` | 换成这段文字；`""` = 清空这一格；**不给 `text` 键 = 不改字**（只挪位置不会把字抹掉） |
+   | `dx` `dy` `dw` `dh` | 拖动/改大小，**设计像素**（1280×720 坐标系），落到 pptx 时按模板画布自动换算 |
+   | `hidden` | 等价于 `text: ""`（清空这处文字） |
+5. 文字超容量的会被**适度压缩**（去括号补充 → 从末尾减分句 → 最后才硬截），并在 `adjustments` 里留痕
+   （`by` 字段值由 `agent-mapping` 改为 `mapping`：同一套执行代码现在也给老师的页内编辑用）。
+   ⚠️ `kind` 为 `decoration`/`page-number` 的**装饰槽不压缩**（页码/设计标签就几个字，压出来的不是你要的）；
+6. **装饰槽与页码**：草案 `fills[]` 里 `kind: "decoration"` 是模板自带的设计标签（默认 `text` = 模板原文字），
+   `kind: "page-number"` 是按成品页号算好的页码。它们**默认原样不动**（你不给这一条，导出的 pptx 与模板逐字节一致），
+   你给了 `text`/`hidden` 才生效；
+7. 没给到的页保持草案原样；
+8. 返回值里的 `checks`（内容零丢失 / 页数符合策略 / 容量自查）就是这次的验收结论。
 
 ---
 
@@ -121,7 +136,9 @@
 |---|---|---|
 | `edu-agent.fill-plan.v1` | 2026-09-27 | 首版：`GET /api/slide/fill/plan`、`POST /api/slide/fill`（`mapping`）、`POST /api/slide/deck` |
 | `edu-agent.fill-plan.v1` | 2026-09-27 | `mapping` 细化：新增 **`shape_index` 精确指槽**；只给 `role` 时语义收紧为"该角色第一个槽"；`adjustments[].by` 由 `agent-mapping` 改为 `mapping`。⚠️ 若你在用只给 `role` 的写法**且依赖"一次改满同角色所有槽"**，请改成逐槽给 `shape_index`（那种行为会串格，是 bug 不是特性） |
+| `edu-agent.fill-plan.v1` | 2026-09-27 | R14：`mapping[]` 新增 **`page`（成品页号，推荐）**；一条 fill 新增 `dx/dy/dw/dh`（拖动/改大小）与 `hidden`（清空）；`fills[]` 新增 `kind`（`decoration`/`page-number`），装饰槽也进 `fills`（默认原样不动）。**旧写法全部继续可用**（`template_index` 取该母版页的第一张成品页；只改字不影响几何） |
 | — | 2026-09-27 | 新增编辑器用的读端：`POST /api/slide/render` 的 `annotate: true` → 响应多一个 `boxes`（每页 `[{slot,kind,x,y,w,h,size,align}]`，1280×720 设计像素）。**导出路径不传它**，所以导出的 SVG 不变 |
+| — | 2026-09-27 | R14：`POST /api/slide/slot` 新增可选 `patch`（`{dx,dy,dw,dh,size,color,align,lh,z,hidden}`，落进 `slides[i].slots[槽位]`）；`text` 变成可选（**不给 = 只改样子、不改字**；给 `""` = 清空那一格）。`boxes[]` 在老师调过层级时多一个 `z` |
 
 ---
 

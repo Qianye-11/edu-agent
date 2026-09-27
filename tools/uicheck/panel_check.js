@@ -88,6 +88,9 @@ function makeDom(opts) {
   const fills = [];
   const deletes = [];
   const slots = [];
+  /* R14：桩要像真服务端那样把 `patch`（拖动/改大小/层级/删除）应用到盒子上 ——
+     真服务端在 ppt_svg.Canvas.box 里套覆盖，预览才会跟着动；桩不套就成了"假链路"（测不出回归）。 */
+  const slotPatch = {};
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => { if (!/Could not load script/.test(e.message || '')) errors.push(e.message); });
   vc.on('error', (...a) => errors.push(a.join(' ')));
@@ -163,17 +166,34 @@ function makeDom(opts) {
           try { body0 = JSON.parse(op.body); n = (body0.slides || []).length || 3;
                 wantAnnotate = !!body0.annotate; } catch (e) {}
           renderCalls.push(n);
-          /* 真实接口只在 annotate=true 时回 boxes —— 桩也照这个规矩来（免得测出一条假链路） */
+          /* 真实接口只在 annotate=true 时回 boxes —— 桩也照这个规矩来（免得测出一条假链路）。
+             覆盖有两处来源（真服务端也一样）：请求里 slides[i].slots（老师刚改的）+ 之前 patch 过的。 */
+          const base = [
+            { slot: 'title', kind: 'text', align: 'start', x: 72, y: 60, w: 1136, h: 80, size: 40 },
+            { slot: 'block:0', kind: 'text', align: 'start', x: 96, y: 240, w: 1112, h: 60, size: 24 },
+            { slot: 'block:1', kind: 'text', align: 'start', x: 96, y: 340, w: 1112, h: 60, size: 24 },
+          ];
           const boxes = wantAnnotate
-            ? Array.from({ length: n }, () => ([
-                { slot: 'title', kind: 'text', align: 'start', x: 72, y: 60, w: 1136, h: 80, size: 40 },
-                { slot: 'block:0', kind: 'text', align: 'start', x: 96, y: 240, w: 1112, h: 60, size: 24 },
-                { slot: 'block:1', kind: 'text', align: 'start', x: 96, y: 340, w: 1112, h: 60, size: 24 },
-              ]))
+            ? Array.from({ length: n }, (_, pi) => base.map((b) => {
+                /* 覆盖只认**这次请求里带的 slides**（真服务端就是这么做的：build_deck 用 slides[i].slots）；
+                    没带 slides 的请求（只回传了一格文字）才退回 patch 记录。 */
+                const sentSlides = body0.slides;
+                const sent = (((sentSlides || [])[pi] || {}).slots || {})[b.slot];
+                const p = sentSlides ? Object.assign({}, sent)
+                                     : Object.assign({}, slotPatch[pi + ':' + b.slot] || {});
+                if (!Object.keys(p).length) return { ...b };
+                if (p.hidden) return null;
+                return { ...b, x: b.x + (p.dx || 0), y: b.y + (p.dy || 0),
+                         w: Math.max(40, b.w + (p.dw || 0)), h: Math.max(24, b.h + (p.dh || 0)),
+                         ...(p.dx ? { dx: p.dx } : {}), ...(p.dy ? { dy: p.dy } : {}),
+                         ...(p.dw ? { dw: p.dw } : {}), ...(p.dh ? { dh: p.dh } : {}),
+                         ...(p.z ? { z: p.z } : {}) };
+              }).filter(Boolean))
             : undefined;
           return new Response(JSON.stringify({ ok: true, enabled: true, theme_id: THEMES.default,
             pages: Array.from({ length: n }, (_, i) => svgPageAnnotated(i, wantAnnotate)),
             ...(boxes ? { boxes } : {}),
+            canvas: { w: 1280, h: 720, margin: 72 },
             warnings: o.slideWarn ? ['第 2 页：模块 6 个 > 上限 5 → 建议拆页（本页只排了前 5 个，其余请另起一页）'] : [],
             layouts: [], stats: { pages: n } }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -237,8 +257,22 @@ function makeDom(opts) {
           let b = {};
           try { b = JSON.parse(op.body); } catch (e) {}
           slots.push(b);
+          /* 桩：把 patch 记下来（下次 render 时套到 boxes 上），并回一份"已落库"的 slides */
+          if (b.patch && b.slot) {
+            const k = b.index + ':' + b.slot;
+            slotPatch[k] = Object.assign({}, slotPatch[k] || {}, b.patch);
+            if (b.patch.hidden === false) delete slotPatch[k].hidden;
+          }
+          const out = (b.slides || DOC_STUB.slides).map((s, i) => {
+            if (i !== b.index || !b.patch || !b.slot) return s;
+            const slots2 = Object.assign({}, s.slots || {});
+            const next = Object.assign({}, slots2[b.slot] || {}, b.patch);
+            Object.keys(next).forEach((k2) => { if (!next[k2]) delete next[k2]; });
+            if (Object.keys(next).length) slots2[b.slot] = next; else delete slots2[b.slot];
+            return Object.assign({}, s, { slots: slots2 });
+          });
           return new Response(JSON.stringify({ ok: true, slot: b.slot, index: b.index,
-            slides: b.slides || DOC_STUB.slides, pages: (DOC_STUB.slides || []).length,
+            slides: out, pages: out.length,
             warnings: [], session_id: 'stub' }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
@@ -341,11 +375,20 @@ async function openDocPanel(doc) {
       parseFloat((boxes[0].style.width || '0')) <= 1280.5,
       boxes[0] ? boxes[0].getAttribute('style').slice(0, 60) : '(无)');
 
-    /* ① 点页面上的字 → 直接改 → 回传 /api/slide/slot */
+    /* ① 单击 = 选中（WPS 习惯）→ 双击 = 改字 → 回传 /api/slide/slot */
     const target = Array.from(boxes).find((b) => b.dataset.slot === 'title') || boxes[0];
     const slotName = target.dataset.slot;
     target.click(); await sleep(300);
-    check('点一下就进入编辑态（同位置出现输入框）',
+    check('单击是"选中"（出现选框 #dpSel），不再直接进编辑态',
+      !!doc.querySelector('#wzDocPane #dpSel') && !target.classList.contains('dp-editing'));
+    check('选框有 8 个手柄（WPS 那样）',
+      doc.querySelectorAll('#wzDocPane #dpSel .dp-h').length === 8,
+      doc.querySelectorAll('#wzDocPane #dpSel .dp-h').length + ' 个');
+    check('操作条显示选中的是哪一格', txt(doc.getElementById('dpSelName')) === slotName,
+      txt(doc.getElementById('dpSelName')));
+    target.dispatchEvent(new w.MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    await sleep(200);
+    check('双击进入编辑态（同位置出现输入框）',
       target.getAttribute('contenteditable') === 'true' && target.classList.contains('dp-editing'));
     check('编辑时原来那行 SVG 文字被藏起来（不会重影）',
       (() => { const t = doc.querySelector('#wzDocPane #dpCanvas svg [data-slot="' + slotName + '"]');
@@ -368,6 +411,129 @@ async function openDocPanel(doc) {
       slots.length > before && slots[slots.length - 1].slot === slotName &&
       slots[slots.length - 1].text !== '页内改过的标题',
       JSON.stringify(slots[slots.length - 1] || {}));
+
+    /* ②b R14：选中 → 拖动 / 手柄 / 方向键 / 层级 / 删除 / 回原位（本轮主验收） */
+    {
+      const scale = parseFloat(doc.querySelector('#wzDocPane .dp-slidewrap').dataset.scale || '0.375');
+      const boxOf = (s) => doc.querySelector('#wzDocPane .dp-box[data-slot="' + s + '"]');
+      const lastPatch = () => (slots.filter((s) => s.patch).pop() || {}).patch || {};
+      const drag = async (el, dxPx, dyPx, opt) => {
+        const o2 = opt || {};
+        el.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true,
+          clientX: 200, clientY: 200, button: 0 }));
+        doc.dispatchEvent(new w.MouseEvent('mousemove', { bubbles: true, cancelable: true,
+          clientX: 200 + dxPx, clientY: 200 + dyPx, shiftKey: !!o2.shift, altKey: !!o2.alt }));
+        return o2;
+      };
+      const drop = async () => {
+        doc.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true }));
+        await sleep(500);
+      };
+
+      check('有吸附开关与层级/删除按钮',
+        !!doc.getElementById('dpSnap') && !!doc.getElementById('dpUp') &&
+        !!doc.getElementById('dpDown') && !!doc.getElementById('dpDel') && !!doc.getElementById('dpReset'));
+      doc.querySelector('#wzDocPane #dpCanvas').dispatchEvent(
+        new w.MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 5, clientY: 5, button: 0 }));
+      await sleep(120);
+      check('点空白取消选中；没选中时层级/删除按钮是灰的',
+        !doc.querySelector('#wzDocPane #dpSel') && doc.getElementById('dpUp').disabled === true &&
+        doc.getElementById('dpDel').disabled === true,
+        'sel=' + txt(doc.getElementById('dpSelName')));
+
+      /* 吸附先关掉：位置要能对得上账（dx = 屏幕位移 ÷ 缩放） */
+      doc.getElementById('dpSnap').click(); await sleep(100);
+      check('吸附可以关（按钮如实显示）', /吸附：关/.test(txt(doc.getElementById('dpSnap'))),
+        txt(doc.getElementById('dpSnap')));
+      const b0 = boxOf('block:0');
+      b0.click(); await sleep(150);
+      const x0 = parseFloat(b0.style.left);
+      await drag(b0, 60 * scale, 30 * scale); await drop();
+      check('拖动把 dx/dy 回传 /api/slide/slot（设计像素）',
+        Math.abs(lastPatch().dx - 60) <= 1.5 && Math.abs(lastPatch().dy - 30) <= 1.5,
+        JSON.stringify(lastPatch()));
+      const b0b = boxOf('block:0');
+      check('预览里的盒子跟着挪了（服务端 boxes 带覆盖）',
+        Math.abs(parseFloat(b0b.style.left) - (x0 + 60)) <= 1.5,
+        x0 + ' → ' + b0b.style.left);
+      check('拖动落进 slides[i].slots（存的是覆盖，不重写字）',
+        lastPatch() && slots.filter((s) => s.patch).length > 0);
+
+      /* 拖手柄改大小：只动 dw/dh */
+      const nBefore = slots.length;
+      b0b.click(); await sleep(150);
+      const hE = doc.querySelector('#wzDocPane #dpSel .dp-h-e');
+      check('选框上有东侧手柄', !!hE);
+      hE.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true,
+        clientX: 300, clientY: 300, button: 0 }));
+      doc.dispatchEvent(new w.MouseEvent('mousemove', { bubbles: true, cancelable: true,
+        clientX: 300 + 40 * scale, clientY: 300 }));
+      doc.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true }));
+      await sleep(500);
+      check('拖手柄改大小 → dw 回传（上一次的 dx 保持不变）',
+        slots.length > nBefore && Math.abs(lastPatch().dw - 40) <= 1.5 &&
+        Math.abs(lastPatch().dx - 60) <= 1.5 && !lastPatch().dh,
+        JSON.stringify(lastPatch()));
+
+      /* 吸打开回来：拖到离安全边距 2px 的地方要被吸到 72 */
+      doc.getElementById('dpSnap').click(); await sleep(100);
+      const b1 = boxOf('block:1');
+      b1.click(); await sleep(150);
+      const x1 = parseFloat(b1.style.left);
+      await drag(b1, (72 - x1 + 2) * scale, 0);
+      const guides = doc.querySelectorAll('#wzDocPane .dp-gl').length;
+      await drop();
+      check('吸附时画出参考线（.dp-gl）', guides > 0, guides + ' 条');
+      check('拖到边距附近被吸到 72px（安全边距）',
+        Math.abs(parseFloat(boxOf('block:1').style.left) - 72) <= 0.5,
+        x1 + ' → ' + boxOf('block:1').style.left + ' · patch=' + JSON.stringify(lastPatch()));
+
+      /* 方向键微调：1px；Shift = 10px（dx 是"相对版式原位的偏移"，所以比的是增量） */
+      b1.click(); await sleep(120);
+      const dxBefore = parseFloat(boxOf('block:1').dataset.dx || '0');
+      const nKey = slots.length;
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await sleep(400);
+      check('方向键微调 1px', slots.length > nKey && Math.abs(lastPatch().dx - (dxBefore + 1)) <= 0.6,
+        'dx ' + dxBefore + ' → ' + JSON.stringify(lastPatch()));
+      const dyBefore = parseFloat(boxOf('block:1').dataset.dy || '0');
+      const nKey2 = slots.length;
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true }));
+      await sleep(400);
+      check('Shift+方向键微调 10px', slots.length > nKey2 && Math.abs(lastPatch().dy - (dyBefore + 10)) <= 0.6,
+        'dy ' + dyBefore + ' → ' + JSON.stringify(lastPatch()));
+
+      /* 层级：上移一层 → z 变大 */
+      const nZ = slots.length;
+      doc.getElementById('dpUp').click(); await sleep(400);
+      check('上移一层写进 z（服务端按 z 重排出图顺序）',
+        slots.length > nZ && lastPatch().z === 1, JSON.stringify(lastPatch()));
+      doc.getElementById('dpDown').click(); await sleep(400);
+      check('下移一层把 z 降回去', lastPatch().z === 0, JSON.stringify(lastPatch()));
+
+      /* 回原位：覆盖清空 */
+      doc.getElementById('dpReset').click(); await sleep(400);
+      check('「回原位」把 dx/dy 归零（覆盖被清掉）',
+        lastPatch().dx === 0 && lastPatch().dy === 0 && lastPatch().dw === 0,
+        JSON.stringify(lastPatch()));
+
+      /* 删除：hidden（不画、字还在、能撤销） */
+      b1.click(); await sleep(120);
+      const nDel = slots.length;
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+      await sleep(500);
+      check('Delete 删掉这一处（回传 hidden）',
+        slots.length > nDel && slots[slots.length - 1].patch &&
+        slots[slots.length - 1].patch.hidden === true,
+        JSON.stringify(slots[slots.length - 1] || {}));
+      check('删掉的格子从页面上消失（服务端不再给它盒子）',
+        !doc.querySelector('#wzDocPane .dp-box[data-slot="block:1"]'));
+      doc.getElementById('dpUndo').click(); await sleep(600);
+      check('撤销能把删掉的文字找回来',
+        !!doc.querySelector('#wzDocPane .dp-box[data-slot="block:1"]'),
+        'block:1 ' + (doc.querySelector('#wzDocPane .dp-box[data-slot="block:1"]') ? '在' : '没了') +
+        ' · 最近回传 ' + JSON.stringify(slots.slice(-2)));
+    }
 
     /* ③ 本页属性条：换版式 / 改时长 / 加一块 */
     const lay = doc.getElementById('dpLayout');
@@ -473,36 +639,73 @@ async function openDocPanel(doc) {
     check('填充提示（如"删掉多余页"）显示在结果条',
       /删掉模板多余的内容页/.test(txt(doc.getElementById('dzExportResult'))));
 
-    /* R11：**模板填充页也能点着改**（老师要求"ppt 有关的编辑都要能编辑"）——
-       盒子来自填充计划的 fills[].geo；改完先记着、点「应用修改」才重填（重填要 3~6 秒）。 */
+    /* R11/R14：**模板填充页也能点着改**（老师要求"ppt 有关的编辑都要能编辑"）——
+       盒子来自填充计划的 fills[].geo；改完先记着、点「应用修改」才重填（重填要 3~6 秒）。
+       R14 起**装饰槽（页码/设计标签）也有盒子**：老师："任何文字都要能改"。 */
     const fboxes = doc.querySelectorAll('#wzDocPane .dp-boxlayer .dp-box');
-    check('填充页上也有可编辑盒子（内容槽才有）', fboxes.length > 0, fboxes.length + ' 个');
+    check('填充页上每一处文字都有可编辑盒子（含装饰槽）', fboxes.length === 3, fboxes.length + ' 个');
     check('填充页的盒子带 shape_index 槽位名（回写要用它精确指槽）',
       Array.from(fboxes).every((b) => /^fill:\d+$/.test(b.dataset.slot)),
       Array.from(fboxes).map((b) => b.dataset.slot).join(','));
+    const decoBox = doc.querySelector('#wzDocPane .dp-box.dp-deco');
+    check('装饰槽（页码/设计标签）也画出盒子并标出来', !!decoBox && decoBox.dataset.slot === 'fill:9',
+      decoBox ? decoBox.dataset.slot : '(无装饰盒)');
+    decoBox.dispatchEvent(new w.MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    await sleep(250);
+    check('点开装饰槽能看到模板原来的字（老师才知道自己在改什么）',
+      decoBox.textContent === '圆', JSON.stringify(decoBox.textContent));
+    decoBox.textContent = '改过的设计标签';
+    decoBox.dispatchEvent(new w.Event('blur', { bubbles: true }));
+    await sleep(300);
+
     const fbox = fboxes[0];
     const fslot = fbox.dataset.slot;
-    fbox.click(); await sleep(300);
+    fbox.dispatchEvent(new w.MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    await sleep(250);
     fbox.textContent = '填充页改过的字';
     fbox.dispatchEvent(new w.Event('blur', { bubbles: true }));
     await sleep(400);
     const applyBtn = doc.getElementById('dpFillApply');
     check('改完先"记着"（按钮上出现待应用数量，不立刻重填）',
-      !!applyBtn && applyBtn.disabled === false && /待应用/.test(txt(doc.getElementById('dpFillPending')) || '')
-        || /应用修改（\d+）/.test(txt(applyBtn)),
+      !!applyBtn && applyBtn.disabled === false && (/待应用/.test(txt(doc.getElementById('dpFillPending')) || '')
+        || /应用修改（\d+）/.test(txt(applyBtn))),
       applyBtn ? txt(applyBtn) + ' / ' + txt(doc.getElementById('dpFillPending')) : '(无按钮)');
+
+    /* R14：填充页也能拖 —— 位置先记着，一起交给「应用修改」 */
+    const fScale = parseFloat(doc.querySelector('#wzDocPane .dp-slidewrap').dataset.scale || '0.375');
+    const fx0 = parseFloat(fbox.style.left);
+    fbox.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true,
+      clientX: 400, clientY: 400, button: 0 }));
+    doc.dispatchEvent(new w.MouseEvent('mousemove', { bubbles: true, cancelable: true,
+      clientX: 400 + 20 * fScale, clientY: 400 }));
+    doc.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true }));
+    await sleep(300);
+    check('填充页拖动也先"记着"（不立刻重填）',
+      /应用修改（\d+）/.test(txt(doc.getElementById('dpFillApply'))) &&
+      Math.abs(parseFloat(fbox.style.left) - (fx0 + 20)) <= 1.5,
+      fx0 + ' → ' + fbox.style.left + ' / ' + txt(doc.getElementById('dpFillApply')));
+
+    /* 装饰槽也能改：改页码那种"模板残留"从根上没了 */
+    const decoText = (doc.querySelector('#wzDocPane .dp-box[data-slot="fill:9"]') || {}).textContent || '';
     const nFills = fills.length;
     applyBtn.click();
     for (let i = 0; i < 16 && fills.length <= nFills; i++) await sleep(300);
     const lastFill = fills[fills.length - 1] || {};
     const rows = lastFill.mapping || [];
-    const hit = rows.reduce((acc, r) => acc.concat((r.fills || []).map((f) => ({ ...f, ti: r.template_index }))), []);
-    check('点「应用修改」→ 用 mapping 只回传改动的那一格',
-      fills.length > nFills && hit.length === 1 &&
-      String(hit[0].shape_index) === fslot.replace('fill:', '') && hit[0].text === '填充页改过的字',
-      JSON.stringify(hit[0] || {}));
+    const hit = rows.reduce((acc, r) => acc.concat((r.fills || []).map((f) => ({ ...f, page: r.page }))), []);
+    const titleRow = hit.find((h) => String(h.shape_index) === fslot.replace('fill:', '')) || {};
+    const decoRow = hit.find((h) => String(h.shape_index) === '9') || {};
+    check('点「应用修改」→ 用 mapping 回传改动的那几格（文字 + 位置）',
+      fills.length > nFills && titleRow.text === '填充页改过的字' && Math.abs(titleRow.dx - 20) <= 1.5,
+      JSON.stringify(hit));
+    check('装饰槽的文字改动也回传（页码/设计标签终于能改了）',
+      decoRow.text === '改过的设计标签', JSON.stringify(decoRow));
+    check('mapping 用 page（成品页号）指页，不用 template_index（续页会同号改错页）',
+      hit.length > 0 && hit.every((h) => h.page === 0) &&
+      !(lastFill.mapping || []).some((r) => 'template_index' in r),
+      JSON.stringify((lastFill.mapping || []).map((r) => Object.keys(r))));
     check('重填后待应用清零', !/应用修改（\d+）/.test(txt(doc.getElementById('dpFillApply'))),
-      txt(doc.getElementById('dpFillApply')));
+      txt(doc.getElementById('dpFillApply')) + ' · decoText=' + JSON.stringify(decoText));
 
     /* R9：删掉导错的演示模板（两下确认 → 发一次 delete，列表回到"只借内置主题"） */
     const del = doc.getElementById('dpTplDel');

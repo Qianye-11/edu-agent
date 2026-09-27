@@ -524,6 +524,149 @@ class PageNumberTest(_FillCase):
         self.assertIn("01 / 02", hit[0], "要列出具体保留了哪些字")
 
 
+class EditableDecorationTest(_FillCase):
+    """R14：模板里的**任何文字**（页码、设计标签）都要能点着改/删，且默认一个字都不动。
+
+    老师的原话是"我要真的像 wps 一样可以去编辑 ppt"，其中"模板原来的内容没有被清除"那类
+    疑心最重 —— 所以这里既要证"默认不动"，也要证"改了/删了**真的**落到 pptx 里"。
+    """
+
+    def _labelled_template(self) -> Path:
+        """一页内容页：标题 + 正文 + 设计标签「快乐成长」+ 页码「01 / 02」。
+
+        为什么自己造：仓库样例模板里没有"小标签 + 页码"这种组合，而这两类正是老师最想改的。
+        """
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+
+        src = Path(self.tmp.name) / "labelled.pptx"
+        prs = Presentation()
+        for _ in range(2):
+            s = prs.slides.add_slide(prs.slide_layouts[6])
+            t = s.shapes.add_textbox(Inches(0.6), Inches(0.4), Inches(8), Inches(0.9))
+            t.text_frame.text = "模板标题占位"
+            t.text_frame.paragraphs[0].runs[0].font.size = Pt(32)
+            b = s.shapes.add_textbox(Inches(0.6), Inches(2), Inches(8), Inches(3))
+            b.text_frame.text = "模板正文示例文字"
+            b.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+            lab = s.shapes.add_textbox(Inches(0.6), Inches(1.4), Inches(1.6), Inches(0.4))
+            lab.text_frame.text = "快乐成长"
+            lab.text_frame.paragraphs[0].runs[0].font.size = Pt(12)
+            n = s.shapes.add_textbox(Inches(8.6), Inches(6.6), Inches(1.1), Inches(0.4))
+            n.text_frame.text = "01 / 02"
+            n.text_frame.paragraphs[0].runs[0].font.size = Pt(12)
+        prs.save(str(src))
+        return src
+
+    def _shape_texts(self, path: str) -> list[str]:
+        from pptx import Presentation
+        return [(sh.text_frame.text or "").strip() for sh in Presentation(path).slides[0].shapes
+                if getattr(sh, "has_text_frame", False)]
+
+    @staticmethod
+    def _fill_of(page: dict, shape_index: int) -> dict:
+        return next(f for f in page["fills"] if f.get("shape_index") == shape_index)
+
+    def _deco_page(self, plan: dict) -> tuple[int, dict, dict]:
+        """第一个带设计标签「快乐成长」的成品页 → (页号, 计划页, 那条 fill)。"""
+        for i, p in enumerate(plan["pages"]):
+            hit = next((f for f in p["fills"] if f.get("sample") == "快乐成长"), None)
+            if hit:
+                return i, p, hit
+        raise AssertionError("没有一页带上设计标签：%s" % [len(p["fills"]) for p in plan["pages"]])
+
+    def test_decoration_slots_are_editable_and_numbered_once(self):
+        tid = st.import_pptx(self._labelled_template(), name="标签模板")["id"]
+        plan = sf.plan(tid, DECK, "标签")
+        _i, page, lab = self._deco_page(plan)
+        deco = [f for f in page["fills"] if f.get("kind") == "decoration"]
+        self.assertTrue(deco, "设计标签必须进 fills（否则老师点不着）")
+        self.assertEqual(lab["text"], "快乐成长", "默认值 = 模板原文字（不填我们的内容）")
+        self.assertEqual(lab["role"], "decoration")
+        self.assertTrue(lab["clear"], "老师清空它时要真的清掉（删除语义）")
+        nums = [f for f in page["fills"] if f.get("kind") == "page-number"]
+        self.assertEqual(len(nums), 1, "页码只该有一条（R14 起原地改，不再追加第二条）")
+        shapes = [f.get("shape_index") for f in page["fills"]]
+        self.assertEqual(len(set(shapes)), len(shapes), "同一个形状不许出现两条 fill")
+        self.assertGreater(float(lab["geo"]["w"]), 0, "装饰槽要带 geo（前端才画得出框）")
+
+    def test_mapping_by_page_hits_the_right_copy(self):
+        """续页与首页共用同一个 `template_index` 时，`page` 必须精确指到那一页（R14 修正）。
+
+        真踩过：只按 `template_index` 找 → 改第 1 页会落到第 3 页（老师："我改的地方没变、别处变了"）。
+        """
+        tid = st.import_pptx(self._labelled_template(), name="标签模板")["id"]
+        plan = sf.plan(tid, DECK, "标签")
+        shared: dict = {}
+        for i, p in enumerate(plan["pages"]):
+            shared.setdefault(p.get("template_index"), []).append(i)
+        pair = next((v for v in shared.values() if len(v) > 1), None)
+        self.assertTrue(pair, "这条用例要走到「同一母版页出多张成品页」的分支：%s" % shared)
+        first, second = pair[0], pair[-1]
+        shape = self._deco_page(plan)[2]["shape_index"]
+        sf.apply_mapping(plan, [{"page": first,
+                                 "fills": [{"shape_index": shape, "text": "只改这一页"}]}])
+        self.assertEqual(self._fill_of(plan["pages"][first], shape)["text"], "只改这一页")
+        self.assertNotEqual(self._fill_of(plan["pages"][second], shape)["text"], "只改这一页",
+                            "同一母版的另一张成品页不许被连带改掉")
+
+    def test_default_run_keeps_template_text_untouched(self):
+        tid = st.import_pptx(self._labelled_template(), name="标签模板")["id"]
+        out = sf.fill_pptx(tid, DECK, "标签", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        texts = self._shape_texts(out["file"])
+        self.assertIn("快乐成长", texts, "老师没碰它 → 模板设计标签一个字都不许动")
+
+    def test_teacher_can_rewrite_and_delete_any_text(self):
+        tid = st.import_pptx(self._labelled_template(), name="标签模板")["id"]
+        the_plan = sf.plan(tid, DECK, "标签")
+        i, _page, lab = self._deco_page(the_plan)
+        shape = lab["shape_index"]
+        sf.apply_mapping(the_plan, [{"page": i, "fills": [{"shape_index": shape, "text": "改过的标签"}]}])
+        texts = self._shape_texts(str(self._fill_with(the_plan, tid)))
+        self.assertIn("改过的标签", texts, "老师改过的装饰字要真的写进 pptx")
+        self.assertNotIn("快乐成长", texts)
+
+        sf.apply_mapping(the_plan, [{"page": i, "fills": [{"shape_index": shape, "hidden": True}]}])
+        texts2 = self._shape_texts(str(self._fill_with(the_plan, tid)))
+        self.assertNotIn("改过的标签", texts2, "清空 = 删掉这处文字")
+        self.assertNotIn("快乐成长", texts2)
+
+    def test_geometry_patch_moves_the_shape_in_pptx(self):
+        from pptx import Presentation
+
+        tid = st.import_pptx(self._labelled_template(), name="标签模板")["id"]
+        the_plan = sf.plan(tid, DECK, "标签")
+        i, _page, lab = self._deco_page(the_plan)
+        shape = lab["shape_index"]
+        prs0 = Presentation(str(self._fill_with(the_plan, tid)))
+        x0, y0 = prs0.slides[i].shapes[shape].left, prs0.slides[i].shapes[shape].top
+        sf.apply_mapping(the_plan, [{"page": i, "fills": [{"shape_index": shape, "dx": 100, "dy": -40}]}])
+        prs1 = Presentation(str(self._fill_with(the_plan, tid)))
+        moved = prs1.slides[i].shapes[shape]
+        k = prs1.slide_width / 1280.0
+        self.assertAlmostEqual(moved.left - x0, round(100 * k), delta=2,
+                               msg="dx 要按模板自己的画布换算（设计像素 → EMU）")
+        self.assertAlmostEqual(moved.top - y0, round(-40 * k), delta=2)
+        self.assertEqual((moved.width, moved.height),
+                         (prs0.slides[i].shapes[shape].width, prs0.slides[i].shapes[shape].height),
+                         "只拖不缩：宽高不许变")
+
+    # -- 小工具：把**算好并改过的计划**落成 pptx（走与 `fill_pptx` 同一条 `_apply`）
+
+    def _fill_with(self, the_plan: dict, tid: str) -> Path:
+        from pptx import Presentation
+
+        import time as _time
+        src = st.root() / st._slug(tid) / "template.pptx"          # noqa: SLF001
+        out = Path(self.tmp.name) / ("filled-%d.pptx" % _time.time_ns())
+        out.write_bytes(src.read_bytes())
+        prs = Presentation(str(out))
+        sf._apply(prs, the_plan, [])                               # noqa: SLF001
+        prs.save(str(out))
+        return out
+
+
 class NoCoverDeckMappingTest(_FillCase):
     """回归 2026-09-27：模板有封面页、会话没有封面时，**不能把正文写进封面页**。
 

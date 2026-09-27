@@ -4,8 +4,9 @@
 为什么要这个脚本：`docs/25` §8.1 记着"工作区自动截图没打通"—— 应用逻辑都在 IIFE 里，
 脚本没法"先切到工作台再拍"。R9 加了只读调试钩子 `window.__edu`，这里就用它。
 
-用法（先启动服务）：  .venv/Scripts/python.exe tools/wz_shot.py [--seed] [页签...]
+用法（先启动服务）：  .venv/Scripts/python.exe tools/wz_shot.py [--seed] [--pick=槽位] [页签...]
 页签取值：plan / doc / md / slides（默认四个都拍）；`--seed` 塞一份老编排数据，让工作区里有 5 个环节。
+`--pick=block:0`（默认自动挑第一个）会在幻灯片页签上**选中一格**再拍 —— 选框 + 8 个手柄要人眼看得见。
 """
 import subprocess
 import sys
@@ -26,7 +27,7 @@ BASE = "http://127.0.0.1:5174/"
 #    死循环 → Edge 一直不结束（踩过：整个截图进程 5 分钟超时）
 SHOT_JS = """
 <script>(function(){
-  var task = %(task)s, busy = false, n = 0;
+  var task = %(task)s, busy = false, n = 0, pick = %(pick)s;
   function step(){
     if(busy) return; busy = true;
     try{
@@ -45,6 +46,16 @@ SHOT_JS = """
       var st = document.getElementById('sidePanel');
       if(st && st.style.display !== 'none') st.style.display = 'none';
       window.scrollTo(0,0);
+      /* R14：选中一格再拍（选框 + 8 手柄）。判断"是否已经是目标态"是硬要求 ——
+         否则 observer 被自己的改动再次触发 → 死循环 → Edge 不退出（踩过）。 */
+      if(task === 'slides' && pick){
+        var cv = document.querySelector('#wzDocPane .dp-canvas');
+        if(cv && !document.getElementById('dpSel')){
+          var b = cv.querySelector('.dp-box[data-slot="' + pick + '"]') ||
+                  cv.querySelector('.dp-box:not(.dp-deco)') || cv.querySelector('.dp-box');
+          if(b) b.click();
+        }
+      }
     }catch(e){ document.title = 'SHOT-ERR ' + e.message; }
     finally{ busy = false; }
   }
@@ -58,6 +69,7 @@ SHOT_JS = """
 def main() -> int:
     args = [a for a in sys.argv[1:]]
     seed = "--seed" in args                      # 塞一份老编排数据 → 工作区有 5 个环节可看
+    pick = next((a.split("=", 1)[1] for a in args if a.startswith("--pick=")), "block:0")
     args = [a for a in args if not a.startswith("--")]
     tabs = [t for t in args if t in ("plan", "doc", "md", "slides")] or \
            ["plan", "doc", "md", "slides"]
@@ -85,9 +97,10 @@ def main() -> int:
         # localStorage 读走了 —— 把 seed 放在 </body> 前就太晚了（踩过：截出来还是空工作区）
         doc_html = html.replace("<head>", "<head>" + head, 1) if head else html
         page.write_text(doc_html[:doc_html.rfind("</body>")] +
-                        (SHOT_JS % {"task": "'%s'" % tab}) + doc_html[doc_html.rfind("</body>"):],
+                        (SHOT_JS % {"task": "'%s'" % tab, "pick": "'%s'" % pick}) +
+                        doc_html[doc_html.rfind("</body>"):],
                         encoding="utf-8")
-        png = OUT / ("wz_%s.png" % tab)
+        png = OUT / ("wz_%s%s.png" % (tab, "-sel" if (tab == "slides" and pick) else ""))
         r = subprocess.run([EDGE, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
                             "--force-device-scale-factor=1", "--window-size=1600,1100",
                             "--virtual-time-budget=12000", "--screenshot=" + str(png),

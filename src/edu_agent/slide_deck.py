@@ -194,6 +194,39 @@ def apply_slot(slide: dict, slot: str, text: str) -> dict:
     return {"ok": True, "slot": slot, "text": text}
 
 
+def apply_override(slide: dict, slot: str, patch: dict) -> dict:
+    """把"这一格被拖动/改过大小/改过层级"并进 `slide["slots"]`（R14 的写入口）。
+
+    与 `apply_slot`（改**文字**）分开：文字进 `blocks/bullets/…` 字段，样子进 `slots` 覆盖。
+    为什么删字要用 `hidden` 而不是把块删掉：槽位名是**按下标**取的（`block:2`），
+    真把第 2 块删了，第 3 块的几何覆盖就会落到新的一块上（老师的拖动成果会"串页"）。
+    所以"删除"= `hidden`（不画、字还在、能撤销），索引稳定。
+
+    边界：认不出的槽位/键一律拒绝或丢弃（不猜）；数值由 `_clean_overrides` 夹到范围内；
+    `hidden: false` 是**取消隐藏**（把这个键去掉），不是"留着 false"。
+    """
+    slot = str(slot or "").strip()
+    if not _SLOT_RE.match(slot):
+        return {"ok": False, "error": f"不认识的槽位：{slot or '(空)'}"}
+    if not isinstance(patch, dict) or not patch:
+        return {"ok": False, "error": "patch 是空的（要给我 dx/dy/dw/dh/size/color/align/lh/z/hidden）"}
+    cur = dict((slide.get("slots") or {}).get(slot) or {})
+    cur.update(patch)
+    if "hidden" in patch and not patch.get("hidden"):
+        cur.pop("hidden", None)
+    clean = _clean_overrides({slot: cur}).get(slot) or {}
+    slots = dict(slide.get("slots") or {})
+    if clean:
+        slots[slot] = clean
+    else:
+        slots.pop(slot, None)                  # 全零覆盖 = 回到版式原位（不留空壳）
+    if slots:
+        slide["slots"] = slots
+    else:
+        slide.pop("slots", None)
+    return {"ok": True, "slot": slot, "slots": dict(slots)}
+
+
 def pick_layout(slide: dict, index: int, total: int) -> str:
     """版式：显式 `layout` 优先；否则按位置推断（docs/19 §8.4）。
 
@@ -284,12 +317,13 @@ def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
         layouts.append(layout)
         page_boxes: list[dict] | None = [] if annotate else None
         pages.append(ppt_svg.render_slide(t, layout, slots, index=i, total=total, warnings=warnings,
-                                         boxes=page_boxes))
+                                          boxes=page_boxes, overrides=slide.get("slots") or None))
         if page_boxes is not None:
             boxes_all.append(page_boxes)
         chars += sum(len(str(v)) for v in (slide.get("bullets") or []))
     out = {"ok": True, "theme_id": t["id"], "pages": pages, "layouts": layouts,
            "warnings": warnings,
+           "canvas": {"w": CANVAS_W, "h": CANVAS_H, "margin": float(t["canvas"].get("margin") or 72)},
            "stats": {"pages": total, "chars": chars, "theme_name": t.get("name") or t["id"]}}
     if annotate:
         out["boxes"] = boxes_all
@@ -334,6 +368,57 @@ def fit_height(container_w: float) -> int:
     return int(math.floor(CANVAS_H * fit_scale(container_w) + 0.5))
 
 
+#: 老师改过的样子（`slides[i].slots`）里认的键与取值范围（R14）：
+#: 位置/大小是"相对版式原位的偏移"（设计像素），字号/颜色/对齐是语义覆盖，hidden = 删掉这一处，
+#: `z` = 层级（正数往上盖，画的时候往后排）。
+#: **认不出的一律丢**（不悄悄改字、也不让越界值进来 —— 越界由审计去报，不在这里静默夹掉太狠）。
+SLOT_OVERRIDE = {
+    "dx": (-200.0, 200.0), "dy": (-200.0, 200.0),
+    "dw": (-400.0, 400.0), "dh": (-400.0, 400.0),
+    "size": (8.0, 200.0), "lh": (0.8, 3.0),
+}
+#: 层级上下限：老师拖一块到另一块上面，用「上移一层/下移一层」调，值就是整数层号
+SLOT_Z_RANGE = (-9, 9)
+SLOT_ALIGNS = ("start", "middle", "end")
+
+
+def _clean_overrides(raw) -> dict:
+    """收干净 `slots` 覆盖：只认已知槽位名与已知键，数值夹进 `SLOT_OVERRIDE` 的范围。"""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    for slot, val in raw.items():
+        slot = str(slot or "").strip()
+        if not slot or not _SLOT_RE.match(slot) or not isinstance(val, dict):
+            continue
+        item: dict = {}
+        for k, (lo, hi) in SLOT_OVERRIDE.items():
+            if k in val:
+                try:
+                    item[k] = round(max(lo, min(hi, float(val[k]))), 1)
+                except (TypeError, ValueError):
+                    continue
+        if "z" in val:
+            try:
+                z = int(round(float(val["z"])))
+            except (TypeError, ValueError):
+                z = 0
+            if z:
+                item["z"] = max(SLOT_Z_RANGE[0], min(SLOT_Z_RANGE[1], z))
+        if val.get("align") in SLOT_ALIGNS:
+            item["align"] = val["align"]
+        m = re.fullmatch(r"#?([0-9a-fA-F]{6})", str(val.get("color") or ""))
+        if m:
+            item["color"] = "#" + m.group(1).upper()
+        if val.get("hidden"):
+            item["hidden"] = True
+        for k in [k for k, v in item.items() if k in SLOT_OVERRIDE and not float(v or 0)]:
+            item.pop(k)                    # 偏移/层级为 0 = 没改，别在会话库里攒一堆 0
+        if item:
+            out[slot] = item
+    return out
+
+
 def clean_slides(slides: list[dict] | None) -> list[dict]:
     """把面板传来的编辑结果**收干净**再存/再渲染（保守：不认识的就丢，绝不悄悄改字）。
 
@@ -372,6 +457,12 @@ def clean_slides(slides: list[dict] | None) -> list[dict]:
                 items = [_text(x)[:400] for x in (col.get("bullets") or []) if _text(x)]
                 if items or _text(col.get("heading")):
                     s[side] = {"heading": _text(col.get("heading"))[:60], "bullets": items}
+        slots = _clean_overrides(raw.get("slots"))          # R14：老师拖过/改过的样子
+        if slots:
+            s["slots"] = slots
+        notes = _text(raw.get("notes"))[:2000]              # R16 预留：每一页的备注
+        if notes:
+            s["notes"] = notes
         if s.get("name") or s.get("title") or s.get("bullets") or s.get("blocks") or s.get("left"):
             out.append(s)                       # 全空的一页直接丢，别留下空白页
     return out

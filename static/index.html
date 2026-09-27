@@ -614,9 +614,27 @@ body.theme-dark .avt{color:#fff}
 .wz-thumb .ops button:hover{background:#fff;color:var(--ink-900)}
 /* 页内编辑叠加层（R11）：与 SVG 同在一个被 scale 的容器里，用设计像素绝对定位 */
 .dp-boxlayer{position:absolute;left:0;top:0;width:1280px;height:720px;z-index:3}
-.dp-box{position:absolute;box-sizing:border-box;border:1px dashed transparent;border-radius:4px;cursor:text;outline:none;white-space:pre-wrap;overflow:hidden;line-height:1.3;font-family:var(--font);color:transparent;caret-color:var(--ink-900)}
+.dp-guides{position:absolute;left:0;top:0;width:1280px;height:720px;z-index:6;pointer-events:none}
+.dp-gl{position:absolute;background:#FF3B30;opacity:.85;display:block}
+.dp-box{position:absolute;box-sizing:border-box;border:1px dashed transparent;border-radius:4px;cursor:move;outline:none;white-space:pre-wrap;overflow:hidden;line-height:1.3;font-family:var(--font);color:transparent;caret-color:var(--ink-900)}
 .dp-box:hover{border-color:rgba(47,107,255,.45);background:rgba(47,107,255,.06)}
-.dp-box.dp-editing{border:1px solid var(--blue);background:rgba(255,255,255,.96);color:var(--ink-900);box-shadow:0 2px 10px rgba(0,0,0,.12);z-index:5;overflow:visible}
+.dp-box:focus{outline:none}
+.dp-box.dp-editing{border:1px solid var(--blue);background:rgba(255,255,255,.96);color:var(--ink-900);box-shadow:0 2px 10px rgba(0,0,0,.12);z-index:9;cursor:text;overflow:visible}
+/* 装饰槽（页码/设计标签）：默认一个字不动，但点得着、改得动（R14） */
+.dp-box.dp-deco{border-style:dotted;border-color:rgba(140,90,200,.35)}
+.dp-box.dp-deco:hover{border-color:rgba(140,90,200,.8);background:rgba(140,90,200,.08)}
+/* 选框 + 8 个手柄（R14）：与盒子同在设计坐标系里，缩放天然对齐 */
+.dp-sel{position:absolute;box-sizing:border-box;border:1px solid var(--blue);z-index:8;pointer-events:none}
+.dp-sel .dp-h{position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;background:#fff;border:1px solid var(--blue);border-radius:2px;pointer-events:auto;display:block}
+.dp-h-nw{left:0;top:0;cursor:nwse-resize}
+.dp-h-n{left:50%;top:0;cursor:ns-resize}
+.dp-h-ne{left:100%;top:0;cursor:nesw-resize}
+.dp-h-e{left:100%;top:50%;cursor:ew-resize}
+.dp-h-se{left:100%;top:100%;cursor:nwse-resize}
+.dp-h-s{left:50%;top:100%;cursor:ns-resize}
+.dp-h-sw{left:0;top:100%;cursor:nesw-resize}
+.dp-h-w{left:0;top:50%;cursor:ew-resize}
+.dp-objs{gap:6px}
 </style>
 <!-- 侧边面板的多格式渲染库：CDN 主用，加载失败自动落回本地 vendor（离线不白屏） -->
 <script defer src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js" onerror="this.onerror=null;this.src='/static/vendor/marked.min.js'"></script>
@@ -3944,7 +3962,9 @@ body.theme-dark .avt{color:#fff}
   var DOCP_SL = { pages: [], boxes: [], sig: '', themeId: '', themes: [], warn: [], fail: false, busy: false,
                   editing: -1, seq: 0, saveTimer: null, undo: [], redo: [],
                   tplId: '', tplList: [], tplLoaded: false, edited: false, fillPreview: false,
-                  fillOverrides: {} };
+                  fillOverrides: {}, fillGeos: {},
+                  /* R14：选中 / 吸附 / 画布参数（margin 来自服务端 tokens，用于吸附参考线） */
+                  sel: '', snap: true, canvas: { w: 1280, h: 720, margin: 72 } };
   var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
                       ['two-col', '两栏'], ['media', '图文'], ['end', '结尾']];
   var CHARS_PER_BLOCK = 22;                     /* 与 slide_deck.CHARS_PER_BLOCK 对齐（只提示不截断） */
@@ -4129,8 +4149,10 @@ body.theme-dark .avt{color:#fff}
     return (docpThemeGet() || '-') + '|' + sl.length + '|' + sl.map(function(s){
       var txt = ((s.blocks || []).map(function(b){ return (b.label || '') + (b.text || ''); }).join('¶')) ||
                 ((s.bullets || []).join('¶'));
+      /* slots（老师拖过/改过的样子）也算指纹：改了它必须重出一份 SVG（R14） */
       return [s.name || '', s.title || '', s.layout || '', s.minutes || '', s.label || '',
-              s.subtitle || '', s.meta || '', s.closing || '', s.caption || '', txt].join('~');
+              s.subtitle || '', s.meta || '', s.closing || '', s.caption || '', txt,
+              JSON.stringify(s.slots || {})].join('~');
     }).join('||');
   }
   function docpPagesEnsure(bd, sl, cb){
@@ -4149,6 +4171,7 @@ body.theme-dark .avt{color:#fff}
         if(d && d.ok && d.enabled !== false && (d.pages || []).length){
           DOCP_SL.pages = d.pages; DOCP_SL.warn = d.warnings || []; DOCP_SL.fail = false;
           DOCP_SL.boxes = d.boxes || [];
+          if(d.canvas) DOCP_SL.canvas = d.canvas;      /* 吸附参考线要用安全边距（服务端 tokens 同一份） */
           DOCP_SL.sig = sig;
         }else{
           DOCP_SL.pages = []; DOCP_SL.boxes = []; DOCP_SL.fail = true;   /* 拿不到 SVG → 退化成纯文本，别白屏 */
@@ -4267,20 +4290,43 @@ body.theme-dark .avt{color:#fff}
     docpBoxesPaint(bd);                           /* R11：给这一页铺"可编辑盒子"叠加层 */
     docpFitSlide(bd);
   }
-  /* ==== 页内编辑（R11）=========================================================
+  /* ==== 页内编辑（R11 改字 / R14 选中·拖动·缩放·吸附·层级·删除）=========================
      做法：服务端在预览 SVG 里给每个文字槽打了 `data-slot` 并回传 `boxes`（设计像素 1280×720）。
      叠加层就放在**同一个被 scale 的容器**里（#dpCanvas）用绝对定位 —— 缩放、位置天然对齐，
      不用量任何像素（jsdom / SVG 量尺寸都不可靠，这也是"能自动测"的关键）。
-     点一下直接改；改完把**那一格**回传 `POST /api/slide/slot`（槽位→字段的映射在服务端，只有一份）。 */
+
+     R14 起按 WPS 的手感分两档：
+       · **单击 = 选中**（出现选框 + 8 个手柄），**双击 / 回车 = 改字**；
+       · 拖框体 = 摆位置（松手才提交），拖手柄 = 改大小，方向键微调，Delete 删，上下移层。
+     拖动只改叠加层的 left/top（**不重建 SVG**：重建会抢焦点、跳滚动 —— R11 踩过），松手才提交。 */
   var WZ_EDIT = { slot: '', box: null, seq: 0 };
+  var WZ_DRAG = null;                            /* 正在拖动/缩放：见 docpDragStart */
+  var WZ_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
+  function docpNum(v, d){ var n = parseFloat(v); return isNaN(n) ? (d || 0) : n; }
+  function docpRound1(v){ return Math.round(v * 10) / 10; }
 
   function docpBoxesHtml(boxes){
     var h = '';
+    var s = docpSlideAt(DOCP_PAGE) || {};
     boxes.forEach(function(b){
       if(!b || !b.slot) return;
-      h += '<div class="dp-box" data-slot="' + escHtml(b.slot) + '" role="button" tabindex="0"' +
-        ' title="点一下改这段文字"' +
+      var dx = docpNum(b.dx, 0), dy = docpNum(b.dy, 0), dw = docpNum(b.dw, 0), dh = docpNum(b.dh, 0);
+      /* 这一格现在写着什么：盒子本身是透明的（字在 SVG 里），但要记住它 ——
+         进编辑态时把字填进输入框（模板填充页的 SVG 没有 data-slot，取不到字）。 */
+      var isFill = b.slot.indexOf('fill:') === 0;
+      var cur = isFill ? (b.text == null ? '' : String(b.text)) : String(docpSlotText(s, b.slot) || '');
+      var tip = b.deco ? '模板自带的设计文字「' + cur.slice(0, 12) + '」—— 双击改它 / Delete 删它'
+                       : (cur ? '「' + cur.slice(0, 14) + '」—— 单击选中 · 双击改字'
+                              : '单击选中 · 双击改字');
+      h += '<div class="dp-box' + (b.deco ? ' dp-deco' : '') + '" data-slot="' + escHtml(b.slot) + '"' +
+        ' role="button" tabindex="0" data-text="' + escHtml(cur) + '"' +
+        ' data-x="' + b.x + '" data-y="' + b.y + '" data-w="' + b.w + '" data-h="' + b.h + '"' +
+        ' data-dx="' + dx + '" data-dy="' + dy + '" data-dw="' + dw + '" data-dh="' + dh + '"' +
+        ' data-z="' + docpNum(b.z, 0) + '"' + (b.deco ? ' data-deco="1"' : '') +
+        ' title="' + escHtml(tip) + '"' +
         ' style="left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px;' +
+        'z-index:' + (10 + docpNum(b.z, 0)) + ';' +
         'font-size:' + b.size + 'px;text-align:' + (b.align === 'middle' ? 'center'
           : (b.align === 'end' ? 'right' : 'left')) + '"></div>';
     });
@@ -4289,38 +4335,343 @@ body.theme-dark .avt{color:#fff}
   function docpBoxesPaint(bd){
     var cv = bd.querySelector('#dpCanvas');
     if(!cv) return;
-    Array.prototype.forEach.call(cv.querySelectorAll('.dp-boxlayer'), function(n){ n.remove(); });
-    if(DOCP_SL.fail) return;                                 /* 纯文本兜底：没有 SVG，也就没有盒子 */
+    Array.prototype.forEach.call(cv.querySelectorAll('.dp-boxlayer,.dp-sel,.dp-guides'), function(n){ n.remove(); });
+    WZ_EDIT.box = null;
+    if(DOCP_SL.fail){ return; }                              /* 纯文本兜底：没有 SVG，也就没有盒子 */
     var boxes = DOCP_SL.fillPreview ? docpFillBoxes() : ((DOCP_SL.boxes || [])[DOCP_PAGE] || []);
     if(!boxes.length) return;
     var layer = document.createElement('div');
     layer.className = 'dp-boxlayer';
     layer.innerHTML = docpBoxesHtml(boxes);
     cv.appendChild(layer);
+    var g = document.createElement('div');
+    g.className = 'dp-guides';
+    cv.appendChild(g);
     Array.prototype.forEach.call(layer.querySelectorAll('.dp-box'), function(el){
-      el.addEventListener('click', function(){ docpBoxEdit(bd, el); });
+      el.addEventListener('mousedown', function(ev){ docpDragStart(bd, el, ev); });
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        docpSelect(bd, el.dataset.slot);                     /* 单击 = 选中（WPS 习惯） */
+      });
+      el.addEventListener('dblclick', function(ev){ ev.preventDefault(); docpBoxEdit(bd, el); });
+      el.addEventListener('keydown', function(ev){
+        if(ev.key === 'Enter' && !ev.shiftKey && !el.isContentEditable){
+          ev.preventDefault(); docpBoxEdit(bd, el);
+        }
+      });
+      el.addEventListener('focus', function(){ docpSelect(bd, el.dataset.slot); });
     });
+    cv.addEventListener('mousedown', function(ev){
+      if(ev.target === cv) docpSelect(bd, '');                /* 点空白 = 取消选中 */
+    });
+    docpSelectPaint(bd);
   }
-  /* 模板填充页的盒子：来自填充计划的 `fills[]`（内容槽才有；装饰槽一个字不许动）。
-     坐标就是 `geo`（1280×720 设计像素），槽位名 `fill:<shape_index>` —— 回写用 `mapping`。 */
+  /* 模板填充页的盒子：来自填充计划的 `fills[]`。**R14 起装饰槽也有盒子**
+     （页码、设计标签都能点着改/删 —— 老师："任何文字都要能改"）。
+     坐标就是 `geo`（1280×720 设计像素）+ 待应用的 dx/dy/dw/dh，槽位名 `fill:<shape_index>`。 */
   function docpFillBoxes(){
     var plan = DOCP_SL.fillPlan;
     if(!plan || !plan.pages) return [];
     var page = plan.pages[DOCP_PAGE];
     if(!page) return [];
+    var over = DOCP_SL.fillOverrides || {}, geo = DOCP_SL.fillGeos || {};
     var out = [];
     (page.fills || []).forEach(function(f){
-      if((f.role || '') === 'decoration') return;
-      var geo = f.geo || {};
-      if(!(parseFloat(geo.w) > 0)) return;
-      var text = (f.shape_index in DOCP_SL.fillOverrides)
-        ? DOCP_SL.fillOverrides[f.shape_index] : (f.text || '');
-      out.push({ slot: 'fill:' + f.shape_index, kind: 'text', align: 'start',
-                 x: geo.x, y: geo.y, w: geo.w, h: geo.h,
+      var g = f.geo || {};
+      if(!(parseFloat(g.w) > 0)) return;
+      var si = f.shape_index;
+      var dx = docpNum((geo[si] || {}).dx, 0), dy = docpNum((geo[si] || {}).dy, 0);
+      var dw = docpNum((geo[si] || {}).dw, 0), dh = docpNum((geo[si] || {}).dh, 0);
+      var isDeco = (f.role || '') === 'decoration' || !!f.kind;
+      var text = (si in over) ? over[si] : (f.text || '');
+      out.push({ slot: 'fill:' + si, kind: 'text', align: 'start', deco: isDeco,
+                 x: docpNum(g.x, 0) + dx, y: docpNum(g.y, 0) + dy,
+                 w: Math.max(20, docpNum(g.w, 0) + dw), h: Math.max(12, docpNum(g.h, 0) + dh),
+                 dx: dx, dy: dy, dw: dw, dh: dh, z: docpNum((geo[si] || {}).z, 0),
                  size: parseFloat(f.size_px) || 16, text: text,
-                 capacity: f.capacity, role: f.role });
+                 capacity: f.capacity, role: f.role, shape_index: si });
     });
     return out;
+  }
+  /* ==== 选中 / 拖动 / 缩放 / 吸附 / 层级 / 删除（R14）=========================
+     为什么都长在叠加层上：SVG 是服务端出的（预览=导出），改一个字的坐标要重出整页；
+     拖动时只动 `left/top`（不重建 DOM），松手才提交，手感才跟得上手。 */
+  function docpScale(){
+    var wrap = docpEl('dpSlideWrap');
+    var k = parseFloat((wrap && wrap.dataset.scale) || '0') || 0;
+    return k > 0 ? k : 1;                      /* jsdom/隐藏时量不到 → 当 1:1，别把坐标算飞 */
+  }
+  function docpSelBox(bd){
+    var cv = bd.querySelector('#dpCanvas');
+    return cv ? cv.querySelector('.dp-box[data-slot="' + DOCP_SL.sel + '"]') : null;
+  }
+  function docpSelect(bd, slot){
+    if(DOCP_SL.sel === slot && docpSelBox(bd)) return;
+    DOCP_SL.sel = slot || '';
+    docpSelectPaint(bd);
+    docpObjBarPaint(bd);
+  }
+  /* 选框 + 8 个手柄：位置直接取盒子的设计坐标（同一个被 scale 的容器里，天然对齐） */
+  function docpSelectPaint(bd){
+    var cv = bd.querySelector('#dpCanvas');
+    if(!cv) return;
+    Array.prototype.forEach.call(cv.querySelectorAll('.dp-sel'), function(n){ n.remove(); });
+    var box = DOCP_SL.sel ? docpSelBox(bd) : null;
+    if(!box) return;
+    var sel = document.createElement('div');
+    sel.className = 'dp-sel';
+    sel.id = 'dpSel';
+    sel.style.left = box.style.left;
+    sel.style.top = box.style.top;
+    sel.style.width = box.style.width;
+    sel.style.height = box.style.height;
+    sel.innerHTML = WZ_HANDLES.map(function(d){
+      return '<i class="dp-h dp-h-' + d + '" data-dir="' + d + '"></i>';
+    }).join('');
+    cv.appendChild(sel);
+    Array.prototype.forEach.call(sel.querySelectorAll('.dp-h'), function(h){
+      h.addEventListener('mousedown', function(ev){ docpDragStart(bd, box, ev, h.dataset.dir); });
+    });
+  }
+  /* 参考线（吸附时画出来，松手就擦掉） */
+  function docpGuidesPaint(list){
+    var cv = docpEl('dpCanvas');
+    if(!cv) return;
+    var g = cv.querySelector('.dp-guides');
+    if(!g){
+      g = document.createElement('div'); g.className = 'dp-guides'; cv.appendChild(g);
+    }
+    g.innerHTML = (list || []).map(function(l){
+      return l.x != null ? '<i class="dp-gl" style="left:' + l.x + 'px;top:0;width:1px;height:720px"></i>'
+                         : '<i class="dp-gl" style="top:' + l.y + 'px;left:0;height:1px;width:1280px"></i>';
+    }).join('');
+  }
+  /* 吸附候选线：安全边距 / 页面中线 / 页脚线 / 同页其它盒子（docs/26 §6.2，阈值 6 设计像素） */
+  function docpSnapTargets(excludeSlot){
+    var c = DOCP_SL.canvas || {}, W = docpNum(c.w, 1280), H = docpNum(c.h, 720), m = docpNum(c.margin, 72);
+    var xs = [m, W - m, W / 2], ys = [m, H - m, H / 2, H - m - 6];
+    (((DOCP_SL.fillPreview ? docpFillBoxes() : ((DOCP_SL.boxes || [])[DOCP_PAGE] || []))) || [])
+      .forEach(function(b){
+        if(!b || b.slot === excludeSlot) return;
+        xs.push(b.x, b.x + b.w, b.x + b.w / 2);
+        ys.push(b.y, b.y + b.h, b.y + b.h / 2);
+      });
+    return { xs: xs, ys: ys };
+  }
+  function docpSnapAxis(edges, targets, thr){
+    var best = null;
+    edges.forEach(function(e){
+      targets.forEach(function(t){
+        var d = t - e.v;
+        if(Math.abs(d) <= thr && (!best || Math.abs(d) < Math.abs(best.d))) best = { d: d, line: t };
+      });
+    });
+    return best;
+  }
+  /* 一次拖动 = 按下 → 移动 → 松手。dir 为空 = 挪位置；给了（nw/n/ne/e/se/s/sw/w）= 改大小。 */
+  function docpDragStart(bd, box, ev, dir){
+    if(WZ_EDIT.box || !box) return;
+    if(ev.button != null && ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    docpSelect(bd, box.dataset.slot);
+    WZ_DRAG = {
+      dir: dir || '', slot: box.dataset.slot, el: box, bd: bd, moved: false,
+      x0: docpNum(ev.clientX, 0), y0: docpNum(ev.clientY, 0),
+      b: { x: docpNum(box.dataset.x, 0), y: docpNum(box.dataset.y, 0),
+           w: docpNum(box.dataset.w, 0), h: docpNum(box.dataset.h, 0),
+           dx: docpNum(box.dataset.dx, 0), dy: docpNum(box.dataset.dy, 0),
+           dw: docpNum(box.dataset.dw, 0), dh: docpNum(box.dataset.dh, 0) },
+      before: docpOverrideOf(bd, box.dataset.slot),
+    };
+    box.focus();
+  }
+  function docpDragMove(ev){
+    var st = WZ_DRAG;
+    if(!st) return;
+    var k = docpScale();
+    var sx = docpNum(ev.clientX, 0) - st.x0, sy = docpNum(ev.clientY, 0) - st.y0;
+    if(!st.moved && Math.abs(sx) + Math.abs(sy) < 3) return;      /* 3 屏幕像素以内当"点了一下" */
+    st.moved = true;
+    var ddx = sx / k, ddy = sy / k;
+    var c = DOCP_SL.canvas || {}, W = docpNum(c.w, 1280), H = docpNum(c.h, 720);
+    var nx = st.b.x, ny = st.b.y, nw = st.b.w, nh = st.b.h;
+    if(!st.dir){                                                  /* 挪位置 */
+      nx = st.b.x + ddx; ny = st.b.y + ddy;
+    }else{                                                        /* 改大小（按方向动对应的边） */
+      if(st.dir.indexOf('w') >= 0){ nx = st.b.x + ddx; nw = st.b.w - ddx; }
+      if(st.dir.indexOf('e') >= 0) nw = st.b.w + ddx;
+      if(st.dir.indexOf('n') >= 0){ ny = st.b.y + ddy; nh = st.b.h - ddy; }
+      if(st.dir.indexOf('s') >= 0) nh = st.b.h + ddy;
+      if(ev.shiftKey && st.dir.length === 2){                     /* 角上按住 Shift = 等比 */
+        var r = st.b.w ? (st.b.h / st.b.w) : 1;
+        if(nw / Math.max(st.b.w, 1) > nh / Math.max(st.b.h, 1)) nh = nw * r; else nw = nh / r;
+        if(st.dir.indexOf('n') >= 0) ny = st.b.y + (st.b.h - nh);
+        if(st.dir.indexOf('w') >= 0) nx = st.b.x + (st.b.w - nw);
+      }
+      nw = Math.max(40, nw); nh = Math.max(24, nh);
+    }
+    var guides = [];
+    if(DOCP_SL.snap && !ev.altKey){                               /* 按住 Alt = 临时不吸附 */
+      var T = docpSnapTargets(st.slot), thr = 6;
+      var hx = docpSnapAxis([{ v: nx }, { v: nx + nw / 2 }, { v: nx + nw }], T.xs, thr);
+      var hy = docpSnapAxis([{ v: ny }, { v: ny + nh / 2 }, { v: ny + nh }], T.ys, thr);
+      if(!st.dir && hx){ nx += hx.d; guides.push({ x: hx.line }); }
+      if(!st.dir && hy){ ny += hy.d; guides.push({ y: hy.line }); }
+    }
+    st.cur = { x: nx, y: ny, w: nw, h: nh,
+               dx: docpRound1(st.b.dx + (nx - st.b.x)), dy: docpRound1(st.b.dy + (ny - st.b.y)),
+               dw: docpRound1(st.b.dw + (nw - st.b.w)), dh: docpRound1(st.b.dh + (nh - st.b.h)) };
+    st.el.style.left = Math.max(-W, nx) + 'px';
+    st.el.style.top = Math.max(-H, ny) + 'px';
+    st.el.style.width = nw + 'px';
+    st.el.style.height = nh + 'px';
+    var selEl = docpEl('dpSel');
+    if(selEl){ selEl.style.left = st.el.style.left; selEl.style.top = st.el.style.top;
+               selEl.style.width = st.el.style.width; selEl.style.height = st.el.style.height; }
+    docpGuidesPaint(guides);
+    ev.preventDefault && ev.preventDefault();
+  }
+  function docpDragEnd(){
+    var st = WZ_DRAG;
+    WZ_DRAG = null;
+    docpGuidesPaint([]);
+    if(!st || !st.moved || !st.cur) return;
+    var patch = /^fill:/.test(st.slot)
+      ? { dx: st.cur.dx, dy: st.cur.dy, dw: st.cur.dw, dh: st.cur.dh }
+      : { dx: st.cur.dx, dy: st.cur.dy, dw: st.cur.dw, dh: st.cur.dh };
+    docpGeoCommit(st.bd, st.slot, patch, st.before);
+  }
+  function docpBindDrag(){
+    document.addEventListener('mousemove', function(ev){ docpDragMove(ev); });
+    document.addEventListener('mouseup', function(){ docpDragEnd(); });
+  }
+  /* 当前这一格的覆盖（用于撤销：记下改动前的样子） */
+  function docpOverrideOf(bd, slot){
+    if(/^fill:/.test(slot)){
+      var si = parseInt(slot.slice(5), 10);
+      var g = (DOCP_SL.fillGeos || {})[si] || {};
+      var o = (DOCP_SL.fillOverrides || {});
+      return { dx: docpNum(g.dx, 0), dy: docpNum(g.dy, 0), dw: docpNum(g.dw, 0),
+               dh: docpNum(g.dh, 0), z: docpNum(g.z, 0), hasText: (si in o), text: o[si] };
+    }
+    var s = docpSlideAt(DOCP_PAGE) || {};
+    return JSON.parse(JSON.stringify(((s.slots || {})[DOCP_SL.sel]) || (s.slots || {})[slot] || {}));
+  }
+  /* 几何/层级/删除的提交口：槽位层进 `slides[i].slots`（回传 patch），填充层进"待应用" */
+  function docpGeoCommit(bd, slot, patch, before){
+    if(/^fill:/.test(slot)){
+      var si = parseInt(slot.slice(5), 10);
+      var cur = Object.assign({}, (DOCP_SL.fillGeos || {})[si] || {}, patch);
+      DOCP_SL.fillGeos[si] = cur;
+      docpUndoPush({ type: 'geo', index: DOCP_PAGE, slot: slot, before: before,
+                     after: { dx: cur.dx, dy: cur.dy, dw: cur.dw, dh: cur.dh, z: cur.z } });
+      docpBoxesPaint(bd);
+      docpFillPendingPaint(bd);
+      showToast('位置记下了 —— 点「应用修改」才真的写进 pptx');
+      return;
+    }
+    var s = docpSlideAt(DOCP_PAGE);
+    if(!s) return;
+    if(!s.slots) s.slots = {};
+    var next = Object.assign({}, s.slots[slot] || {}, patch);
+    Object.keys(next).forEach(function(k){                   /* 归零 = 不留这个键（回版式原位） */
+      if((k === 'dx' || k === 'dy' || k === 'dw' || k === 'dh' || k === 'z') && !next[k]) delete next[k];
+      if(k === 'hidden' && !next[k]) delete next[k];
+    });
+    if(Object.keys(next).length) s.slots[slot] = next; else delete s.slots[slot];
+    if(!Object.keys(s.slots).length) delete s.slots;
+    docpUndoPush({ type: 'geo', index: DOCP_PAGE, slot: slot, before: before,
+                   after: JSON.parse(JSON.stringify(s.slots[slot] || {})) });
+    DOCP_SL.edited = true;
+    DOCP_SL.sig = '';                                        /* 逼下一页重出 SVG（位置变了） */
+    docpPagesEnsure(bd, (DOCP && DOCP.slides) || [], function(){ docpPaintStage(bd); docpRailMaybe(); });
+    var seq = ++DOCP_SL.seq;
+    spJson('/api/slide/slot', 'POST', { session_id: CUR || '', index: DOCP_PAGE, slot: slot,
+                                        patch: patch, slides: (DOCP && DOCP.slides) || [],
+                                        title: (DOCP && DOCP.title) || '' })
+      .then(function(d){
+        if(seq !== DOCP_SL.seq) return;
+        if(d && d.ok && d.slides) DOCP.slides = d.slides;
+        docpUpdateStat();
+      }).catch(function(){ showToast('这一处没存上（网络？）：点【保存】再试', false); });
+    docpFmtTip(true);
+  }
+  /* 删除选中的这一处文字：槽位层用 `hidden`（不画、字还在、索引不乱，能撤销）；
+     填充层就是"清空这一格"（重填时生效）。 */
+  function docpObjDelete(bd){
+    var slot = DOCP_SL.sel;
+    if(!slot){ showToast('先点一下要删的文字', false); return; }
+    var before = docpOverrideOf(bd, slot);
+    if(/^fill:/.test(slot)){
+      var si = parseInt(slot.slice(5), 10);
+      DOCP_SL.fillOverrides[si] = '';
+      DOCP_SL.fillGeos[si] = Object.assign({}, DOCP_SL.fillGeos[si] || {}, { hidden: true });
+      docpUndoPush({ type: 'geo', index: DOCP_PAGE, slot: slot, before: before,
+                     after: { hidden: true, deleted: true } });
+      docpSelect(bd, '');
+      docpBoxesPaint(bd);
+      docpFillPendingPaint(bd);
+      showToast('删掉了 —— 点「应用修改」后真正从 pptx 里消失');
+      return;
+    }
+    docpGeoCommit(bd, slot, { hidden: true }, before);
+    docpSelect(bd, '');
+    showToast('删掉了（Ctrl+Z 能撤回）');
+  }
+  /* 上下移一层：`z` 越大越靠上（服务端按 z 重排出图顺序，见 ppt_svg.order_z） */
+  function docpLayer(bd, delta){
+    var slot = DOCP_SL.sel;
+    if(!slot){ showToast('先点一下要调层级的文字', false); return; }
+    var cur = /^fill:/.test(slot)
+      ? docpNum(((DOCP_SL.fillGeos || {})[parseInt(slot.slice(5), 10)] || {}).z, 0)
+      : docpNum(((docpSlideAt(DOCP_PAGE) || {}).slots || {})[slot] && ((docpSlideAt(DOCP_PAGE) || {}).slots || {})[slot].z, 0);
+    var z = Math.max(-9, Math.min(9, cur + delta));
+    if(z === cur){ showToast(delta > 0 ? '已经在最上层了' : '已经在最下层了'); return; }
+    docpGeoCommit(bd, slot, { z: z }, docpOverrideOf(bd, slot));
+    showToast(delta > 0 ? '上移一层' : '下移一层');
+  }
+  /* 方向键微调（1px；Shift = 10px）。绑在 document 上：盒子被重画也不丢。 */
+  function docpNudge(ev){
+    if(!DOCP_SL.sel || WZ_EDIT.box) return;
+    if(typeof WZ_TAB === 'string' && WZ_TAB !== 'slides') return;
+    var ae = document.activeElement || {};
+    if(ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable) return;
+    var step = ev.shiftKey ? 10 : 1, d = null;
+    if(ev.key === 'ArrowLeft') d = { dx: -step };
+    else if(ev.key === 'ArrowRight') d = { dx: step };
+    else if(ev.key === 'ArrowUp') d = { dy: -step };
+    else if(ev.key === 'ArrowDown') d = { dy: step };
+    else if(ev.key === 'Delete' || ev.key === 'Backspace'){
+      ev.preventDefault(); docpObjDelete(docpEl('wzDocBody')); return;
+    }else if(ev.key === 'Escape'){ docpSelect(docpEl('wzDocBody'), ''); return; }
+    else return;
+    ev.preventDefault();
+    var bd = docpEl('wzDocBody');
+    var cur = docpOverrideOf(bd, DOCP_SL.sel);
+    /* 覆盖存的是**绝对偏移**，所以微调要加到现值上（直接发 {dx:1} 会把之前拖的 60px 抹掉 —— 踩过） */
+    var patch = {};
+    if(d.dx) patch.dx = docpRound1(docpNum(cur.dx, 0) + d.dx);
+    if(d.dy) patch.dy = docpRound1(docpNum(cur.dy, 0) + d.dy);
+    docpGeoCommit(bd, DOCP_SL.sel, patch, cur);
+  }
+  function docpUndoPush(step){
+    DOCP_SL.undo.push(step);
+    if(DOCP_SL.undo.length > 20) DOCP_SL.undo.shift();
+    DOCP_SL.redo.length = 0;
+  }
+  /* 顶栏那条"选中了什么"的操作条（按钮与键盘走同一套函数） */
+  function docpObjBarPaint(bd){
+    var name = bd.querySelector('#dpSelName');
+    if(name) name.textContent = DOCP_SL.sel ? (DOCP_SL.sel.indexOf('fill:') === 0
+      ? ('模板第 ' + DOCP_SL.sel.slice(5) + ' 号框') : DOCP_SL.sel) : '未选中';
+    var on = !!DOCP_SL.sel;
+    ['dpUp', 'dpDown', 'dpReset', 'dpDel'].forEach(function(id){
+      var el = bd.querySelector('#' + id);
+      if(el) el.disabled = !on;
+    });
+    var s = bd.querySelector('#dpSnap');
+    if(s){ s.textContent = '吸附：' + (DOCP_SL.snap ? '开' : '关'); s.classList.toggle('dark', !!DOCP_SL.snap); }
   }
   /* 填充页改字：**先本地记着**（立刻能在页面上看到），点「应用修改」才真正重填（重填 3~6 秒） */
   function docpFillCommit(bd, slot, text){
@@ -4331,7 +4682,10 @@ body.theme-dark .avt{color:#fff}
     showToast('记下了（还没重填）：改完点「应用修改」');
   }
   function docpFillPendingCount(){
-    return Object.keys(DOCP_SL.fillOverrides || {}).length;
+    var keys = {};
+    Object.keys(DOCP_SL.fillOverrides || {}).forEach(function(k){ keys[k] = 1; });
+    Object.keys(DOCP_SL.fillGeos || {}).forEach(function(k){ keys[k] = 1; });
+    return Object.keys(keys).length;
   }
   function docpFillPendingPaint(bd){
     var el = bd.querySelector('#dpFillApply');
@@ -4343,31 +4697,38 @@ body.theme-dark .avt{color:#fff}
     var host = bd.querySelector('#dpFillPending');
     if(host) host.textContent = docpFillPendingCount() ? ('有 ' + docpFillPendingCount() + ' 处改动待应用') : '';
   }
-  /* 把逐格改动合成 `mapping` 交给后端重填（接口与外部 agent 用的是同一条：docs/24 §4） */
+  /* 把逐格改动合成 `mapping` 交给后端重填（接口与外部 agent 用的是同一条：docs/24 §4）。
+     ⚠️ 指页用 **`page`（成品第几页）**，不用 `template_index`：续页是整页克隆母版的，
+     第 1 页和第 3 页的 template_index 可能都是 0，只按母版页号会改到另一页上（R14 修）。 */
   function docpFillApply(bd){
     var plan = DOCP_SL.fillPlan;
     var tid = docpTplGet();
-    var over = DOCP_SL.fillOverrides || {};
-    var keys = Object.keys(over);
-    if(!plan || !tid || !keys.length) return;
-    var byPage = {};
-    (plan.pages || []).forEach(function(p){
+    var over = DOCP_SL.fillOverrides || {}, geo = DOCP_SL.fillGeos || {};
+    if(!plan || !tid || !docpFillPendingCount()) return;
+    var rows = [];
+    (plan.pages || []).forEach(function(p, pi){
+      var fills = [];
       (p.fills || []).forEach(function(f){
-        if(!(f.shape_index in over)) return;
-        var ti = p.template_index;
-        byPage[ti] = byPage[ti] || [];
-        byPage[ti].push({ shape_index: f.shape_index, text: over[f.shape_index] });
+        var si = f.shape_index;
+        var hit = false, row = { shape_index: si };
+        if(Object.prototype.hasOwnProperty.call(over, si)){ row.text = over[si]; hit = true; }
+        var g = geo[si] || {};
+        ['dx', 'dy', 'dw', 'dh'].forEach(function(k){
+          if(g[k]){ row[k] = g[k]; hit = true; }
+        });
+        if(g.z){ row.z = g.z; hit = true; }
+        if(g.hidden && !Object.prototype.hasOwnProperty.call(over, si)){ row.hidden = true; hit = true; }
+        if(hit) fills.push(row);
       });
+      if(fills.length) rows.push({ page: pi, fills: fills });
     });
-    var mapping = Object.keys(byPage).map(function(ti){
-      return { template_index: parseInt(ti, 10), fills: byPage[ti] };
-    });
+    if(!rows.length) return;
     var btn = bd.querySelector('#dpFillApply');
     if(btn){ btn.disabled = true; btn.textContent = '正在重填…'; }
     spJsonPermission('/api/slide/fill', 'POST', {
       template_id: tid, session_id: CUR || '', slides: (DOCP && DOCP.slides) || [],
       title: (DOCP && DOCP.title) || '', outDir: dzOutDirGet() || '', confirm: true,
-      mapping: mapping,
+      mapping: rows,
     }).then(function(d){
       if(!d || !d.ok){
         if(btn){ btn.disabled = false; btn.textContent = '应用修改'; }
@@ -4375,6 +4736,8 @@ body.theme-dark .avt{color:#fff}
         return;
       }
       DOCP_SL.fillOverrides = {};
+      DOCP_SL.fillGeos = {};
+      DOCP_SL.sel = '';
       DOCP_SL.fillPlan = d.plan || DOCP_SL.fillPlan;
       if(d.preview && d.preview.length){ DOCP_SL.pages = d.preview; }
       DOCP_SL.sig = 'fill-preview';
@@ -4392,7 +4755,9 @@ body.theme-dark .avt{color:#fff}
     if(!cv) return;
     var slot = el.dataset.slot;
     var s = docpSlideAt(DOCP_PAGE) || {};
-    var cur = DOCP_SL.fillPreview ? (el.textContent || '') : docpSlotText(s, slot);
+    /* 这一格现在的文字：盒子上记着（模板填充页的 SVG 没打 data-slot，从 SVG 取不到） */
+    var cur = (el.dataset.text != null && el.dataset.text !== '')
+      ? el.dataset.text : (DOCP_SL.fillPreview ? '' : docpSlotText(s, slot));
     var svgSlot = cv.querySelector('svg [data-slot="' + slot + '"]');
     if(svgSlot) svgSlot.style.visibility = 'hidden';
     var size = parseFloat((el.style.fontSize || '').replace('px', '')) || 24;
@@ -4406,6 +4771,7 @@ body.theme-dark .avt{color:#fff}
       var sel = window.getSelection(); sel.removeAllRanges();
       sel.addRange(r);                                    /* 全选：直接打字就是替换 */
     }catch(e){}
+    if(el.dataset.deco === '1') showToast('这是模板自带的设计文字，改完点「应用修改」才生效');
     WZ_EDIT.slot = slot;
     WZ_EDIT.box = el;
     var done = function(commit){
@@ -4417,6 +4783,7 @@ body.theme-dark .avt{color:#fff}
       el.textContent = '';
       if(svgSlot) svgSlot.style.visibility = '';
       if(commit && text !== cur) docpSlotCommit(bd, slot, text, cur);
+      docpSelectPaint(bd);                                /* 收工时把选框摆回新位置 */
     };
     el.addEventListener('blur', function(){ done(true); });
     el.addEventListener('keydown', function(ev){
@@ -4445,9 +4812,7 @@ body.theme-dark .avt{color:#fff}
   /* 改动提交：本地先"乐观"生效（页面立刻是新的），同时把这一格回传服务端落库 */
   function docpSlotCommit(bd, slot, text, before){
     if(/^fill:/.test(slot)){ docpFillCommit(bd, slot, text); return; }   /* 模板填充页：走 mapping */
-    DOCP_SL.undo.push({ index: DOCP_PAGE, slot: slot, before: before, after: text });
-    if(DOCP_SL.undo.length > 20) DOCP_SL.undo.shift();
-    DOCP_SL.redo.length = 0;
+    docpUndoPush({ index: DOCP_PAGE, slot: slot, before: before, after: text });
     docpSlotApplyLocal(docpSlideAt(DOCP_PAGE), slot, text);
     DOCP_SL.sig = '';                                   /* 逼下一页重出 SVG（文字变了） */
     var sl = (DOCP && DOCP.slides) || [];
@@ -4495,22 +4860,62 @@ body.theme-dark .avt{color:#fff}
     if(slot === 'title'){ s.name = text; s.title = text; }
     else s[slot] = text;
   }
-  /* 撤销 / 重做（本地 20 步；恢复后同样回传服务端） */
+  /* 撤销 / 重做（本地 20 步；恢复后同样回传服务端）。
+     R14 起栈里有两类步骤：改字（`before/after` 是文字）与几何/层级/删除（`before/after` 是覆盖对象）。 */
   function docpUndo(bd){
     var step = DOCP_SL.undo.pop();
     if(!step){ showToast('没有可撤销的了'); return; }
     DOCP_SL.redo.push(step);
     DOCP_PAGE = step.index;
-    docpSlotApplyLocal(docpSlideAt(step.index), step.slot, step.before);
-    docpSlotPush(bd, step.index, step.slot, step.before);
+    docpStepApply(bd, step, step.before, step.after);
   }
   function docpRedo(bd){
     var step = DOCP_SL.redo.pop();
     if(!step){ showToast('没有可重做的了'); return; }
     DOCP_SL.undo.push(step);
     DOCP_PAGE = step.index;
-    docpSlotApplyLocal(docpSlideAt(step.index), step.slot, step.after);
-    docpSlotPush(bd, step.index, step.slot, step.after);
+    docpStepApply(bd, step, step.after, step.before);
+  }
+  /* 把一步"变成"某个状态：几何步骤写覆盖，文字步骤写字段（都回传服务端） */
+  function docpStepApply(bd, step, want, other){
+    if(step.type === 'geo'){
+      if(/^fill:/.test(step.slot)){
+        var si = parseInt(step.slot.slice(5), 10);
+        DOCP_SL.fillGeos[si] = Object.assign({}, want || {});
+        if(want && want.hasText !== undefined){
+          if(want.hasText) DOCP_SL.fillOverrides[si] = want.text == null ? '' : want.text;
+          else delete DOCP_SL.fillOverrides[si];
+        }
+        DOCP_SL.sel = step.slot;
+        docpBoxesPaint(bd);
+        docpFillPendingPaint(bd);
+        showToast('撤销了这一步 —— 点「应用修改」才写进 pptx');
+        return;
+      }
+      var s = docpSlideAt(step.index);
+      if(s){
+        var next = JSON.parse(JSON.stringify(want || {}));
+        delete next.hasText; delete next.text; delete next.deleted;
+        if(!s.slots) s.slots = {};
+        if(Object.keys(next).length) s.slots[step.slot] = next; else delete s.slots[step.slot];
+        if(!Object.keys(s.slots).length) delete s.slots;
+      }
+      DOCP_SL.sel = other && other.deleted ? '' : step.slot;
+      DOCP_SL.sig = '';
+      docpRenderSlides(bd);
+      var seq = ++DOCP_SL.seq;
+      var patch = JSON.parse(JSON.stringify(want || {}));
+      delete patch.hasText; delete patch.text; delete patch.deleted;
+      if(!Object.keys(patch).length) patch = { dx: 0, dy: 0, dw: 0, dh: 0, z: 0, hidden: false };
+      spJson('/api/slide/slot', 'POST', { session_id: CUR || '', index: step.index, slot: step.slot,
+                                          patch: patch, slides: (DOCP && DOCP.slides) || [],
+                                          title: (DOCP && DOCP.title) || '' })
+        .then(function(d){ if(seq === DOCP_SL.seq && d && d.ok && d.slides) DOCP.slides = d.slides; })
+        .catch(function(){});
+      return;
+    }
+    docpSlotApplyLocal(docpSlideAt(step.index), step.slot, want);
+    docpSlotPush(bd, step.index, step.slot, want);
   }
   function docpSlotPush(bd, index, slot, text){
     DOCP_SL.sig = '';
@@ -4546,7 +4951,7 @@ body.theme-dark .avt{color:#fff}
       '<div id="dpWarnBox">' + warn + '</div>' +
       (DOCP_SL.fillPreview
         ? '<div class="dp-slhead"><span class="dp-warn" style="margin:0">当前预览 = 按模板《' +
-          escHtml(docpTplName(docpTplGet())) + '》填出来的样子 —— <b>内容槽也能点着改</b></span>' +
+          escHtml(docpTplName(docpTplGet())) + '》填出来的样子 —— <b>每一处文字（含页码/设计标签）都能点着改</b></span>' +
           '<span id="dpFillPending" style="font-size:11.5px;color:var(--ink-500)"></span>' +
           '<span style="flex:1"></span>' +
           '<button id="dpFillApply"' + (docpFillPendingCount() ? '' : ' disabled') + '>应用修改' +
@@ -4554,10 +4959,19 @@ body.theme-dark .avt{color:#fff}
           '<button id="dpPreviewBack">切回我们的版式</button></div>'
         : '') +
       '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-canvas" id="dpCanvas"></div></div>' +
+      '<div class="dp-pagebar dp-objs">' +
+      '<span>选中：<b id="dpSelName">未选中</b></span>' +
+      '<button id="dpSnap" title="拖动时对齐到边距/中线/其它文字（按住 Alt 临时关掉）">吸附：开</button>' +
+      '<button id="dpUp" disabled title="把选中的文字盖到上面一层">上移一层</button>' +
+      '<button id="dpDown" disabled title="把选中的文字压到下面一层">下移一层</button>' +
+      '<button id="dpReset" disabled title="回到版式原来的位置与大小">回原位</button>' +
+      '<button id="dpDel" disabled title="删掉这一处文字（Delete；Ctrl+Z 能撤回）">删除</button>' +
+      '<span style="flex:1"></span>' +
+      '<span class="dp-cnt">单击选中 · 双击改字 · 拖动摆位置 · 拖手柄改大小 · 方向键微调（Shift 10px）</span></div>' +
       '<div class="dp-pagebar"><button data-pg="prev">上一页</button>' +
       '<button data-pg="next">下一页</button>' +
       '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页　' +
-      '<b>点页面上的文字就能直接改</b>（左栏缩略图换页 · Ctrl+Z 撤销）</span></div>' +
+      '<b>点页面上的文字就能改</b>（左栏缩略图换页 · Ctrl+Z 撤销）</span></div>' +
       docpPagePropsHtml() +
       '<div class="dp-pagebar"><button id="dpAddPage">+ 加一页</button>' +
       '<button id="dpUndo">撤销</button><button id="dpRedo">重做</button>' +
@@ -4608,6 +5022,36 @@ body.theme-dark .avt{color:#fff}
     if(undo) undo.addEventListener('click', function(){ docpUndo(bd); });
     var redo = bd.querySelector('#dpRedo');
     if(redo) redo.addEventListener('click', function(){ docpRedo(bd); });
+    /* R14 对象操作条：吸附开关 / 上下移层 / 回原位 / 删除（与键盘走同一套函数） */
+    var snapBtn = bd.querySelector('#dpSnap');
+    if(snapBtn) snapBtn.addEventListener('click', function(){
+      DOCP_SL.snap = !DOCP_SL.snap;
+      docpObjBarPaint(bd);
+      showToast(DOCP_SL.snap ? '吸附已开（拖动时会对齐边距/中线）' : '吸附已关（自由摆放）');
+    });
+    var up = bd.querySelector('#dpUp');
+    if(up) up.addEventListener('click', function(){ docpLayer(bd, 1); });
+    var down = bd.querySelector('#dpDown');
+    if(down) down.addEventListener('click', function(){ docpLayer(bd, -1); });
+    var reset = bd.querySelector('#dpReset');
+    if(reset) reset.addEventListener('click', function(){
+      var slot = DOCP_SL.sel;
+      if(!slot) return;
+      if(/^fill:/.test(slot)){
+        var si = parseInt(slot.slice(5), 10);
+        delete DOCP_SL.fillGeos[si];
+        delete DOCP_SL.fillOverrides[si];
+        docpBoxesPaint(bd); docpFillPendingPaint(bd);
+        showToast('回到模板原位（点「应用修改」生效）');
+        return;
+      }
+      docpGeoCommit(bd, slot, { dx: 0, dy: 0, dw: 0, dh: 0, z: 0, hidden: false },
+                    docpOverrideOf(bd, slot));
+      showToast('回到版式原来的位置与大小');
+    });
+    var del = bd.querySelector('#dpDel');
+    if(del) del.addEventListener('click', function(){ docpObjDelete(bd); });
+    docpObjBarPaint(bd);
     /* 本页属性：换版式 / 改时长 / 加一块（这三样页内编辑覆盖不到） */
     var lay = bd.querySelector('#dpLayout');
     if(lay) lay.addEventListener('change', function(){
@@ -4713,6 +5157,7 @@ body.theme-dark .avt{color:#fff}
     var total = DOCP_SL.fillPreview ? ((DOCP_SL.pages || []).length || sl.length) : sl.length;
     if(DOCP_PAGE < 0) DOCP_PAGE = 0;
     if(DOCP_PAGE > total - 1) DOCP_PAGE = total - 1;
+    DOCP_SL.sel = '';                          /* 换页 = 取消选中（同一格名在别的页上位置不同） */
     docpPaintStage(bd);
     var bar = bd.querySelector('.dp-pagebar span');
     if(bar) bar.textContent = '第 ' + (DOCP_PAGE + 1) + ' / ' + total + ' 页　点左栏缩略图换页';
@@ -5207,6 +5652,8 @@ body.theme-dark .avt{color:#fff}
   /* 启动初始化（R9 起面板不再有文档视图，这里只剩"预览台尺寸跟着窗口变"这一件事） */
   function docpInit(){
     docpKeysBind();                                   /* Ctrl+Z / Ctrl+Y（幻灯片页签） */
+    docpBindDrag();                                   /* R14：拖动的移动/松手要绑在 document 上（手滑出框也算） */
+    document.addEventListener('keydown', docpNudge);  /* R14：方向键微调 / Delete / Esc */
     window.addEventListener('resize', function(){ if(DOCP_ON) docpRefit(); });
   }
   /* ==== 启动初始化（会话文档预览面板 + 导出位置；编排台由 dzBind 自调用初始化）==== */
