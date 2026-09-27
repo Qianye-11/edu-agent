@@ -255,6 +255,29 @@ def tokens_from_pptx(pptx: Path, *, name: str = "") -> tuple[dict, list[str]]:
 
 #: 小于这个容量（字）的槽位当成"标签/装饰"，不往里写正文（见 slide_fill 的说明）
 MIN_FILLABLE_CAPACITY = 4
+#: 中文设计标签的判据（又小又短才算）
+_LABEL_MAX_CHARS = 4
+_LABEL_MAX_W = 200.0
+_LABEL_MAX_H = 60.0
+
+
+def _is_design_label(text: str, geo: dict) -> bool:
+    """设计稿里的固定小标签（「快乐成长」「PART 01」「01」「小小探险家」）—— **绝不替换、绝不清空**。
+
+    判据（踩过一轮才定下来）：
+      · 纯西文/数字的短文本（`PART 01`、`01`、`ABC`）基本都是标签 —— 不管框多大；
+      · 中文：只有**又小又短**（≤4 字且框 ≤200×60）才算标签，
+        否则「写作魔法学院」这种目录条目会被误判成标签。
+    注意"字号最大"**不能**用来找标题：标签往往显式设了字号，内容框反而没设（踩过）。
+    """
+    t = (text or "").strip()
+    if not t:
+        return False
+    has_cjk = any(ord(ch) > 0x2E80 for ch in t)
+    if not has_cjk:
+        return len(t) <= 12
+    small = float(geo.get("w") or 0) <= _LABEL_MAX_W and float(geo.get("h") or 0) <= _LABEL_MAX_H
+    return small and len(t) <= _LABEL_MAX_CHARS
 
 
 def _slot_capacity(shape, size_px: float, geo: dict | None = None) -> int:
@@ -320,7 +343,19 @@ def _role_of(shape, index: int, layout_name: str) -> str:
 
 
 def slots_from_pptx(pptx: Path) -> dict:
-    """抽文本槽：每页的 `[{role, capacity, geo, text}]` + 版式名。
+    """把模板每页的文本框分成 **标题 / 正文 / 装饰** 三类（设计稿里没有"占位符"时的正解）。
+
+    为什么不能"按顺序塞"（踩过）：老师的模板是**设计好的普通文本框**（没有占位符），
+    第一个框往往是「快乐成长」这种装饰标签、真正的标题框反而是个空的大框 ——
+    按顺序写就会把正文写进标签、模板自己的示例文字还都留着，成品看着就是"乱填"。
+
+    规则（确定性、可复核）：
+
+    1. 容量 < `MIN_FILLABLE_CAPACITY` 的小框 → 装饰；
+    2. 短文本（≤6 字）+ 小面积（≤200×60）→ 设计标签 → 装饰；
+    3. 其余算**内容槽**：字号最大（并列取面积最大）的当 `title`，其余按阅读顺序（上→下、左→右）当 `body`；
+    4. 每个槽记下 `shape_index`（在 `slide.shapes` 里的位置）与 `sample`（当时的文字），
+       填充时按它精确找回那个框，并核对 `sample` 没过期。
 
     读不出来就返回 `{"slides": [], "error": ...}` —— 调用方据此退化成"只用配色"。
     """
@@ -335,10 +370,11 @@ def slots_from_pptx(pptx: Path) -> dict:
         prs = Presentation(str(pptx))
         for i, slide in enumerate(prs.slides):
             layout_name = slide.slide_layout.name or ""
-            slots = []
-            for shp in slide.shapes:
+            rows: list[dict] = []
+            for si, shp in enumerate(slide.shapes):
                 if not getattr(shp, "has_text_frame", False):
                     continue
+                geo = _geo_px(shp)
                 text = (shp.text_frame.text or "").strip()
                 size_px = 0.0
                 for para in shp.text_frame.paragraphs:
@@ -348,14 +384,37 @@ def slots_from_pptx(pptx: Path) -> dict:
                             break
                     if size_px:
                         break
-                slots.append({"role": _role_of(shp, len(slots), layout_name),
-                              "capacity": _slot_capacity(shp, size_px),
-                              "size_px": round(size_px, 1), "geo": _geo_px(shp),
-                              "sample": text[:40]})
+                rows.append({"shape_index": si, "text": text, "geo": geo,
+                             "size_px": round(size_px, 1),
+                             "capacity": _slot_capacity(shp, size_px, geo),
+                             "placeholder": _placeholder_kind(shp)})
+            content = [r for r in rows
+                       if r["capacity"] >= MIN_FILLABLE_CAPACITY and not _is_design_label(r["text"], r["geo"])]
+            # 标题 = **面积最大**的内容槽（不能用字号：标签常显式设字号、内容框反而没设 —— 踩过）
+            content.sort(key=lambda r: -(r["geo"]["w"] * r["geo"]["h"]))
+            title_row = content[0] if content else None
+            body_rows = sorted([r for r in content[1:]], key=lambda r: (r["geo"]["y"], r["geo"]["x"]))
+            slots = []
+            for r in rows:
+                role = ("title" if r is title_row else ("body" if r in body_rows else "decoration"))
+                slots.append({"role": role, "shape_index": r["shape_index"],
+                              "capacity": r["capacity"], "size_px": r["size_px"], "geo": r["geo"],
+                              "sample": r["text"][:40], "placeholder": r["placeholder"]})
             out.append({"index": i, "layout": layout_name, "slots": slots})
     except Exception as exc:  # noqa: BLE001 坏包/加密包
         return {"slides": [], "error": f"读 .pptx 失败：{type(exc).__name__}: {exc}"}
     return {"slides": out, "pages": len(out)}
+
+
+def _placeholder_kind(shape) -> str:
+    """占位符类型串（有占位符的模板优先用它的语义；没有就给空串）。"""
+    try:
+        ph = shape.placeholder_format
+        if ph is None:
+            return ""
+        return f"{ph.type}:{ph.idx}"
+    except (AttributeError, ValueError):
+        return ""
 
 
 # ---------------------------------------------------------------- 导入 / 软删

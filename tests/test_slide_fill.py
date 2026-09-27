@@ -172,8 +172,8 @@ class MultiRunRegressionTest(_FillCase):
     """
 
     def _multi_run_template(self) -> Path:
-        """一个"真模板会有的样子"：标题占位符里是一段多 run 文字 + 第二行；
-        另有一个**非占位**文本框（模板自己的装饰文字，用来验证我们不会去动它）。"""
+        """一个"像真设计稿"的模板：标题占位符里一段多 run 文字 + 第二行；
+        一个**设计标签**（短文本 + 小框，如「快乐成长」）；一个**内容槽**（示例正文）。"""
         from pptx import Presentation
         from pptx.util import Inches, Pt
 
@@ -189,8 +189,10 @@ class MultiRunRegressionTest(_FillCase):
         r2.text = "（模板原名）"
         para2 = tf.add_paragraph()
         para2.add_run().text = "（占位第二行）"                      # ← 第二段：触发删多余段落的分支
-        box = slide.shapes.add_textbox(Inches(1), Inches(5), Inches(4), Inches(0.6))
-        box.text_frame.text = "模板自己的装饰文字"
+        label = slide.shapes.add_textbox(Inches(0.4), Inches(0.3), Inches(0.9), Inches(0.25))
+        label.text_frame.text = "快乐成长"                            # 短文本 + 小框 → 设计标签
+        body = slide.shapes.add_textbox(Inches(1), Inches(5), Inches(4), Inches(0.6))
+        body.text_frame.text = "模板自己的装饰文字"                    # 较长文本 → 内容槽（示例正文）
         prs.save(str(src))
         return src
 
@@ -225,8 +227,9 @@ class MultiRunRegressionTest(_FillCase):
                  if run.text.strip() and run.font.size]
         self.assertIn(32.0, sizes, "第一个 run 的 32pt 应该留着")
 
-    def test_untouched_box_keeps_template_text(self):
-        """我们这页没有对应角色的内容时，**不动**模板那个框（装饰文字/页脚不该被清空）。"""
+    def test_unfilled_content_box_is_cleared_and_labels_kept(self):
+        """策略（2026-09-27 改）：**内容槽**没填就清空（免得模板示例文字和我们的内容混在一起＝乱填）；
+        **设计标签**（短文本 + 小面积，如「快乐成长」「PART 01」）一个字都不动。"""
         tid = st.import_pptx(self._multi_run_template(), name="多run模板")["id"]
         out = sf.fill_pptx(tid, [{"layout": "cover", "name": "只有标题", "cover_title": "只有标题"}],
                            "只有标题", out_dir=self.out)
@@ -236,7 +239,11 @@ class MultiRunRegressionTest(_FillCase):
         prs = Presentation(out["file"])
         blob = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes
                          if getattr(sh, "has_text_frame", False))
-        self.assertIn("模板自己的装饰文字", blob)
+        self.assertIn("只有标题", blob, "我们的标题要填进去")
+        self.assertIn("快乐成长", blob, "设计标签不能被替换/清空")
+        self.assertNotIn("模板自己的装饰文字", blob, "没填的内容槽要清掉（否则和我们的内容混在一起）")
+        plan = sf.plan(tid, [{"layout": "cover", "name": "x", "cover_title": "x"}], "x")
+        self.assertTrue(plan["pages"][0]["kept"], "计划里要记下保留了哪些模板文字")
 
 
 class NoCoverDeckMappingTest(_FillCase):

@@ -3650,7 +3650,7 @@ svg{display:block}
   var DOCP_PAGE = 0;
   var DOCP_SL = { pages: [], sig: '', themeId: '', themes: [], warn: [], fail: false, busy: false,
                   editing: -1, seq: 0, saveTimer: null,
-                  tplId: '', tplList: [], tplLoaded: false, edited: false };
+                  tplId: '', tplList: [], tplLoaded: false, edited: false, fillPreview: false };
   var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
                       ['two-col', '两栏'], ['media', '图文'], ['end', '结尾']];
   var CHARS_PER_BLOCK = 22;                     /* 与 slide_deck.CHARS_PER_BLOCK 对齐（只提示不截断） */
@@ -3727,6 +3727,15 @@ svg{display:block}
         '<span style="color:var(--ink-400)">　' + escHtml(d.outDir || '') + '</span>　' +
         '<a class="pill-btn" style="text-decoration:none" href="' + escHtml(d.download_url || '#') + '">下载到本机</a>' +
         '<div class="dp-warn">' + escHtml(d.detail || '') + '</div>' + warn);
+      /* 填充结果直接进预览台：老师要看的正是"按模板填出来长什么样" */
+      if(d.preview && d.preview.length){
+        DOCP_SL.fillPreview = true;
+        DOCP_SL.pages = d.preview;
+        DOCP_SL.sig = 'fill-preview';          /* 占住 sig：别被普通渲染覆盖 */
+        DOCP_PAGE = 0;
+        docpRenderSlides(docpEl('docPanelBody'));
+        showToast('预览已切到「按模板填出来的样子」（' + d.preview.length + ' 页）');
+      }
       showToast('已按模板填充' + (d.warnings && d.warnings.length ? '（有提示，见结果条）' : ''));
     }).catch(function(e){ docpResult('<span style="color:#dc2626">✗ ' + escHtml(String(e)) + '</span>'); });
   }
@@ -3935,6 +3944,11 @@ svg{display:block}
       '<button class="dp-mini" id="dpTplFill"' + (docpTplGet() ? '' : ' disabled') + '>用模板填一遍</button>' +
       '<input type="file" id="dpTplFile" accept=".pptx,.pptm,.potx" style="display:none"></div>' +
       '<div id="dpWarnBox">' + warn + '</div>' +
+      (DOCP_SL.fillPreview
+        ? '<div class="dp-slhead"><span class="dp-warn" style="margin:0">当前预览 = 按模板《' +
+          escHtml(docpTplName(docpTplGet())) + '》填出来的样子</span>' +
+          '<span style="flex:1"></span><button id="dpPreviewBack">切回我们的版式</button></div>'
+        : '') +
       '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-canvas" id="dpCanvas"></div></div>' +
       '<div class="dp-pagebar"><button data-pg="prev">上一页</button>' +
       '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页　点下面的卡片可直接跳页</span>' +
@@ -3987,6 +4001,14 @@ svg{display:block}
     }
     var tplFill = bd.querySelector('#dpTplFill');
     if(tplFill) tplFill.addEventListener('click', docpTplFill);
+    var pvBack = bd.querySelector('#dpPreviewBack');
+    if(pvBack) pvBack.addEventListener('click', function(){
+      DOCP_SL.fillPreview = false;
+      DOCP_SL.pages = [];
+      DOCP_SL.sig = '';                       /* 清掉指纹 → 重新取我们版式的 SVG */
+      DOCP_PAGE = 0;
+      docpRenderSlides(bd);
+    });
     bd.querySelectorAll('[data-edit]').forEach(function(b){
       b.addEventListener('click', function(){
         var i = parseInt(b.dataset.edit, 10) || 0;

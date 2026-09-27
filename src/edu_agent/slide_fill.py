@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import copy
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -34,11 +36,25 @@ def _is_role(name: str, hints: tuple[str, ...]) -> bool:
 
 
 def template_pages(template_id: str) -> tuple[list[dict], str]:
-    """读模板的槽位清单 → `(每页 [{index, layout, slots}], 错误信息)`。"""
-    theme = st._read_json(st.root() / st._slug(template_id) / "slots.json")   # noqa: SLF001
-    pages = theme.get("slides") or []
-    if not pages and theme.get("error"):
-        return [], str(theme["error"])
+    """读模板每一页的槽位 → `(每页 [{index, layout, slots}], 错误信息)`。
+
+    **现场重新分类**（不是只读导入时那份 `slots.json`）：分类规则改了以后，老模板自动用新规则，
+    不用重新导入一次（踩过：改了分类但计划没变，因为读的是旧缓存）。
+    原稿不在时才退回缓存的 `slots.json`。
+    """
+    tpl_dir = st.root() / st._slug(template_id)                        # noqa: SLF001
+    pptx = tpl_dir / "template.pptx"
+    if pptx.is_file():
+        fresh = st.slots_from_pptx(pptx)
+        if fresh.get("slides"):
+            return fresh["slides"], ""
+        if fresh.get("error"):
+            cached = st._read_json(tpl_dir / "slots.json")             # noqa: SLF001
+            return cached.get("slides") or [], str(fresh["error"])
+    cached = st._read_json(tpl_dir / "slots.json")                     # noqa: SLF001
+    pages = cached.get("slides") or []
+    if not pages and cached.get("error"):
+        return [], str(cached["error"])
     return pages, ""
 
 
@@ -109,55 +125,127 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
 
 
 def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -> dict:
-    """把一页的数据分配到模板页的槽上（按角色；没有对应角色就并到 body）。"""
+    """把一页数据分配到模板页的槽上：标题槽 1 个、正文槽按阅读顺序一条一个，其余内容槽**清空**。
+
+    `docs/19` §10.1 的映射在这里落地；设计稿（没有占位符的模板）靠 `classify_slots` 分好的
+    `title/body/decoration` 三类，**装饰槽一个字都不动**。
+    """
     slots = tpl_page.get("slots") or []
     fills: list[dict] = []
-    body_texts = list(data.get("body") or [])
+    body_texts = [t for t in (data.get("body") or []) if str(t).strip()]
     title = str(data.get("title") or "")
     sub = str(data.get("subtitle") or "")
     meta = str(data.get("meta") or "")
     minutes = str(data.get("minutes") or "")
 
-    title_done = False
-    for slot in slots:
-        role = slot.get("role") or "body"
+    title_slots = [s for s in slots if (s.get("role") or "") == "title"]
+    body_slots = [s for s in slots if (s.get("role") or "") == "body"]
+    deco = [s for s in slots if (s.get("role") or "") == "decoration"]
+
+    def emit(slot: dict, text: str, *, clear: bool = False) -> None:
         cap = int(slot.get("capacity") or 0)
-        if 0 < cap < st.MIN_FILLABLE_CAPACITY and role not in ("title", "cover"):
-            continue                       # 太小的框是标签/装饰，不往里写正文（也不报"容量不足"）
-        text = ""
-        if role == "title" and not title_done:
-            text, title_done = (title or sub or meta), True
-            if title and sub:
-                out["degraded"].append("模板只有标题槽 → 副标题并入标题行（不硬造槽）")
-        elif role in ("cover", "subtitle"):
-            text = sub or (title if not title_done else "")
-            title_done = title_done or bool(text)
-        elif role == "meta":
-            text = meta or minutes
-        elif role == "footer":
-            text = minutes
+        role = slot.get("role") or "body"
+        if text and cap > 0 and len(text) > cap:
+            where = f"第 {tpl_page.get('index', 0) + 1} 页" + ("标题" if role == "title" else "正文")
+            how = "建议缩短标题" if role == "title" else "建议拆页或精简"
+            out["warnings"].append(f"{where}超出模板框（{slot.get('sample') or '空框'}：容量 {cap} 字 < 填入 {len(text)} 字）→ {how}")
+        fills.append({"role": role, "capacity": cap, "text": text, "clear": bool(clear),
+                      "shape_index": slot.get("shape_index"),
+                      "sample": slot.get("sample") or "", "geo": slot.get("geo") or {}})
+
+    # ① 标题：第一个标题槽；副标题/元信息并进标题（模板没有更多槽时，别硬造）
+    title_text = title or sub or meta
+    if title_slots:
+        emit(title_slots[0], title_text)
+        for extra in title_slots[1:]:
+            emit(extra, "", clear=True)
+    elif body_slots:                       # 没有标题槽：正文第一条当标题（并把它从正文里去掉）
+        first = body_texts.pop(0) if body_texts else (title or sub or meta)
+        emit(body_slots[0], first)
+        body_slots = body_slots[1:]
+
+    # ② 正文：每个正文槽装一条（按阅读顺序）；多出来的条目并进最后一个槽，槽不够就提示
+    for k, slot in enumerate(body_slots):
+        if k < len(body_texts):
+            emit(slot, body_texts[k])
         else:
-            text = "\n".join(body_texts)
-            body_texts = []
-        if cap > 0 and len(text) > cap:
-            where = f"第 {tpl_page.get('index', 0) + 1} 页" + ("标题" if role in ("title", "cover") else "正文")
-            how = "建议缩短标题" if role in ("title", "cover") else "建议拆页或精简"
-            out["warnings"].append(f"{where}超出模板框（容量 {cap} 字 < 填入 {len(text)} 字）→ {how}")
-        elif cap <= 0 and text and not out.get("_cap_unknown"):
-            out["_cap_unknown"] = True
-            out["degraded"].append("模板有槽位量不出容量（缺几何或字号）→ 容量自查对这类槽跳过")
-        fills.append({"role": role, "capacity": cap, "text": text, "geo": slot.get("geo") or {}})
-    if body_texts:                       # 模板槽不够装 → 不丢，记下来提示（不截断）
-        out["warnings"].append(f"模板这一页没有足够的正文槽 → 多出 {len(body_texts)} 条没填进去"
-                               f"（内容没删，但请手动确认）")
+            emit(slot, "", clear=True)     # 模板示例文字属于"内容"，没填就清掉，别和我们的混在一起
+    if len(body_texts) > len(body_slots):
+        rest = body_texts[len(body_slots):]
+        if body_slots:
+            last = fills[-1] if fills else None
+            if last is not None and last.get("role") == "body":
+                last["text"] = "\n".join([last["text"]] + rest) if last["text"] else "\n".join(rest)
+                out["warnings"].append(f"第 {tpl_page.get('index', 0) + 1} 页模板只有 {len(body_slots)} 个正文框，"
+                                       f"多出的 {len(rest)} 条并进了最后一个框（建议拆页）")
+        else:
+            out["warnings"].append(f"第 {tpl_page.get('index', 0) + 1} 页模板没有可用正文框 → {len(body_texts)} 条没填进去"
+                                   f"（内容没删，请手动确认）")
+
+    if minutes:
+        out.setdefault("notes", []).append(f"第 {tpl_page.get('index', 0) + 1} 页时长 {minutes} 分钟"
+                                           f"（模板没有时间槽，写进备注即可）")
     return {"template_index": tpl_page.get("index", 0), "layout": tpl_page.get("layout") or "",
-            "copied": copied, "fills": fills}
+            "copied": copied, "fills": fills,
+            "kept": [s.get("sample") for s in deco if s.get("sample")],
+            "replaced": [{"sample": f.get("sample"), "text": f["text"]}
+                         for f in fills if f["text"] and f.get("sample")]}
 
 
 # ---------------------------------------------------------------- 真正写文件
 
+def preview_pages(pptx: Path, job: Path, *, limit: int = 12) -> list[str]:
+    """把填好的 pptx 转成 SVG，让面板能看到**填出来的真实样子**（老师最关心的那件事）。
+
+    用 ppt-master 的 `pptx_to_svg.py`（约 2 秒）；图片**内联成 data URI**，这样面板里单独显示
+    这些 SVG 时不会因为取不到 `images/...` 而破图。转不出来就返回空列表（预览退回我们的版式，不报错）。
+    """
+    import base64
+    import mimetypes
+    import re as _re
+
+    scripts = ppt_polish.scripts_dir()
+    tool = scripts / "pptx_to_svg.py"
+    if not tool.is_file():
+        return []
+    out_dir = job / "svg_preview"
+    cmd = [sys.executable, str(tool), str(pptx), "-o", str(out_dir), "--inheritance-mode", "both"]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       timeout=300, cwd=str(job))
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    files: list[Path] = []
+    for sub in ("svg-flat", "svg"):
+        files = sorted((out_dir / sub).glob("slide_*.svg"))
+        if files:
+            break
+    pages: list[str] = []
+    for f in files[:limit]:
+        try:
+            svg = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        def _inline(m: "_re.Match[str]") -> str:
+            rel = m.group(2)
+            img = (f.parent / rel).resolve()
+            try:
+                if not img.is_file() or img.stat().st_size > 2_000_000:
+                    return m.group(0)
+                mime = mimetypes.guess_type(img.name)[0] or "image/png"
+                b64 = base64.b64encode(img.read_bytes()).decode("ascii")
+                return f'{m.group(1)}="data:{mime};base64,{b64}"'
+            except OSError:
+                return m.group(0)
+
+        svg = _re.sub(r'(xlink:href|href)="((?!data:|https?:|#)[^"]+)"', _inline, svg)
+        pages.append(svg)
+    return pages
+
+
 def fill_pptx(template_id: str, slides: list[dict] | None, title: str = "", *,
-              out_dir: str | Path | None = None) -> dict:
+              out_dir: str | Path | None = None, with_preview: bool = True) -> dict:
     """按计划填一份 pptx（在副本上写；模板原稿只读）。"""
     src = st.root() / st._slug(template_id) / "template.pptx"      # noqa: SLF001
     if not src.is_file():
@@ -199,9 +287,11 @@ def fill_pptx(template_id: str, slides: list[dict] | None, title: str = "", *,
 
     checks = _verify_fill(target, want, the_plan)
     ok = all(c["ok"] for c in checks if c.get("blocking", True))
+    preview = preview_pages(target, job) if with_preview else []
     return {"ok": ok, "file": str(target), "filename": target.name, "outDir": str(target_dir),
             "template_id": template_id, "job": str(job), "plan": the_plan,
-            "checks": checks, "quality": {"fill": "ok" if ok else "fail", "template": "ok"},
+            "checks": checks, "preview": preview, "preview_pages": len(preview),
+            "quality": {"fill": "ok" if ok else "fail", "template": "ok"},
             "detail": "；".join(f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in checks),
             "warnings": the_plan["warnings"] + the_plan["degraded"],
             "download_url": "/api/wps/download?path=" + str(target)}
@@ -281,28 +371,37 @@ def _apply(prs, the_plan: dict, want: list[str]) -> None:
 
 
 def _fill_slide(slide, page: dict, want: list[str]) -> None:
-    """把一页的填充内容写进这张幻灯片：**按角色**挑形状，没内容的角色不动模板的框。"""
+    """把一页的填充内容写进这张幻灯片：**按 `shape_index` 精确落位**（槽位分类时记下的位置）。
+
+    为什么要按 index 而不是"再猜一次角色"：填充与导入读的是同一个文件，形状顺序一致；
+    按 index 落位能保证"计划里说要填那个框"和"实际填的就是那个框"，也避免二次猜测带来的漂移。
+    `sample` 用来核对没拿错框（模板被改过时退化为按角色找）。
+    """
     text_shapes = [s for s in slide.shapes if getattr(s, "has_text_frame", False)]
-    layout_name = slide.slide_layout.name or ""
-    used: set[int] = set()
     for fill in page["fills"]:
-        # **按角色**挑（不是按顺序）：模板里页脚/页码排在前面的情况很常见，顺序写就会把标题写进页脚。
-        role = fill.get("role") or "body"
-        if not str(fill.get("text") or "").strip():
+        idx = fill.get("shape_index")
+        shape = None
+        if isinstance(idx, int) and 0 <= idx < len(list(slide.shapes)):
+            cand = list(slide.shapes)[idx]
+            if getattr(cand, "has_text_frame", False):
+                sample = (cand.text_frame.text or "").strip()[:40]
+                if not fill.get("sample") or sample == fill["sample"] or not sample:
+                    shape = cand
+        if shape is None:                       # 退路：按角色找第一个没用过的
+            used = getattr(_fill_slide, "_used", None)
+            if used is None or used[0] is not slide:
+                used = (slide, set())
+                _fill_slide._used = used          # type: ignore[attr-defined]
+            for k, shp in enumerate(text_shapes):
+                if k not in used[1]:
+                    shape, _ = shp, used[1].add(k)
+                    break
+        if shape is None:
             continue
-        pick = None
-        for k, shp in enumerate(text_shapes):
-            if k in used:
-                continue
-            if st._role_of(shp, k, layout_name) == role:                # noqa: SLF001
-                pick = k
-                break
-        if pick is None:
-            pick = next((k for k in range(len(text_shapes)) if k not in used), None)
-        if pick is None:                                                # 槽不够：不硬塞（计划里有提示）
-            break
-        used.add(pick)
-        _write_text(text_shapes[pick], fill["text"], want)
+        text = fill.get("text") or ""
+        if not text and not fill.get("clear"):
+            continue                            # 没内容且不需要清空 → 不动模板的框
+        _write_text(shape, text, want)
 
 
 def _write_text(shape, text: str, want: list[str]) -> None:
