@@ -389,6 +389,36 @@ _LABEL_MAX_AREA = 1280 * 720 * 0.04
 _TITLE_MAX_CHARS = 14
 
 
+def is_page_number(text: str) -> bool:
+    """这一串是不是"页码"（`02 / 10`、`2/10`、`第 2 页`）。
+
+    为什么单独认它（老师反馈"填充后模板原来的内容没清除"）：设计稿的页码是**普通文本框**，
+    我们在自动分类里把它归成"装饰"（一个字不许动）—— 于是**续页整页克隆时把母版的页码也带过去了**，
+    10 页模板填 14 页，后 4 页全写着「06 / 10」。
+    页码是**跟着页走的**，必须由我们按成品页号重写；而「01」「PART 01」这种章节号**不能动**，
+    所以这里只认"斜杠式"和"第 N 页"，不认孤零零的数字。
+    """
+    t = str(text or "").strip()
+    if not t:
+        return False
+    if re.fullmatch(r"\d{1,3}\s*[/／]\s*\d{1,3}", t):
+        return True
+    return bool(re.fullmatch(r"第\s*\d{1,3}\s*页", t))
+
+
+def page_number_text(sample: str, index: int, total: int) -> str:
+    """按模板原来的写法，生成这一页该显示的页码（`02 / 10` 这种零填充也会保留）。"""
+    t = str(sample or "").strip()
+    m = re.fullmatch(r"(\d{1,3})\s*([/／])\s*(\d{1,3})", t)
+    if m:
+        pad = len(m.group(3))                       # 总页数是 10 → 两位数；是 100 → 三位数
+        cur = str(index + 1).rjust(pad, "0") if m.group(1).startswith("0") else str(index + 1)
+        return "%s %s %s" % (cur, "／" if m.group(2) == "／" else "/", str(total).rjust(pad, "0"))
+    if re.fullmatch(r"第\s*\d{1,3}\s*页", t):
+        return "第 %d 页" % (index + 1)
+    return t
+
+
 def _is_design_label(text: str, geo: dict) -> bool:
     """设计稿里的固定小标签（「快乐成长」「PART 01」「01」「小小探险家」）—— **绝不替换、绝不清空**。
 

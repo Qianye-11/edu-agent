@@ -240,6 +240,10 @@ svg{display:block}
 .wz-save{font-size:11.5px;color:var(--ink-400);flex:none}
 .wz-save.wz-dirty{color:#B45309}
 .wz-resultbar{margin-top:8px;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.wz-resultbar>span{flex:1;min-width:0}
+.dp-filldetail{margin-top:6px;font-size:11.5px;color:var(--ink-600);line-height:1.7;width:100%}
+.dp-filldetail summary{cursor:pointer;color:var(--ink-500)}
+.dp-filldetail>div{padding-left:8px;border-left:2px solid var(--line)}
 .wz-statusbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:7px 34px 14px;
   font-size:11.5px;color:var(--ink-500);border-top:.5px solid var(--line);margin:0 34px}
 .wz-statusbar b{font-weight:600;color:var(--ink-700)}
@@ -4060,11 +4064,12 @@ body.theme-dark .avt{color:#fff}
         docpResult('<span style="color:#dc2626">✗ ' + escHtml((d && d.error) || '填充失败') + '</span>');
         return;
       }
-      var warn = (d.warnings || []).slice(0, 3).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
+      var warn = (d.warnings || []).slice(0, 4).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
       docpResult('<span style="color:#16a34a">✓ ' + escHtml(d.filename) + '</span>' +
         '<span style="color:var(--ink-400)">　' + escHtml(d.outDir || '') + '</span>　' +
         '<a class="pill-btn" style="text-decoration:none" href="' + escHtml(d.download_url || '#') + '">下载到本机</a>' +
-        '<div class="dp-warn">' + escHtml(d.detail || '') + '</div>' + warn);
+        '<div class="dp-warn">' + escHtml(d.detail || '') + '</div>' + warn +
+        docpFillDetailHtml(d));
       /* 填充结果直接进预览台：老师要看的正是"按模板填出来长什么样" */
       if(d.preview && d.preview.length){
         DOCP_SL.fillPreview = true;
@@ -4079,6 +4084,33 @@ body.theme-dark .avt{color:#fff}
       }
       showToast('已按模板填充' + (d.warnings && d.warnings.length ? '（有提示，见结果条）' : ''));
     }).catch(function(e){ docpResult('<span style="color:#dc2626">✗ ' + escHtml(String(e)) + '</span>'); });
+  }
+  /* 填充明细（R12.6）：**每一页我们把什么填到了哪个槽**，一条条列出来。
+     为什么要有它：老师反馈"我生成的内容没有填充到合适的位置" —— 与其让他猜，
+     不如把"第 3 页：标题 ← 实践背景基本信息；正文 ← 时间/地点…"直接摊开；
+     看着不对，就在幻灯片页签上点那句话改（R11 已支持），或去「对齐」改槽位角色。 */
+  function docpFillDetailHtml(d){
+    var plan = (d && d.plan) || null;
+    var pages = (plan && plan.pages) || [];
+    if(!pages.length) return '';
+    var rows = pages.map(function(p, i){
+      var put = (p.fills || []).filter(function(f){ return f.text && f.kind !== 'page-number'; });
+      var kept = (p.kept || []).filter(function(t){ return t; });
+      if(!put.length && !kept.length) return '';
+      var line = put.map(function(f){
+        var role = f.role === 'title' ? '标题' : '正文';
+        var was = (f.sample || '').trim();
+        return role + '←' + escHtml(String(f.text).slice(0, 22)) +
+               (was ? '<span style="color:var(--ink-400)">（原为「' + escHtml(was.slice(0, 12)) + '」）</span>' : '');
+      }).join('　');
+      var keep = kept.length ? '<span style="color:var(--ink-400)">　保留模板文字：' +
+        kept.slice(0, 3).map(function(t){ return '「' + escHtml(String(t).slice(0, 10)) + '」'; }).join('') +
+        (kept.length > 3 ? ' 等 ' + kept.length + ' 处' : '') + '</span>' : '';
+      return '<div>第 ' + (i + 1) + ' 页　' + line + keep + '</div>';
+    }).filter(Boolean).join('');
+    if(!rows) return '';
+    return '<details class="dp-filldetail"><summary>看看这一页一页都填到哪儿了（' + pages.length + ' 页）</summary>' +
+      rows + '</details>';
   }
   /* 主题清单：进幻灯片页签时拉一次（失败就把下拉藏起来，预览照常走默认主题） */
   function docpThemesEnsure(cb){

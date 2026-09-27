@@ -271,7 +271,57 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
     if out["policy"].get("copied"):
         out["warnings"].append(f"会话比模板多 → 复制了模板自己的内容页 {out['policy']['copied']} 张"
                                f"（母版/版式继承不变）")
+    _plan_page_numbers(out, pages)                # 页码跟着页走（含复制页/重排后的页号）
+    _warn_kept_texts(out)                         # 如实告诉老师"模板里还留着几处设计文字"
     return out
+
+
+def _plan_page_numbers(out: dict, tpl_pages: list[dict]) -> None:
+    """给每一页补一条"页码"填充：**按成品页号重写**模板里那个页码框。
+
+    为什么必须做（老师反馈的 bug）：页码在设计稿里是普通文本框，被我们归成"装饰"（不许动），
+    于是"教案页数比模板多"时，整页克隆出来的续页会一直显示母版的「06 / 10」——
+    老师看到的就是"模板原来的内容没清除"。页码本来就应该跟着页走。
+
+    注意：计划页里**不带** `slots`（只有 fills/kept），所以这里拿 `tpl_pages[template_index]` 去查。
+    """
+    by_index = {p.get("index"): p for p in tpl_pages or []}
+    pages = out.get("pages") or []
+    total = len(pages)
+    for i, page in enumerate(pages):
+        tpl = by_index.get(page.get("template_index"))
+        if not tpl:
+            continue
+        for slot in (tpl.get("slots") or []):
+            sample = str(slot.get("sample") or "")
+            if not st.is_page_number(sample):
+                continue
+            text = st.page_number_text(sample, i, total)
+            if text == sample:
+                continue
+            page.setdefault("fills", []).append(
+                {"role": "decoration", "capacity": int(slot.get("capacity") or 0), "text": text,
+                 "clear": False, "kind": "page-number", "shape_index": slot.get("shape_index"),
+                 "size_px": slot.get("size_px") or 0,
+                 "design_capacity": int(slot.get("design_capacity") or 0),
+                 "sample": sample, "geo": slot.get("geo") or {}})
+
+
+def _warn_kept_texts(out: dict) -> None:
+    """把"模板里还留着哪些字、为什么留着"写进 warnings（老师不必猜）。"""
+    kept: list[str] = []
+    for page in out.get("pages") or []:
+        for t in (page.get("kept") or []):
+            t = str(t).strip()
+            if t and t not in kept:
+                kept.append(t)
+    if not kept:
+        return
+    shown = "、".join("「%s」" % t[:10] for t in kept[:4])
+    out["warnings"].append(
+        f"模板里保留了 {len(kept)} 处**设计文字**（没填、也没清）：{shown}"
+        f"{'…' if len(kept) > 4 else ''} —— 这些是页码/章节号一类的版式元素；"
+        f"想改它们用「对齐」把它们标成正文，或到幻灯片页签上点着改")
 
 
 def _slot_rank(slot: dict) -> tuple[float, float, float]:

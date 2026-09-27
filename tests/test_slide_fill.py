@@ -449,6 +449,81 @@ class DesignBakedFillTest(_FillCase):
         self.assertFalse(any("卡片标题" in t for t in texts), "没填的内容槽要清掉（不留模板示例文字）")
 
 
+class PageNumberTest(_FillCase):
+    """页码要**跟着页走**（R12.6：老师反馈"填完模板原来的内容没清除"，真凶就是续页带着母版页码）。
+
+    模板里的页码是普通文本框 → 被归成"装饰"（一个字不许动）→ 续页整页克隆时把母版页码一起带过来，
+    10 页模板填 14 页，后 4 页全写着「06 / 10」。
+    """
+
+    def _numbered_template(self) -> Path:
+        """一页内容页：标题 + 正文 + 页码「01 / 02」（零填充的斜杠式，跟老师那份一样）。"""
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+
+        src = Path(self.tmp.name) / "numbered.pptx"
+        prs = Presentation()
+        cover = prs.slides.add_slide(prs.slide_layouts[6])
+        cover.shapes.add_textbox(Inches(0.5), Inches(2.5), Inches(8), Inches(1)).text_frame.text = "封面占位"
+        for _ in range(2):
+            s = prs.slides.add_slide(prs.slide_layouts[6])
+            t = s.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(8), Inches(0.8))
+            t.text_frame.text = "模板标题占位"
+            t.text_frame.paragraphs[0].runs[0].font.size = Pt(32)
+            b = s.shapes.add_textbox(Inches(0.5), Inches(2), Inches(8), Inches(3))
+            b.text_frame.text = "模板正文示例文字" * 4
+            b.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+            n = s.shapes.add_textbox(Inches(8.5), Inches(6.6), Inches(1.2), Inches(0.4))
+            n.text_frame.text = "01 / 02"
+            n.text_frame.paragraphs[0].runs[0].font.size = Pt(12)
+        prs.save(str(src))
+        return src
+
+    def test_page_number_follows_the_page_including_copies(self):
+        from pptx import Presentation
+
+        tid = st.import_pptx(self._numbered_template(), name="页码模板")["id"]
+        deck = [{"layout": "cover", "name": "封面", "cover_title": "封面"}] + \
+               [{"name": f"第 {i} 页", "bullets": [f"内容 {i}"]} for i in range(2, 8)]   # 共 7 页 > 模板 3 页
+        plan = sf.plan(tid, deck, "页码检查")
+        total = len(plan["pages"])
+        self.assertGreater(total, 3, "这条用例要走到「复制页」分支")
+        out = sf.fill_pptx(tid, deck, "页码检查", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        prs = Presentation(out["file"])
+        seen = []
+        for i, slide in enumerate(prs.slides):
+            if i == 0:
+                continue                     # 封面页在模板里本来就没有页码框 → 不该硬造一个
+            texts = [(sh.text_frame.text or "").strip() for sh in slide.shapes
+                     if getattr(sh, "has_text_frame", False)]
+            nums = [t for t in texts if "/" in t and t.replace(" ", "").replace("/", "").isdigit()]
+            seen.extend(nums)
+            self.assertTrue(nums, "第 %d 页（内容页）应该有页码" % (i + 1))
+            for t in nums:
+                with self.subTest(page=i + 1, num=t):
+                    self.assertEqual(t, "%02d / %02d" % (i + 1, total),
+                                     "每一页的页码都要跟着成品页号走（含复制页），不能留母版的号")
+        self.assertEqual(len(seen), total - 1, "内容页各一个页码：%s" % seen)
+
+    def test_page_number_like_label_helper(self):
+        for t in ("02 / 10", "2/10", "２／10", "第 3 页"):
+            with self.subTest(text=t):
+                self.assertTrue(st.is_page_number(t), "该认成页码")
+        for t in ("01", "PART 01", "01 / 02 / 03", "圆", ""):
+            with self.subTest(text=t):
+                self.assertFalse(st.is_page_number(t), "不许误伤章节号/设计标签")
+
+    def test_kept_design_texts_are_reported(self):
+        """保留了几处设计文字要如实报出来（老师不必猜"为什么这块没清"）。"""
+        tid = st.import_pptx(self._numbered_template(), name="页码模板")["id"]
+        out = sf.fill_pptx(tid, DECK, "保留说明", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        hit = [w for w in (out.get("warnings") or []) if "设计文字" in w]
+        self.assertTrue(hit, out.get("warnings"))
+        self.assertIn("01 / 02", hit[0], "要列出具体保留了哪些字")
+
+
 class NoCoverDeckMappingTest(_FillCase):
     """回归 2026-09-27：模板有封面页、会话没有封面时，**不能把正文写进封面页**。
 
