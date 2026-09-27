@@ -4,9 +4,10 @@
 为什么要这个脚本：`docs/25` §8.1 记着"工作区自动截图没打通"—— 应用逻辑都在 IIFE 里，
 脚本没法"先切到工作台再拍"。R9 加了只读调试钩子 `window.__edu`，这里就用它。
 
-用法（先启动服务）：  .venv/Scripts/python.exe tools/wz_shot.py [--seed] [--pick=槽位] [页签...]
+用法（先启动服务）：  .venv/Scripts/python.exe tools/wz_shot.py [--seed] [--pick=槽位] [--size=1600,1400] [页签...]
 页签取值：plan / doc / md / slides（默认四个都拍）；`--seed` 塞一份老编排数据，让工作区里有 5 个环节。
 `--pick=block:0`（默认自动挑第一个）会在幻灯片页签上**选中一格**再拍 —— 选框 + 8 个手柄要人眼看得见。
+`--size=1600,1400` 拍高一点：幻灯片页签底下还有备注栏与页操作，1100 高会截掉。
 """
 import subprocess
 import sys
@@ -70,6 +71,7 @@ def main() -> int:
     args = [a for a in sys.argv[1:]]
     seed = "--seed" in args                      # 塞一份老编排数据 → 工作区有 5 个环节可看
     pick = next((a.split("=", 1)[1] for a in args if a.startswith("--pick=")), "block:0")
+    size = next((a.split("=", 1)[1] for a in args if a.startswith("--size=")), "1600,1100")
     args = [a for a in args if not a.startswith("--")]
     tabs = [t for t in args if t in ("plan", "doc", "md", "slides")] or \
            ["plan", "doc", "md", "slides"]
@@ -100,9 +102,10 @@ def main() -> int:
                         (SHOT_JS % {"task": "'%s'" % tab, "pick": "'%s'" % pick}) +
                         doc_html[doc_html.rfind("</body>"):],
                         encoding="utf-8")
-        png = OUT / ("wz_%s%s.png" % (tab, "-sel" if (tab == "slides" and pick) else ""))
+        png = OUT / ("wz_%s%s%s.png" % (tab, "-sel" if (tab == "slides" and pick) else "",
+                                        "" if size == "1600,1100" else "-tall"))
         r = subprocess.run([EDGE, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-                            "--force-device-scale-factor=1", "--window-size=1600,1100",
+                            "--force-device-scale-factor=1", "--window-size=" + size,
                             "--virtual-time-budget=12000", "--screenshot=" + str(png),
                             BASE + "static/" + page.name],
                            capture_output=True, text=True, encoding="utf-8", errors="replace",
