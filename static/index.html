@@ -4319,6 +4319,8 @@ body.theme-dark .avt{color:#fff}
       var tip = b.deco ? '模板自带的设计文字「' + cur.slice(0, 12) + '」—— 双击改它 / Delete 删它'
                        : (cur ? '「' + cur.slice(0, 14) + '」—— 单击选中 · 双击改字'
                               : '单击选中 · 双击改字');
+      /* 装饰槽压在内容槽**下面**：页码/标签常和正文框叠着，不能把正文的点击区挡掉 */
+      var zbase = b.deco ? 4 : 10;
       h += '<div class="dp-box' + (b.deco ? ' dp-deco' : '') + '" data-slot="' + escHtml(b.slot) + '"' +
         ' role="button" tabindex="0" data-text="' + escHtml(cur) + '"' +
         ' data-x="' + b.x + '" data-y="' + b.y + '" data-w="' + b.w + '" data-h="' + b.h + '"' +
@@ -4326,7 +4328,7 @@ body.theme-dark .avt{color:#fff}
         ' data-z="' + docpNum(b.z, 0) + '"' + (b.deco ? ' data-deco="1"' : '') +
         ' title="' + escHtml(tip) + '"' +
         ' style="left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px;' +
-        'z-index:' + (10 + docpNum(b.z, 0)) + ';' +
+        'z-index:' + (zbase + docpNum(b.z, 0)) + ';' +
         'font-size:' + b.size + 'px;text-align:' + (b.align === 'middle' ? 'center'
           : (b.align === 'end' ? 'right' : 'left')) + '"></div>';
     });
