@@ -239,6 +239,86 @@ class MultiRunRegressionTest(_FillCase):
         self.assertIn("模板自己的装饰文字", blob)
 
 
+class NoCoverDeckMappingTest(_FillCase):
+    """回归 2026-09-27：模板有封面页、会话没有封面时，**不能把正文写进封面页**。
+
+    体检脚本发现：老实现"计划第 i 页就写第 i 张"，于是正文落到模板封面上，
+    而且没用上的封面/结尾页没被删掉（`页数符合策略` 判为 False）。现在按 `template_index` 落位 + 重排。
+    """
+
+    def _two_layout_template(self) -> Path:
+        from pptx import Presentation
+
+        src = Path(self.tmp.name) / "cover-and-content.pptx"
+        prs = Presentation()
+        s0 = prs.slides.add_slide(prs.slide_layouts[0])          # Title Slide（封面）
+        s0.shapes.title.text_frame.text = "封面占位"
+        for _ in range(2):
+            s = prs.slides.add_slide(prs.slide_layouts[1])        # Title and Content
+            s.shapes.title.text_frame.text = "标题占位"
+            s.placeholders[1].text_frame.text = "正文占位"
+        prs.save(str(src))
+        return src
+
+    def test_deck_without_cover_skips_template_cover(self):
+        tid = st.import_pptx(self._two_layout_template(), name="封面+内容模板")["id"]
+        deck = [{"name": "情境导入", "minutes": "5", "bullets": ["投影五个实例"]},
+                {"name": "小结", "minutes": "3", "bullets": ["三条结论"]}]
+        p = sf.plan(tid, deck, "3.3 幂函数")
+        pages, _ = sf.template_pages(tid)
+        self.assertEqual(p["policy"].get("deleted"), len(pages) - len(p["pages"]),
+                         "没用到的模板页（含封面）都要计入删除")
+        out = sf.fill_pptx(tid, deck, "3.3 幂函数", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        from pptx import Presentation
+
+        prs = Presentation(out["file"])
+        self.assertEqual(len(prs.slides._sldIdLst), len(p["pages"]), "产物页数 = 计划页数")   # noqa: SLF001
+        blob = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes
+                         if getattr(sh, "has_text_frame", False))
+        self.assertIn("情境导入", blob)
+        self.assertIn("投影五个实例", blob)
+        self.assertIn("小结", blob)
+        self.assertNotIn("封面占位", blob, "模板封面页应该被删掉，而不是留着当正文页")
+
+    def test_deck_with_cover_uses_template_cover(self):
+        tid = st.import_pptx(self._two_layout_template(), name="封面+内容模板")["id"]
+        deck = [{"layout": "cover", "name": "3.3 幂函数", "cover_title": "3.3 幂函数",
+                 "subtitle": "数学 · 高一"},
+                {"name": "情境导入", "bullets": ["投影五个实例"]}]
+        p = sf.plan(tid, deck, "3.3 幂函数")
+        out = sf.fill_pptx(tid, deck, "3.3 幂函数", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        from pptx import Presentation
+
+        prs = Presentation(out["file"])
+        self.assertEqual(len(prs.slides._sldIdLst), len(p["pages"]))         # noqa: SLF001
+        blob = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes
+                         if getattr(sh, "has_text_frame", False))
+        self.assertIn("3.3 幂函数", blob)
+        self.assertIn("情境导入", blob)
+
+    def test_more_slides_than_template_pages(self):
+        """会话比模板页多：复制模板的内容页（母版继承不变），页数仍对得上。"""
+        tid = st.import_pptx(self._two_layout_template(), name="封面+内容模板")["id"]
+        deck = [{"name": f"环节 {i}", "bullets": [f"第 {i} 条"]} for i in range(6)]
+        p = sf.plan(tid, deck, "3.3 幂函数")
+        self.assertGreater(p["policy"].get("copied", 0), 0)
+        out = sf.fill_pptx(tid, deck, "3.3 幂函数", out_dir=self.out)
+        self.assertTrue(out["ok"], out.get("error"))
+        from pptx import Presentation
+
+        prs = Presentation(out["file"])
+        checks = {c["name"]: c["ok"] for c in out["checks"]}
+        self.assertTrue(checks["页数符合策略"], out["checks"])
+        self.assertEqual(len(prs.slides._sldIdLst), len(deck))               # noqa: SLF001
+        blob = "\n".join(sh.text_frame.text for s in prs.slides for sh in s.shapes
+                         if getattr(sh, "has_text_frame", False))
+        for i in range(6):
+            with self.subTest(page=i):
+                self.assertIn(f"环节 {i}", blob)
+
+
 class EndpointFillTest(_FillCase):
     """走接口（面板点按钮的真实路径）：`POST /api/slide/fill`。"""
 

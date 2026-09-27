@@ -156,10 +156,29 @@ class WrapAndDensityTest(unittest.TestCase):
             with self.subTest(max_w=max_w):
                 self.assertEqual("".join(ppt_svg.wrap(s, max_w, 24)), s)
 
-    def test_wrap_keeps_overflow_in_last_line(self):
-        lines = ppt_svg.wrap("一二三四五六七八九十", 48, 24, max_lines=2)
-        self.assertEqual(len(lines), 2)
-        self.assertEqual("".join(lines), "一二三四五六七八九十")
+    def test_wrap_keeps_going_instead_of_one_giant_line(self):
+        """回归 2026-09-27：超长文字**必须继续换行**，不能并成一个巨宽的行。
+
+        并行的后果：SVG 里出现 6456px 宽的文字（横向溢出 404%）→ 转换器拒绝 → 导出静默回退旧版式。
+        """
+        s = "字" * 400
+        lines = ppt_svg.wrap(s, 1096, 24)
+        self.assertGreaterEqual(len(lines), 8, f"400 字至少该换 8 行，实际 {len(lines)}")
+        self.assertEqual("".join(lines), s)
+        for ln in lines:
+            with self.subTest(line=ln[:8]):
+                self.assertLessEqual(sum(ppt_svg.char_w(c, 24) for c in ln), 1096, "每行都不能超过版心宽")
+
+    def test_long_text_page_stays_inside_canvas(self):
+        """整页渲染后，任何文字元素都不该越出画布（转换器的硬要求）。"""
+        from edu_agent import slide_audit
+
+        out = ppt_svg.render_deck(tk.load("tech-editorial"),
+                                 [{"layout": "bullets", "title": "长文本", "bullets": ["字" * 400]}])
+        boxes = slide_audit.boxes_from_svg(out[0])
+        for b in boxes:
+            with self.subTest(text=b["text"][:8]):
+                self.assertLessEqual(b["x"] + b["w"], 1280.5, f"文字越出右边界：{b['text'][:10]}")
 
     def test_density_warns_and_caps_blocks(self):
         data = tk.load("tech-editorial")

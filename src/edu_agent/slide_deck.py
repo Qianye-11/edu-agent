@@ -456,9 +456,16 @@ def export_deck_pptx(theme_id: str, slides: list[dict] | None, title: str = "", 
     for i, svg in enumerate(pages, 1):
         (svg_out / f"{i:02d}_{built['layouts'][i - 1]}.svg").write_text(svg, encoding="utf-8")
 
-    target_dir = Path(out_dir) if out_dir else ppt_polish.outdir()
+    # ⚠️ 必须 `resolve()`：子进程的 cwd 是任务目录，相对路径会落到 `任务目录/data/tmp/...` 里（踩过）
+    target_dir = Path(out_dir).expanduser().resolve() if out_dir else ppt_polish.outdir()
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / f"教案_{safe_name(title or '未命名')}_{stamp}.pptx"
+    if target.exists():                      # 同一秒导两次别互相覆盖
+        for n in range(2, 100):
+            alt = target.with_name(f"{target.stem}-{n}{target.suffix}")
+            if not alt.exists():
+                target = alt
+                break
 
     logs: list[str] = []
     steps = (

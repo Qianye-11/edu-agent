@@ -94,11 +94,13 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
             "minutes": str(s.get("minutes") or ""),
         }, out, copied=copied))
 
-    # 3) 页数：模板内容页多出来 → 默认删掉（§10.2）
-    extra = max(0, len(content_pages) - len(body_slides))
-    if extra:
-        out["policy"]["deleted"] = extra
-        out["warnings"].append(f"会话比模板少 {extra} 页内容 → 默认删掉模板多余的内容页"
+    # 3) 页数：模板里**没被计划用到的页**都删掉（含没用上的封面/结尾页）
+    used = {p.get("template_index") for p in out["pages"] if not p.get("copied")}
+    unused = [i for i in range(len(pages)) if i not in used]
+    if unused:
+        out["policy"]["deleted"] = len(unused)
+        out["policy"]["delete_indices"] = unused
+        out["warnings"].append(f"模板里有 {len(unused)} 页没被用到（含没用上的封面/结尾页）→ 默认删掉"
                                f"（想保留空页就说一声）")
     if out["policy"].get("copied"):
         out["warnings"].append(f"会话比模板多 → 复制了模板自己的内容页 {out['policy']['copied']} 张"
@@ -184,9 +186,15 @@ def fill_pptx(template_id: str, slides: list[dict] | None, title: str = "", *,
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"填充失败：{type(exc).__name__}: {exc}", "plan": the_plan}
 
-    target_dir = Path(out_dir) if out_dir else ppt_polish.outdir()
+    target_dir = Path(out_dir).expanduser().resolve() if out_dir else ppt_polish.outdir()
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / f"教案_{slide_deck.safe_name(title or '未命名')}_{stamp}.pptx"
+    if target.exists():
+        for n in range(2, 100):
+            alt = target.with_name(f"{target.stem}-{n}{target.suffix}")
+            if not alt.exists():
+                target = alt
+                break
     prs.save(str(target))
 
     checks = _verify_fill(target, want, the_plan)
@@ -200,58 +208,101 @@ def fill_pptx(template_id: str, slides: list[dict] | None, title: str = "", *,
 
 
 def _apply(prs, the_plan: dict, want: list[str]) -> None:
-    """把计划落到 pptx 上：逐页写槽；模板页不够就复制（母版/版式继承保持不变）。"""
-    slides = list(prs.slides)
-    fills = the_plan["pages"]
+    """把计划落到 pptx 上：**按模板页号落位** + 复制页按需新建 + 最后按计划重排顺序。
 
-    # 复制页：从最后一张内容页复制（只复制文本类形状，图片/图表不复制——见 docs/19 §10.2 备注）
-    while len(slides) < len(fills):
-        donor = slides[-1] if slides else None
+    为什么不能"计划第 i 页就写第 i 张"（踩过）：模板常有封面页而会话没有 →
+    那样会把正文写进封面，还会留下没用的封面/结尾页（页数对不上）。
+    所以：先用 `template_index` 精确落位，再一次性算出"最终顺序 = 计划顺序"，其余页连关系一起删掉。
+    """
+    import copy as _copy
+
+    fills = the_plan["pages"]
+    if not fills:
+        return
+    sld_id_lst = prs.slides._sldIdLst                                   # noqa: SLF001
+    slides = list(prs.slides)
+    n0 = len(sld_id_lst)
+
+    # 1) 先写"用模板现有页"的那些（按 template_index 落位）
+    for page in fills:
+        if page.get("copied"):
+            continue
+        ti = page.get("template_index")
+        if ti is None or ti >= len(slides):
+            continue
+        _fill_slide(slides[ti], page, want)
+
+    # 2) 再补"会话比模板多"的页：从模板自己的内容页（donor）复制，只复制文本类形状
+    copied_pages = [p for p in fills if p.get("copied")]
+    donor_idx = next((p.get("template_index") for p in copied_pages), None)
+    donor = slides[donor_idx] if donor_idx is not None and donor_idx < len(slides) else \
+        (slides[-1] if slides else None)
+    copy_elem: dict[int, object] = {}
+    for k, page in enumerate(copied_pages):
         if donor is None:
             break
         new = prs.slides.add_slide(donor.slide_layout)
-        for shp in list(new.shapes):
-            shp._element.getparent().remove(shp._element)          # noqa: SLF001 清掉版式带来的空占位符
+        for shp in list(new.shapes):                                    # 清掉版式带来的空占位符
+            shp._element.getparent().remove(shp._element)               # noqa: SLF001
         for shp in donor.shapes:
             if getattr(shp, "has_text_frame", False):
-                new.shapes._spTree.append(copy.deepcopy(shp._element))   # noqa: SLF001
-        slides = list(prs.slides)
+                new.shapes._spTree.append(_copy.deepcopy(shp._element))  # noqa: SLF001
+        _fill_slide(new, page, want)
+        idx = n0 + k
+        if idx < len(sld_id_lst):
+            copy_elem[id(page)] = sld_id_lst[idx]
 
-    for i, page in enumerate(fills):
-        if i >= len(slides):
-            break
-        slide = slides[i]
-        text_shapes = [s for s in slide.shapes if getattr(s, "has_text_frame", False)]
-        layout_name = slide.slide_layout.name or ""
-        used: set[int] = set()
-        for fill in page["fills"]:
-            # **按角色**挑形状（不是按顺序）：模板里页脚/页码排在前面的情况很常见，
-            # 顺序写就会把标题写进页脚（踩过）。同角色里挑第一个没用过的，找不到再退回顺序。
-            role = fill.get("role") or "body"
-            if not str(fill.get("text") or "").strip():
-                continue                       # 我们这页没有这个角色的内容 → **不动模板那个框**
-            pick = None
-            for k, shp in enumerate(text_shapes):
-                if k in used:
-                    continue
-                if st._role_of(shp, k, layout_name) == role:      # noqa: SLF001
-                    pick = k
-                    break
-            if pick is None:
-                pick = next((k for k in range(len(text_shapes)) if k not in used), None)
-            if pick is None:                                     # 槽不够：不硬塞，交给计划里的提示
+    # 3) 最终顺序 = 计划顺序（复制页用刚建的那张），其余模板页删掉
+    order = []
+    for page in fills:
+        el = copy_elem.get(id(page))
+        if el is None:
+            ti = page.get("template_index")
+            if ti is not None and ti < n0:
+                el = sld_id_lst[ti]
+        if el is not None and el not in order:
+            order.append(el)
+    keep_ids = {el.rId for el in order}
+    for el in list(sld_id_lst):                                         # 先全部摘下，再按计划顺序挂回
+        sld_id_lst.remove(el)                                           # noqa: SLF001
+    for el in order:
+        sld_id_lst.append(el)                                           # noqa: SLF001
+    for el in list(sld_id_lst):                                         # 理论上已经没有多余项，稳妥起见
+        if el.rId not in keep_ids:
+            sld_id_lst.remove(el)                                       # noqa: SLF001
+    # 没进最终顺序的模板页：连关系一起丢掉，避免包里留下孤儿页
+    used_rids = {el.rId for el in sld_id_lst}                           # noqa: SLF001
+    for rel in list(prs.part.rels.values()):
+        if rel.reltype.endswith("/slide") and rel.rId not in used_rids:
+            try:
+                prs.part.drop_rel(rel.rId)
+            except KeyError:
+                pass
+
+
+def _fill_slide(slide, page: dict, want: list[str]) -> None:
+    """把一页的填充内容写进这张幻灯片：**按角色**挑形状，没内容的角色不动模板的框。"""
+    text_shapes = [s for s in slide.shapes if getattr(s, "has_text_frame", False)]
+    layout_name = slide.slide_layout.name or ""
+    used: set[int] = set()
+    for fill in page["fills"]:
+        # **按角色**挑（不是按顺序）：模板里页脚/页码排在前面的情况很常见，顺序写就会把标题写进页脚。
+        role = fill.get("role") or "body"
+        if not str(fill.get("text") or "").strip():
+            continue
+        pick = None
+        for k, shp in enumerate(text_shapes):
+            if k in used:
+                continue
+            if st._role_of(shp, k, layout_name) == role:                # noqa: SLF001
+                pick = k
                 break
-            used.add(pick)
-            _write_text(text_shapes[pick], fill["text"], want)
-
-    # 页数比会话多 → 删掉多余（默认策略，§10.2）
-    deleted = int(the_plan.get("policy", {}).get("deleted") or 0)
-    for _ in range(deleted):
-        if len(prs.slides._sldIdLst) <= len(fills):                # noqa: SLF001
+        if pick is None:
+            pick = next((k for k in range(len(text_shapes)) if k not in used), None)
+        if pick is None:                                                # 槽不够：不硬塞（计划里有提示）
             break
-        rId = prs.slides._sldIdLst[-1].rId                          # noqa: SLF001
-        prs.part.drop_rel(rId)
-        prs.slides._sldIdLst.remove(prs.slides._sldIdLst[-1])       # noqa: SLF001
+        used.add(pick)
+        _write_text(text_shapes[pick], fill["text"], want)
 
 
 def _write_text(shape, text: str, want: list[str]) -> None:

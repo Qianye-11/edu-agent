@@ -3960,6 +3960,9 @@ svg{display:block}
     var sel = bd.querySelector('#dpTheme');
     if(sel) sel.addEventListener('change', function(){
       docpThemeSet(sel.value);
+      /* 主题与模板**二选一**：选了内置主题就把模板清掉 —— 否则"模板压过主题"，
+         老师换了主题却看不出变化，会以为是 bug（踩过）。 */
+      if(docpTplGet()) { docpTplSet(''); showToast('已切回内置主题（模板已取消）'); }
       DOCP_SL.sig = '';                  /* 换主题 → 重新要一份 SVG */
       docpRenderSlides(bd);
     });
@@ -3969,6 +3972,7 @@ svg{display:block}
     var tplSel = bd.querySelector('#dpTpl');
     if(tplSel) tplSel.addEventListener('change', function(){
       docpTplSet(tplSel.value);
+      if(tplSel.value) showToast('已用模板《' + docpTplName(tplSel.value) + '》的配色/字体渲染');
       DOCP_SL.sig = '';                      /* 换模板 → 重新要一份 SVG（借它的配色/字体） */
       docpRenderSlides(bd);
     });

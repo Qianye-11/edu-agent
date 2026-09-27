@@ -302,6 +302,17 @@ async function openDocPanel(doc) {
     tpl.dispatchEvent(new w.Event('change', { bubbles: true }));
     await sleep(800);
     check('选了模板后填充按钮可用', doc.getElementById('dpTplFill').disabled === false);
+    /* 主题与模板二选一：换内置主题要把模板清掉（否则"模板压过主题"，换主题看不出变化） */
+    const themeSel = doc.getElementById('dpTheme');
+    themeSel.value = 'hand-drawn';
+    themeSel.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(700);
+    check('换主题会清掉模板选择（二选一）',
+      doc.getElementById('dpTpl').value === '' && doc.getElementById('dpTplFill').disabled === true,
+      'tpl=' + doc.getElementById('dpTpl').value);
+    tpl.value = '学校模板';
+    tpl.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(700);
     doc.getElementById('dpTplFill').click();
     for (let i = 0; i < 12 && !fills.length; i++) await sleep(250);
     const body = fills[0] || {};

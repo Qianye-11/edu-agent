@@ -131,8 +131,13 @@ def char_w(ch: str, size: float) -> float:
     return size * 0.55
 
 
-def wrap(s: object, max_w: float, size: float, max_lines: int = 4) -> list[str]:
-    """按宽度贪心换行；**不截断**：排到上限后，余下内容全并进最后一行（一个字符都不丢）。"""
+def wrap(s: object, max_w: float, size: float) -> list[str]:
+    """按宽度换行；**该换几行就换几行**（排不下就往下长，交给审计与密度提示去报）。
+
+    ⚠️ 曾经写成"到 max_lines 就把余下内容全并进最后一行"—— 结果 400 字的块变成
+    **一个 6456px 宽的文字元素**（横向溢出 404%），转换器直接拒绝、导出静默回退旧版式（踩过）。
+    "绝不截断"说的是**不删字**，不是"不许换行"：所以现在一律按宽度排满。
+    """
     txt = "" if s is None else str(s)
     if not txt:
         return []
@@ -140,7 +145,7 @@ def wrap(s: object, max_w: float, size: float, max_lines: int = 4) -> list[str]:
     cur, cur_w = "", 0.0
     for ch in txt:
         w = char_w(ch, size)
-        if cur and cur_w + w > max_w and len(lines) < max_lines - 1:
+        if cur and cur_w + w > max_w:
             lines.append(cur)
             cur, cur_w = "", 0.0
         cur += ch
@@ -151,9 +156,9 @@ def wrap(s: object, max_w: float, size: float, max_lines: int = 4) -> list[str]:
 
 
 def paragraph(cv: Canvas, x: float, y: float, s: object, *, size: float, max_w: float, lh: float,
-              weight: int | None = None, fill: str | None = None, max_lines: int = 4) -> tuple[str, float]:
+              weight: int | None = None, fill: str | None = None) -> tuple[str, float]:
     """多行文字；返回 (SVG 片段, 下一次可用的基线 y)。"""
-    lines = wrap(s, max_w, size, max_lines)
+    lines = wrap(s, max_w, size)
     step = size * lh
     svg = "".join(text(cv, x, y + i * step, ln, size=size, weight=weight, fill=fill)
                   for i, ln in enumerate(lines))
@@ -332,7 +337,7 @@ def _media(cv: Canvas, slots: dict, index: int, total: int, warnings: list[str])
     yy = y + size * 0.9
     if slots.get("caption"):
         svg, yy = paragraph(cv, x, yy, slots["caption"], size=cv.size("caption"), max_w=max_w,
-                            lh=1.45, fill=cv.color("sub"), max_lines=3)
+                            lh=1.45, fill=cv.color("sub"))
         out.append(svg)
         yy += size * 0.9
     for b in apply_density(cv, slots.get("bullets") or [], warnings, f"第 {index + 1} 页"):

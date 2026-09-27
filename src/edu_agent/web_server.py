@@ -1427,17 +1427,26 @@ def _export_pptx_deck(body: dict) -> dict:
     title = str(body.get("title") or "").strip()
     out_dir = (body.get("outDir") or "").strip() or None
     md = _strip_agent_tag(str(body.get("markdown") or ""))
-    if not slides:
-        sid = str(body.get("session_id") or "").strip() or (_store.current_id() or "")
-        saved = _store.get_session_doc(sid)          # 只给了会话 id 也要导出"改过的那份"
+    sid = str(body.get("session_id") or "").strip()
+    if not slides and sid:                       # **明确给了会话**才用会话里那份（不猜"当前会话"）
+        saved = _store.get_session_doc(sid)
         if saved.get("slides"):
             slides = saved["slides"]
             title = title or str(saved.get("title") or "")
+    if not slides and not md.strip():            # 既没幻灯片也没正文：明确报错，别静默导出别人的稿
+        return JSONResponse({"ok": False,
+                             "error": "没有可导出的内容（既没有幻灯片，也没有教案正文；"
+                                      "先在面板里生成教案，或带上 session_id）"},
+                            status_code=400)
 
     def _legacy(reason: str) -> dict:
         from edu_agent import wsl_docx
 
-        r = wsl_docx.export_best(body.get("payload") or {}, markdown=md, kind="pptx", out_dir=out_dir)
+        # 新版式这条线的产物目录是 data/ppt_out；回退时**别**把稿子写进老师的 content/plans
+        # （旧版式导出从面板走时仍按它原来的默认行为，这里只改新版式的回退）
+        fallback_dir = out_dir or str(ppt_polish.outdir())
+        r = wsl_docx.export_best(body.get("payload") or {}, markdown=md, kind="pptx",
+                                 out_dir=fallback_dir)
         r = dict(r or {})
         r["fallback"] = True
         r["reason"] = reason
