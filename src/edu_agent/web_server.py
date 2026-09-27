@@ -1645,10 +1645,13 @@ def _export_pptx_deck(body: dict) -> dict:
         return _legacy(f"新版式导出没通过验收：{out.get('error') or '未知原因'}")
 
     v = out.get("verify") or {}
+    notes_n = int(out.get("notes_written") or 0)
     return {"ok": True, "backend": "native", "filename": out["filename"], "outDir": out["outDir"],
             "file": out["file"], "pages": out["pages"], "theme_id": out["theme_id"],
             "fallback": False,
-            "detail": f"已导出 {out['pages']} 页（原生可编辑）· " + "；".join(
+            "notes_written": notes_n, "postcheck": out.get("postcheck") or {},
+            "detail": f"已导出 {out['pages']} 页（原生可编辑）" +
+                      (f" · {notes_n} 页带讲稿备注" if notes_n else "") + " · " + "；".join(
                 f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in (v.get("checks") or [])),
             "verify": v, "download_url": "/api/wps/download?path=" + str(out["file"])}
 

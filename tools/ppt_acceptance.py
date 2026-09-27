@@ -130,16 +130,25 @@ def slide_deck_build() -> dict:
 
 
 def slides_export(with_wps: bool = False) -> None:
-    """幻灯片导出验收：同一份 SVG → 原生可编辑 pptx（docs/23 M3 的 T3.1/T3.4）。"""
+    """幻灯片导出验收：同一份 SVG → 原生可编辑 pptx（docs/23 M3 的 T3.1/T3.4）。
+
+    R16：给示例 deck 的第 2 页塞一句讲稿 —— 备注这条硬验收（备注读回）才算真验过，
+    否则"0 页有备注、逐页读回通过"是空过的。
+    """
     from edu_agent import slide_deck
 
     print("\n[8] 幻灯片导出（新版式 → 原生可编辑 pptx）")
-    out = slide_deck.export_deck_pptx("tech-editorial", slide_deck.SAMPLE_DECK, title="3.3 幂函数")
+    deck = [dict(s) for s in slide_deck.SAMPLE_DECK]
+    if len(deck) > 1:
+        deck[1] = dict(deck[1], notes="验收用讲稿：先问「面积怎么算」，再引出负指数")
+    out = slide_deck.export_deck_pptx("tech-editorial", deck, title="3.3 幂函数")
     check("导出成功", out.get("ok"), out.get("error") or f"status={out.get('status')}")
     if not out.get("ok"):
         return
     for c in (out.get("verify") or {}).get("checks") or []:
         check(f"硬验收：{c['name']}", c["ok"], c["detail"][:90])
+    check("讲稿备注写进产物", int(out.get("notes_written") or 0) >= 1,
+          f"notes_written={out.get('notes_written')}")
     pptx = Path(out["file"])
     print(f"       产物：{pptx}")
     if with_wps:

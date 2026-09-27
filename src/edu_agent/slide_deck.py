@@ -598,11 +598,75 @@ def pptx_font_audit(slides_xml: list[str], theme_xml: str = "") -> tuple[bool, s
     return ok, msg
 
 
-def verify_pptx(pptx: Path, pages: list[str]) -> dict:
+def slide_notes(slides: list[dict] | None, count: int = 0) -> list[str]:
+    """每页的讲稿备注（R16）：与页一一对应，缺的补空串（导出时按页写进 notesSlide）。"""
+    out = []
+    for s in (slides or []):
+        out.append(_text((s or {}).get("notes"))[:2000] if isinstance(s, dict) else "")
+    while len(out) < count:
+        out.append("")
+    return out
+
+
+def notes_in_pptx(pptx: Path) -> list[str]:
+    """读回 pptx 里每页的备注（校验用；读不到就是空串）。
+
+    为什么不直接读包里的 XML：python-pptx 已经把 notesSlide 的坑（缺少 notesMaster、
+    空段落、占位符继承）都处理过了，读它的 `notes_text_frame.text` 最省事也最准。
+    """
+    try:
+        from pptx import Presentation
+        prs = Presentation(str(pptx))
+    except Exception:  # noqa: BLE001 读不出来就当没有备注（校验会如实报"缺"）
+        return []
+    out: list[str] = []
+    for slide in prs.slides:
+        try:
+            out.append((slide.notes_slide.notes_text_frame.text or "").strip())
+        except Exception:  # noqa: BLE001 没有备注页 / 模板异常
+            out.append("")
+    return out
+
+
+def write_notes(pptx: Path, notes: list[str]) -> dict:
+    """把每页备注写进 pptx（R16）：**就地改产物**，写不进去如实返回，不假装成功。
+
+    为什么放在转换之后：ppt-master 是 svg→pptx，SVG 里没有"备注"这个概念，
+    只能在产物上补 —— 补完还要 `notes_in_pptx` 读回来核对（校验里那一条就是它）。
+    """
+    from pptx import Presentation
+
+    want = [(n or "").strip() for n in notes]
+    if not any(want):
+        return {"ok": True, "written": 0, "detail": "没有备注要写"}
+    try:
+        prs = Presentation(str(pptx))
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "written": 0, "error": f"{type(exc).__name__}: {exc}"}
+    if len(prs.slides) != len(want):
+        return {"ok": False, "written": 0,
+                "error": f"页数不一致：pptx {len(prs.slides)} 页 / 备注 {len(want)} 条"}
+    written = 0
+    for slide, text in zip(prs.slides, want):
+        if not text:
+            continue
+        try:
+            slide.notes_slide.notes_text_frame.text = text
+            written += 1
+        except Exception as exc:  # noqa: BLE001 单页失败不拖累别的页
+            return {"ok": False, "written": written, "error": f"{type(exc).__name__}: {exc}"}
+    prs.save(str(pptx))
+    return {"ok": True, "written": written, "detail": f"写了 {written} 页备注"}
+
+
+def verify_pptx(pptx: Path, pages: list[str], notes: list[str] | None = None) -> dict:
     """`docs/22` §6.2 的四条硬验收：页数 / 原生文本 / 不嵌字体+中文字体 / 内容零丢失。
 
     返回 `{ok, checks:[{name, ok, detail}], detail}`；**只看报告与包内容，不看退出码**
     （`svg_to_pptx.py` 在 `passed-with-warnings` 时退出码仍是 1）。
+
+    `notes` 给了就多一条 **备注读回**（R16）：写了讲稿就要能在 pptx 里读出来，
+    读不回来说明白写了（不能只看"我们调用赋值没报错"）。
     """
     checks: list[dict] = []
 
@@ -643,6 +707,17 @@ def verify_pptx(pptx: Path, pages: list[str]) -> dict:
             missing.append(f"第 {i} 页缺 {lack[:3]}")
     add("内容零丢失", not missing and len(want) == len(per_slide),
         "逐页逐串比对通过" if not missing else "；".join(missing))
+
+    if notes is not None:
+        want_notes = [(n or "").strip() for n in notes]
+        got_notes = notes_in_pptx(pptx)
+        lack = [i + 1 for i, (w, g) in enumerate(zip(want_notes, got_notes))
+                if w and w not in g]
+        short = len(got_notes) < len(want_notes)
+        add("备注读回", not lack and not short,
+            f"{sum(1 for w in want_notes if w)} 页有备注，逐页读回通过" if not lack and not short
+            else (f"备注页数不够：{len(got_notes)} / {len(want_notes)}" if short
+                  else f"这些页的备注读不回来：{lack[:5]}"))
 
     ok = all(c["ok"] for c in checks)
     return {"ok": ok, "checks": checks,
@@ -718,18 +793,24 @@ def export_deck_pptx(theme_id: str, slides: list[dict] | None, title: str = "", 
             status = json.loads(report.read_text(encoding="utf-8")).get("status", "")
         except Exception:  # noqa: BLE001 报告坏了不当失败
             status = ""
-    post = _postcheck(target, pages)                    # 内核：清动画 + 补 <a:ea> + 内容零丢失（必经）
+    # R16：备注在转换之后补进产物（SVG 里没有"备注"这个概念），补完由 verify 读回核对
+    notes = slide_notes(slides, len(pages))
+    post = _postcheck(target, pages, notes)             # 内核：清动画 + 补 <a:ea> + 内容零丢失（必经）
     verify = post.pop("verify", {})
     ok = verify.get("ok", False) and (not status or status.startswith("passed"))
     return {"ok": ok, "backend": "native", "file": str(target), "filename": target.name,
             "outDir": str(target_dir), "job": str(job), "status": status,
             "pages": len(pages), "theme_id": built["theme_id"], "layouts": built["layouts"],
             "verify": verify, "postcheck": post, "logs": logs,
+            "notes_written": sum(1 for n in notes if n),
             "error": "" if ok else (f"转换报告 status={status or '（缺失）'}；" + verify.get("detail", ""))}
 
 
-def _postcheck(path: Path, pages: list[str]) -> dict:
-    """生成链路的**最后一道**（docs/23 §6.5 R6-4）：内核 + 内容零丢失。失败不影响产物交付，但要如实报出。"""
+def _postcheck(path: Path, pages: list[str], notes: list[str] | None = None) -> dict:
+    """生成链路的**最后一道**（docs/23 §6.5 R6-4）：内核 + 内容零丢失。失败不影响产物交付，但要如实报出。
+
+    `notes`（R16）先写进产物再校验 —— 顺序反了会校验出一条假失败。
+    """
     from . import ppt_polish
 
     out: dict = {}
@@ -737,7 +818,12 @@ def _postcheck(path: Path, pages: list[str]) -> dict:
         out["normalize"] = ppt_polish.normalize_file(path)
     except Exception as exc:  # noqa: BLE001 内核失败不该让产物不可用
         out["normalize"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-    out["verify"] = verify_pptx(path, pages)
+    if notes is not None:
+        try:
+            out["notes"] = write_notes(path, notes)
+        except Exception as exc:  # noqa: BLE001 备注写不进去不该让产物不可用（但要如实报）
+            out["notes"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    out["verify"] = verify_pptx(path, pages, notes=notes)
     return out
 
 

@@ -359,7 +359,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
   {
-    const { w, doc, errors, saves, renderCalls, slots } = makeDom({ withDoc: true });
+    const { w, doc, errors, saves, renderCalls, slots, exports } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -633,6 +633,38 @@ async function openDocPanel(doc) {
       check('「本页复原」把本页覆盖一次清掉并存回会话',
         saves.length > nSaves0 && !((lastSave.slides || [])[0] || {}).slots,
         JSON.stringify(((lastSave.slides || [])[0] || {}).slots || null));
+
+      /* R16：备注（编辑区下方写讲稿，导出后 WPS 里能看到） */
+      const notesEl = () => doc.getElementById('dpNotes');
+      check('有备注输入框（编辑区下方）', !!notesEl(), notesEl() ? 'ok' : '(没有)');
+      const nSaves1 = saves.length;
+      notesEl().value = '第 1 页的讲稿：先问面积怎么算';
+      notesEl().dispatchEvent(new w.Event('input', { bubbles: true }));
+      for (let i = 0; i < 12 && saves.length <= nSaves1; i++) await sleep(250);
+      const savedN = saves[saves.length - 1] || {};
+      check('备注写进 slides[i].notes 并自动回存',
+        saves.length > nSaves1 && ((savedN.slides || [])[0] || {}).notes === '第 1 页的讲稿：先问面积怎么算',
+        JSON.stringify(((savedN.slides || [])[0] || {}).notes || null));
+      doc.querySelectorAll('#wzLeft .wz-thumb')[1].click(); await sleep(600);
+      check('换页后备注框是空的（不把上一页的讲稿串过来）', notesEl().value === '',
+        JSON.stringify(notesEl().value));
+      notesEl().value = '第 2 页的讲稿';
+      notesEl().dispatchEvent(new w.Event('input', { bubbles: true }));
+      await sleep(900);
+      doc.querySelectorAll('#wzLeft .wz-thumb')[0].click(); await sleep(600);
+      check('换回第 1 页，备注还是第 1 页那份（各页各存各的）',
+        notesEl().value === '第 1 页的讲稿：先问面积怎么算', JSON.stringify(notesEl().value));
+      /* 导出载荷也要带备注（旧版式那份 pptx 才有讲稿） */
+      const legacyBtn = doc.querySelector('#wzDownMenu [data-dl="pptx"]');
+      const nExp = exports.length;
+      legacyBtn.click();
+      for (let i = 0; i < 12 && exports.length <= nExp; i++) await sleep(250);
+      const expBody = exports[exports.length - 1] || {};
+      const expSteps = ((expBody.payload || {}).steps) || [];
+      check('旧版式导出把每一页的备注带上（payload.steps[].notes）',
+        exports.length > nExp && (expSteps[0] || {}).notes === '第 1 页的讲稿：先问面积怎么算',
+        'exports ' + nExp + '→' + exports.length + ' · steps0=' + JSON.stringify(expSteps[0] || null));
+      doc.querySelector('#wzDownMenu [data-dl="pptx"]').blur?.();
 
       /* R13：缩放 */
       const wrap = () => doc.querySelector('#wzDocPane .dp-slidewrap');

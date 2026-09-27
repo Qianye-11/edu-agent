@@ -231,6 +231,7 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
                 "title": cover_slide.get("cover_title") or title or cover_slide.get("name") or "",
                 "subtitle": cover_slide.get("subtitle") or "",
                 "meta": cover_slide.get("meta") or "",
+                "notes": cover_slide.get("notes") or "",
             }, out))
         else:
             out["degraded"].append("模板没有封面页 → 封面内容并入第一张内容页（不硬造封面）")
@@ -259,6 +260,7 @@ def plan(template_id: str, slides: list[dict] | None, title: str = "") -> dict:
                 "title": page_title,
                 "body": group,
                 "minutes": str(s.get("minutes") or "") if gi == 0 else "",
+                "notes": s.get("notes") or "",          # R16：讲稿原样带走（续页也带同一份）
             }, out, copied=copied))
 
     # 3) 页数：模板里**没被计划用到的页**都删掉（含没用上的封面/结尾页）
@@ -448,8 +450,10 @@ def _page_fill(tpl_page: dict, data: dict, out: dict, *, copied: bool = False) -
                       "shape_index": slot.get("shape_index"), "size_px": slot.get("size_px") or 0,
                       "design_capacity": int(slot.get("design_capacity") or 0),
                       "sample": sample, "geo": slot.get("geo") or {}})
+    # ④ 备注（R16）：老师写的讲稿原样带走；没写就把这一页的时长写进备注（信息不丢）
+    note = str(data.get("notes") or "").strip() or (f"{minutes} 分钟" if minutes else "")
     return {"template_index": tpl_page.get("index", 0), "layout": tpl_page.get("layout") or "",
-            "copied": copied, "fills": fills,
+            "copied": copied, "fills": fills, "note": note,
             "kept": [s.get("sample") for s in deco if s.get("sample")],
             "replaced": [{"sample": f.get("sample"), "text": f["text"]}
                          for f in fills if f["text"] and f.get("sample")
@@ -581,6 +585,7 @@ def fill_pptx(template_id: str, slides: list[dict] | None, title: str = "", *,
     return {"ok": ok, "file": str(target), "filename": target.name, "outDir": str(target_dir),
             "template_id": template_id, "job": str(job), "plan": the_plan,
             "checks": checks, "preview": preview, "preview_pages": len(preview), "postcheck": post,
+            "notes_written": sum(1 for p in the_plan["pages"] if (p.get("note") or "").strip()),
             "quality": {"fill": "ok" if ok else "fail", "template": "ok"},
             "detail": "；".join(f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in checks),
             "warnings": the_plan["warnings"] + the_plan["degraded"],
@@ -633,6 +638,7 @@ def _apply(prs, the_plan: dict, want: list[str]) -> None:
                 continue
             target = slides[ti]
         _fill_slide(target, page, want, scale=scale)
+        _write_note(target, page.get("note"))       # R16：讲稿写进备注（WPS 里能看到）
 
     # 3) 最终顺序 = 计划顺序（复制页用刚建的那张），其余模板页删掉
     order = []
@@ -762,6 +768,28 @@ def _fill_slide(slide, page: dict, want: list[str], *, scale: float = 1.0) -> No
         if text and text == (fill.get("sample") or ""):
             continue                            # 原样（装饰/页码没变）→ 一个字都不动
         _write_text(shape, text, want, fill)
+
+
+def _write_note(slide, text: str) -> None:
+    """把一页的讲稿写进 pptx 的备注（R16）：WPS 里打开就能看到"这一页要讲什么"。
+
+    空文本不建备注页（不给模板添无用的 notesSlide）；写不进去不抛异常（备注不该拖垮填充），
+    但 `_verify_fill` 会**读回来核对**，真写丢了会在结果条里报出来。
+    """
+    text = str(text or "").strip()
+    if not text:
+        return
+    try:
+        slide.notes_slide.notes_text_frame.text = text
+    except Exception:  # noqa: BLE001 个别模板的备注页结构异常
+        pass
+
+
+def _note_of(slide) -> str:
+    try:
+        return (slide.notes_slide.notes_text_frame.text or "").strip()
+    except Exception:  # noqa: BLE001 没有备注页
+        return ""
 
 
 def _apply_geo(shape, fill: dict, scale: float = 1.0) -> None:
@@ -967,6 +995,10 @@ def _verify_fill(pptx: Path, want: list[str], the_plan: dict) -> list[dict]:
              if not any(getattr(sh, "has_text_frame", False) and (sh.text_frame.text or "").strip()
                         for sh in s.shapes)
              and not any(sh.shape_type == MSO_SHAPE_TYPE.PICTURE for sh in s.shapes)]
+    # 备注读回（R16，不阻断）：写了讲稿就要能在 pptx 里读出来
+    want_notes = [(p.get("note") or "").strip() for p in the_plan["pages"]]
+    got_notes = [_note_of(s) for s in product]
+    note_lack = [i + 1 for i, (w, g) in enumerate(zip(want_notes, got_notes)) if w and w not in g]
     return [
         {"name": "内容零丢失", "ok": not missing, "blocking": True,
          "detail": f"拟写入 {len(want)} 串，缺 {len(missing)} 串" + (f"：{missing[:3]}" if missing else "")},
@@ -980,6 +1012,9 @@ def _verify_fill(pptx: Path, want: list[str], the_plan: dict) -> list[dict]:
          "detail": f"产物 {len(prs.slides._sldIdLst)} 页 / 计划 {len(the_plan['pages'])} 页"},
         {"name": "容量自查", "ok": not over, "blocking": False,
          "detail": f"{len(over)} 处超容量（只提示，不阻断）" if over else "没有超容量"},
+        {"name": "备注读回", "ok": not note_lack, "blocking": False,
+         "detail": f"{sum(1 for w in want_notes if w)} 页有讲稿，逐页读回通过"
+                   if not note_lack else f"这些页的备注读不回来：{note_lack[:5]}"},
     ]
 
 
