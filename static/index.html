@@ -672,6 +672,14 @@ body.theme-dark .avt{color:#fff}
 .dp-wallcard .cv{position:relative;aspect-ratio:16/9;overflow:hidden}
 .dp-wallcard .cv svg{width:100%;height:100%;display:block}
 .dp-wallcard .n{font-size:11.5px;color:var(--ink-600);padding:3px 6px;border-top:.5px solid var(--line)}
+/* R17：放映层（全屏铺一份 SVG；系统全屏被拒时也照样能放） */
+.dp-show{position:fixed;inset:0;z-index:9999;background:#0d0f12;display:flex;align-items:center;justify-content:center}
+.dp-show .pg{width:min(100vw, calc(100vh * 16 / 9));height:auto;aspect-ratio:16/9;background:#fff;box-shadow:0 8px 40px rgba(0,0,0,.45)}
+.dp-show .pg svg{width:100%;height:100%;display:block}
+.dp-show .bar{position:fixed;left:0;right:0;bottom:0;height:40px;display:flex;align-items:center;gap:10px;justify-content:center;background:rgba(0,0,0,.5);color:#fff;font-size:12.5px;font-family:var(--font)}
+.dp-show .bar button{height:26px;padding:0 10px;border-radius:7px;border:.5px solid rgba(255,255,255,.45);background:rgba(255,255,255,.08);color:#fff;font-size:12px;font-family:var(--font);cursor:pointer}
+.dp-show .bar button:hover{background:rgba(255,255,255,.2)}
+.dp-show .dp-show-tip{color:rgba(255,255,255,.6)}
 /* 放大后要能滚（transform 不改变布局尺寸，靠 #dpZoomBox 撑出滚动区） */
 .dp-zoombox{position:relative}
 /* R16：备注（这一页的讲稿，导出后 WPS 备注栏能看到） */
@@ -3184,12 +3192,15 @@ body.theme-dark .avt{color:#fff}
         '<span class="sp"></span>' + saved;
       return;
     }
-    el.innerHTML = '<b>第 ' + (DOCP_PAGE + 1) + ' / ' + Math.max(1, sl.length) + ' 页</b>' +
-      '<span>共 ' + sl.length + ' 页</span>' +
-      '<span>' + Math.round((DOCP_SL.zoom || DOCP_SL.fit || 0.375) * 100) + '%' +
-        (DOCP_SL.zoom ? '（手动）' : '（适应窗口）') + '</span>' +
-      '<span>' + escHtml(docpThemeName(docpThemeGet()) || '学术蓝') + '</span>' +
-      '<span>' + (DOCP_SL.fail ? '纯文本预览' : '单击选中 · 双击改字 · Ctrl+Z 撤销') + '</span>' +
+    el.innerHTML = (docpShowOn()
+        ? '<b>放映中 · 第 ' + (DOCP_SL.show.page + 1) + ' / ' + Math.max(1, (DOCP_SL.pages || []).length) +
+          ' 页</b><span>方向键 / 空格翻页</span><span>Esc 退出</span>'
+        : '<b>第 ' + (DOCP_PAGE + 1) + ' / ' + Math.max(1, sl.length) + ' 页</b>' +
+          '<span>共 ' + sl.length + ' 页</span>' +
+          '<span>' + Math.round((DOCP_SL.zoom || DOCP_SL.fit || 0.375) * 100) + '%' +
+            (DOCP_SL.zoom ? '（手动）' : '（适应窗口）') + '</span>' +
+          '<span>' + escHtml(docpThemeName(docpThemeGet()) || '学术蓝') + '</span>' +
+          '<span>' + (DOCP_SL.fail ? '纯文本预览' : '单击选中 · 双击改字 · F5 放映') + '</span>') +
       '<span class="sp"></span>' + saved;
   }
   /* 保存状态：改动时标"正在写入"，服务端确认后回"已保存"（顶栏那行字与状态栏同步） */
@@ -4016,7 +4027,9 @@ body.theme-dark .avt{color:#fff}
                   sel: '', snap: true, canvas: { w: 1280, h: 720, margin: 72, cols: 12, gutter: 24 },
                   /* R13/R15：缩放（0 = 适应窗口）、浏览视图、网格、工具分组、字体清单 */
                   zoom: 0, fit: 0.375, browse: false, grid: false, group: 'home', fonts: [],
-                  notesTimer: null };
+                  notesTimer: null,
+                  /* R17：放映（全屏层；page = 当前放映到第几页，0 起） */
+                  show: { on: false, page: 0 } };
   var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
                       ['two-col', '两栏'], ['media', '图文'], ['end', '结尾']];
   var CHARS_PER_BLOCK = 22;                     /* 与 slide_deck.CHARS_PER_BLOCK 对齐（只提示不截断） */
@@ -4745,9 +4758,12 @@ body.theme-dark .avt{color:#fff}
   }
   /* 方向键微调（1px；Shift = 10px）。绑在 document 上：盒子被重画也不丢。 */
   function docpNudge(ev){
-    /* R13/R15 的全局键：网格（Shift+F9）、适应窗口（Ctrl+0）、缩放（Ctrl+= / Ctrl+-） */
+    /* 放映中（R17）：键盘全交给放映层 —— 翻页/退出，别的键一概不管 */
+    if(docpShowOn()){ docpShowKey(ev); return; }
+    /* R17 的入口键 + R13/R15 的全局键：F5 从头、Shift+F5 从本页、网格（Shift+F9）、适应窗口（Ctrl+0） */
     if(typeof WZ_TAB === 'string' && WZ_TAB === 'slides' && !DOCP_SL.browse){
       var bd0 = docpEl('wzDocBody');
+      if(ev.key === 'F5' && bd0){ ev.preventDefault(); docpShowStart(!!ev.shiftKey); return; }
       if(ev.shiftKey && ev.key === 'F9' && bd0){ ev.preventDefault(); docpGridToggle(bd0); return; }
       if((ev.ctrlKey || ev.metaKey) && (ev.key === '0' || ev.key === ')') && bd0){
         ev.preventDefault(); docpZoomSet(bd0, 0); return;
@@ -5137,11 +5153,11 @@ body.theme-dark .avt{color:#fff}
   var DOCP_GROUPS = [['home', '开始'], ['insert', '插入'], ['design', '设计'], ['show', '放映']];
   function docpToolTabsHtml(){
     return '<div class="dp-tooltabs">' + DOCP_GROUPS.map(function(g){
-      var soon = (!DOCP_SL.fillPreview && (g[0] === 'insert' || g[0] === 'show'))
-        || (DOCP_SL.fillPreview && g[0] !== 'design');
+      var soon = (g[0] === 'insert');          /* R17 起「放映」是真的了；插入类还在 R21–R22 */
       return '<button class="dp-tt' + (DOCP_SL.group === g[0] ? ' on' : '') + '" data-tool="' + g[0] + '"' +
         (soon ? ' data-soon="1"' : '') + ' title="' + (soon ? '这一组在后面的轮次里加进来' :
-          (g[0] === 'design' ? '主题 / 模板 / 网格 / 缩放' : '选中后改字与样式')) + '">' +
+          (g[0] === 'design' ? '主题 / 模板 / 网格 / 缩放'
+            : (g[0] === 'show' ? '从头放映（F5）/ 从本页放映（Shift+F5）' : '选中后改字与样式'))) + '">' +
         escHtml(g[1]) + '</button>';
     }).join('') + '<span class="sp"></span>' +
       '<span class="dp-cnt">' + (DOCP_SL.fillPreview ? '模板填充页：改了先记着，点【应用修改】才重填'
@@ -5157,11 +5173,17 @@ body.theme-dark .avt{color:#fff}
         '<button id="dpZoomIn" title="放大（Ctrl+滚轮）">放大 +</button>' +
         '<button id="dpZoomOut" title="缩小（Ctrl+滚轮）">缩小 −</button></div>';
     }
-    if(g === 'insert' || g === 'show'){
-      var what = g === 'insert' ? '文本框 / 形状 / 图片' : '放映（F5）';
-      var when = g === 'insert' ? 'R21–R22' : 'R17';
-      return '<div class="dp-toolgroup" data-group="' + g + '">' +
-        '<span class="dp-cnt">' + what + '在 ' + when + ' 加进来 —— 这一组先占位，不放假按钮</span></div>';
+    if(g === 'insert'){
+      var what = '文本框 / 形状 / 图片';
+      return '<div class="dp-toolgroup" data-group="insert">' +
+        '<span class="dp-cnt">' + what + '在 R21–R22 加进来 —— 这一组先占位，不放假按钮</span></div>';
+    }
+    if(g === 'show'){
+      return '<div class="dp-toolgroup" data-group="show">' +
+        '<button id="dpShowAll" title="全屏从头放映（F5）">▶ 从头放映</button>' +
+        '<button id="dpShowHere" title="全屏从这一页放映（Shift+F5）">▶ 从本页放映</button>' +
+        '<span class="dp-cnt">放映中：方向键 / 空格翻页 · Home/End 首末页 · Esc 退出 ' +
+        '（全屏被系统拦下也能放，只是不铺满屏幕）</span></div>';
     }
     /* 开始：选中后能改的样式（位置/大小在右栏，层级/删除在下面那条） */
     return '<div class="dp-toolgroup" data-group="home">' +
@@ -5242,8 +5264,8 @@ body.theme-dark .avt{color:#fff}
       '<div class="dp-prow"><span></span>' +
         '<button class="dp-mini" id="dpPresetPage" title="本页所有改动回到版式原样">本页复原</button>' +
         '<button class="dp-mini" id="dpPresetAll" title="整册所有改动回到版式原样（谨慎）">整册复原</button></div>' +
-      '<div class="dp-prow"><button class="dp-mini" id="dpPlayFrom" disabled title="放映这一页（R17 加进来）">从本页放映</button>' +
-        '<span class="dp-cnt">R17</span></div>' +
+      '<div class="dp-prow"><button class="dp-mini" id="dpPlayFrom" title="全屏从这一页放映（Shift+F5）">▶ 从本页放映</button>' +
+        '<span class="dp-cnt">Shift+F5</span></div>' +
       '</div>';
   }
   function docpSizeSteps(){
@@ -5496,6 +5518,11 @@ body.theme-dark .avt{color:#fff}
         docpRenderSlides(bd);
       });
     });
+    /* R17：放映入口（F5 / Shift+F5 与这里同一套函数） */
+    var showAll = bd.querySelector('#dpShowAll');
+    if(showAll) showAll.addEventListener('click', function(){ docpShowStart(false); });
+    var showHere = bd.querySelector('#dpShowHere');
+    if(showHere) showHere.addEventListener('click', function(){ docpShowStart(true); });
     var map = { dpBold: 'bold', dpItalic: 'italic' };
     Object.keys(map).forEach(function(id){
       var el = bd.querySelector('#' + id);
@@ -5590,6 +5617,7 @@ body.theme-dark .avt{color:#fff}
     });
     bind('dpPresetPage', 'click', function(){ docpResetScope(bd, 'page'); });
     bind('dpPresetAll', 'click', function(){ docpResetScope(bd, 'all'); });
+    bind('dpPlayFrom', 'click', function(){ docpShowStart(true); });
   }
   /* 一键复原（R15 §6.4 的四级里先做三级：本槽 / 本页 / 整册；"单对象"要等自由层 R21） */
   function docpResetScope(bd, scope){
@@ -5698,6 +5726,91 @@ body.theme-dark .avt{color:#fff}
         showToast('第 ' + (DOCP_PAGE + 1) + ' 页');
       });
     });
+  }
+  /* ==== 放映（R17）=================================================================
+     全屏层铺 `DOCP_SL.pages`（**同一份 SVG**，所以放映里看到的和导出的一模一样）。
+     为什么不用浏览器全屏 API 兜底：无头/受限环境里 `requestFullscreen` 可能被拒，
+     所以铺一层 `position:fixed` 的深色层 + 居中 16:9 —— 系统全屏成了就真全屏，没成也能放。
+     页码：SVG 里服务端已经画了 `n / N`，这里再给一条状态读数（模板页的页码在 pptx 里，读不到）。 */
+  function docpShowOn(){ return !!(DOCP_SL.show && DOCP_SL.show.on); }
+  function docpShowStart(fromCurrent){
+    var pages = DOCP_SL.pages || [];
+    if(!pages.length){ showToast('还没有可放映的页面（先让幻灯片渲染出来）', false); return; }
+    var start = fromCurrent ? Math.max(0, Math.min(DOCP_PAGE, pages.length - 1)) : 0;
+    DOCP_SL.show = { on: true, page: start };
+    docpShowPaint();
+    try{
+      var el = document.documentElement;
+      if(el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen();
+    }catch(e){ /* 全屏被拒：深色层照样能放，不报错打断老师 */ }
+    showToast('放映中：方向键 / 空格翻页 · Esc 退出');
+    wzStatusRender();
+  }
+  function docpShowStop(){
+    DOCP_SL.show = { on: false, page: 0 };
+    var host = document.getElementById('dpShow');
+    if(host && host.parentNode) host.parentNode.removeChild(host);
+    try{
+      if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+    }catch(e){ /* 退出全屏失败无所谓：层已经拆了 */ }
+    wzStatusRender();
+  }
+  function docpShowGo(delta){
+    if(!docpShowOn()) return;
+    var n = (DOCP_SL.pages || []).length;
+    DOCP_SL.show.page = Math.max(0, Math.min(n - 1, DOCP_SL.show.page + delta));
+    docpShowPaint();
+    wzStatusRender();
+  }
+  function docpShowJump(to){
+    if(!docpShowOn()) return;
+    var n = (DOCP_SL.pages || []).length;
+    DOCP_SL.show.page = to === 'last' ? n - 1 : 0;
+    docpShowPaint();
+    wzStatusRender();
+  }
+  function docpShowPaint(){
+    if(!docpShowOn()) return;
+    var pages = DOCP_SL.pages || [];
+    var i = DOCP_SL.show.page;
+    var host = document.getElementById('dpShow');
+    if(!host){
+      host = document.createElement('div');
+      host.className = 'dp-show';
+      host.id = 'dpShow';
+      host.setAttribute('role', 'dialog');
+      host.setAttribute('aria-label', '放映');
+      document.body.appendChild(host);
+      host.addEventListener('click', function(ev){
+        if(ev.target.closest && ev.target.closest('.bar')) return;   /* 底下那条不算"翻页点击" */
+        docpShowGo(1);
+      });
+    }
+    host.innerHTML = '<div class="pg" id="dpShowPage">' + (pages[i] || '') + '</div>' +
+      '<div class="bar"><button id="dpShowPrev">‹ 上一页</button>' +
+      '<span id="dpShowNum">第 ' + (i + 1) + ' / ' + pages.length + ' 页</span>' +
+      '<button id="dpShowNext">下一页 ›</button>' +
+      '<button id="dpShowExit">退出（Esc）</button>' +
+      '<span class="dp-show-tip">方向键 / 空格翻页 · Home/End 首末页</span></div>';
+    var prev = host.querySelector('#dpShowPrev');
+    if(prev) prev.addEventListener('click', function(){ docpShowGo(-1); });
+    var next = host.querySelector('#dpShowNext');
+    if(next) next.addEventListener('click', function(){ docpShowGo(1); });
+    var exit = host.querySelector('#dpShowExit');
+    if(exit) exit.addEventListener('click', function(){ docpShowStop(); });
+  }
+  /* 放映时的键盘：只认翻页/退出，别的键一律不管（别在放映时偷偷改数据） */
+  function docpShowKey(ev){
+    if(ev.key === 'Escape'){ ev.preventDefault(); docpShowStop(); return; }
+    if(ev.key === 'ArrowRight' || ev.key === 'ArrowDown' || ev.key === ' ' || ev.key === 'PageDown' ||
+       ev.key === 'Enter'){ ev.preventDefault(); docpShowGo(1); return; }
+    if(ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' || ev.key === 'PageUp' || ev.key === 'Backspace'){
+      ev.preventDefault(); docpShowGo(-1); return;
+    }
+    if(ev.key === 'Home'){ ev.preventDefault(); docpShowJump('first'); return; }
+    if(ev.key === 'End'){ ev.preventDefault(); docpShowJump('last'); return; }
+    if(ev.key === 'F5'){ ev.preventDefault(); docpShowStart(!!ev.shiftKey); return; }
+    /* 放映中吞掉其它键（含 Delete 与方向微调）—— 不 return 也不做事，等于忽略 */
   }
   /* 只换页：更新舞台 + 页码，**不重建 DOM**（重建会让页面滚动位置跳走 —— 踩过） */
   function docpPaintPage(bd){

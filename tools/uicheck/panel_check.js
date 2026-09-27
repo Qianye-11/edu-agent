@@ -548,7 +548,9 @@ async function openDocPanel(doc) {
         Array.from(doc.querySelectorAll('#wzDocPane .dp-tt')).map((b) => txt(b)).join('/'));
       check('没做的组标了 data-soon（不放假按钮）',
         !!doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"][data-soon]') &&
-        !!doc.querySelector('#wzDocPane .dp-tt[data-tool="show"][data-soon]'));
+        !doc.querySelector('#wzDocPane .dp-tt[data-tool="show"][data-soon]'),
+        '插入=' + !!doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"][data-soon]') +
+        ' 放映=' + !!doc.querySelector('#wzDocPane .dp-tt[data-tool="show"][data-soon]'));
       doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click(); await sleep(200);
       check('点「插入」不切换、只说明第几轮做',
         doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').classList.contains('on'));
@@ -710,6 +712,50 @@ async function openDocPanel(doc) {
         /第 3 \//.test(txt(doc.querySelector('#wzDocPane #dpPgBar span'))),
         txt(doc.querySelector('#wzDocPane #dpPgBar span')));
       check('无运行时错误（R15/R13 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+      /* R17：放映（F5 从头 / Shift+F5 从本页 / 方向键翻页 / Esc 退出） */
+      const showLayer = () => doc.getElementById('dpShow');
+      const showNum = () => txt(doc.querySelector('#dpShow .bar #dpShowNum'));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="show"]').click(); await sleep(400);
+      check('「放映」组里有从头放映 / 从本页放映',
+        !!doc.getElementById('dpShowAll') && !!doc.getElementById('dpShowHere'));
+      doc.getElementById('dpShowAll').click(); await sleep(400);
+      check('进入放映：铺一层全屏层，里面是同一份 SVG',
+        !!showLayer() && !!doc.querySelector('#dpShow .pg svg'),
+        (showLayer() ? 'ok' : '(没有 #dpShow)') + ' · 画布 svg=' +
+        !!doc.querySelector('#wzDocPane #dpCanvas svg') + ' · err=' + errors.slice(-2).join(' | ') +
+        ' · body 尾=' + (doc.body.lastElementChild || {}).className);
+      check('放映层给页码读数', /第 1 \/ 5 页/.test(showNum()), showNum());
+      check('放映时状态栏也说"放映中"', /放映中/.test(txt(doc.getElementById('wzStatusBar'))),
+        txt(doc.getElementById('wzStatusBar')));
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      await sleep(250);
+      check('方向键翻到下一页', /第 2 \/ 5 页/.test(showNum()), showNum());
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      await sleep(250);
+      check('方向键能往回翻', /第 1 \/ 5 页/.test(showNum()), showNum());
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+      await sleep(250);
+      check('End 跳末页', /第 5 \/ 5 页/.test(showNum()), showNum());
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+      await sleep(250);
+      check('Home 回首页', /第 1 \/ 5 页/.test(showNum()), showNum());
+      doc.getElementById('dpShowNext').click(); await sleep(250);
+      check('点「下一页」也翻页', /第 2 \/ 5 页/.test(showNum()), showNum());
+      doc.querySelector('#dpShow .pg').click(); await sleep(250);
+      check('点画面翻页（WPS 习惯）', /第 3 \/ 5 页/.test(showNum()), showNum());
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(300);
+      check('Esc 退出放映（层拆掉，回到编辑视图）',
+        !showLayer() && !!doc.querySelector('#wzDocPane #dpCanvas'));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
+      doc.querySelectorAll('#wzLeft .wz-thumb')[3].click(); await sleep(500);
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'F5', shiftKey: true, bubbles: true }));
+      await sleep(350);
+      check('Shift+F5 从当前页开始放（第 4 页）', /第 4 \/ 5 页/.test(showNum()), showNum());
+      doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(300);
+      check('再按 Esc 退出（可反复进出）', !showLayer());
+
       /* 回到第 1 页：下面的老用例（本页属性条那几条）默认在第 1 页上跑 */
       doc.querySelector('#wzLeft .wz-thumb[data-thumb="0"]').click(); await sleep(600);
       check('（收尾）回到第 1 页', /第 1 \//.test(txt(doc.querySelector('#wzDocPane #dpPgBar span'))),
