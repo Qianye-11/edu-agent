@@ -174,6 +174,54 @@ def _base_tokens() -> dict:
     return tk.load("tech-editorial")
 
 
+def _bg_from_pptx(pptx: Path) -> tuple[str, str]:
+    """从模板首页的**整页底图/色块**推一个近似底色（给预览用；填充产物里仍是原图）。
+
+    为什么需要：设计稿的"背景"往往是一张整页图片，而不是主题色（`clrScheme` 里只有白）——
+    于是老师选了模板却在预览里"看不出背景变化"。这里取整页图的**中位色**当底色近似。
+    """
+    try:
+        from pptx import Presentation
+        from pptx.util import Emu
+
+        prs = Presentation(str(pptx))
+        if not len(prs.slides._sldIdLst):                       # noqa: SLF001
+            return "", ""
+        slide = prs.slides[0]
+        pic = None
+        solid = ""
+        for sh in slide.shapes:
+            w = float(Emu(int(sh.width or 0)).inches) * 96
+            h = float(Emu(int(sh.height or 0)).inches) * 96
+            if w < 1280 * 0.6 or h < 720 * 0.6:                 # 只认"盖住大半页"的
+                continue
+            if "PICTURE" in str(sh.shape_type):
+                pic = pic or sh
+            elif not solid:
+                try:
+                    if sh.fill.type == 1 and sh.fill.fore_color.rgb:
+                        solid = "#" + str(sh.fill.fore_color.rgb).upper()
+                except Exception:  # noqa: BLE001
+                    pass
+        if solid:
+            return solid, f"底色取自模板首页的整页色块 {solid}"
+        if pic is not None:
+            import io
+
+            from PIL import Image
+
+            im = Image.open(io.BytesIO(pic.image.blob)).convert("RGB").resize((24, 24))
+            px = list(im.getdata())
+            n = len(px) or 1
+            med = tuple(sorted(p[i] for p in px)[n // 2] for i in range(3))
+            hexc = "#%02X%02X%02X" % med
+            return hexc, (f"模板首页是整页底图 → 预览用它的中位色 {hexc} 近似"
+                          f"（填充产物里是原图，不会丢）")
+    except Exception:  # noqa: BLE001 取不到就算了，别影响导入
+        pass
+    return "", ""
+
+
 def tokens_from_pptx(pptx: Path, *, name: str = "") -> tuple[dict, list[str]]:
     """一份 .pptx → 我们那套 tokens（配色/字体/字号取自模板，画布与版式仍是我们的）。
 
@@ -186,6 +234,10 @@ def tokens_from_pptx(pptx: Path, *, name: str = "") -> tuple[dict, list[str]]:
     fonts = _font_scheme(xml)
 
     bg = scheme.get("lt1") or base["canvas"]["bg"]
+    bg2, bg_note = _bg_from_pptx(pptx)              # 整页底图/色块优先（否则预览看不出背景变化）
+    if bg2:
+        bg = bg2
+        degraded.append(bg_note)
     text = scheme.get("dk1") or base["palette"]["text"]
     accent = scheme.get("accent1") or base["palette"]["accent"]
     if not scheme:
@@ -472,8 +524,19 @@ def theme_for(template_id: str) -> dict | None:
         return None
     if tid in tk.available():
         return tk.load(tid)
-    theme = _read_json(root() / _slug(tid) / "theme.json")
-    tokens = theme.get("tokens")
+    tpl_dir = root() / _slug(tid)
+    theme = _read_json(tpl_dir / "theme.json")
+    pptx = tpl_dir / "template.pptx"
+    tokens = None
+    if pptx.is_file():                                 # 现场重算：抽取规则改进了，老导入自动跟上
+        try:
+            fresh, _ = tokens_from_pptx(pptx, name=theme.get("name") or tid)
+            tokens = fresh if not tk.validate(fresh) else None
+        except Exception:  # noqa: BLE001 重算失败就用缓存
+            tokens = None
+    if tokens is None:
+        cached = theme.get("tokens")
+        tokens = cached if isinstance(cached, dict) else None
     if not isinstance(tokens, dict):
         return None
     problems = tk.validate(tokens)

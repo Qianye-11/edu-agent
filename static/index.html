@@ -3757,6 +3757,7 @@ svg{display:block}
     }).join('||');
   }
   function docpPagesEnsure(bd, sl, cb){
+    if(DOCP_SL.fillPreview){ if(cb) cb(); return; }   /* 正在看"按模板填出来的样子"：别取我们的 SVG 覆盖它 */
     var sig = docpSlidesSig(sl);
     if(DOCP_SL.sig === sig && DOCP_SL.pages.length){ if(cb) cb(); return; }
     if(DOCP_SL.busy) return;
@@ -3966,9 +3967,7 @@ svg{display:block}
         if(v === 'prev') DOCP_PAGE--;
         else if(v === 'next') DOCP_PAGE++;
         else DOCP_PAGE = parseInt(v, 10) || 0;
-        if(DOCP_PAGE < 0) DOCP_PAGE = 0;
-        if(DOCP_PAGE > sl.length - 1) DOCP_PAGE = sl.length - 1;
-        docpRenderSlides(bd);
+        docpPaintPage(bd);
       });
     });
     var sel = bd.querySelector('#dpTheme');
@@ -4106,6 +4105,19 @@ svg{display:block}
         });
       });
     }
+  }
+  /* 只换页：更新舞台 + 当前卡片高亮 + 页码，**不重建 DOM**（重建会让页面滚动位置跳走 —— 踩过） */
+  function docpPaintPage(bd){
+    var sl = (DOCP && DOCP.slides) || [];
+    var total = DOCP_SL.fillPreview ? ((DOCP_SL.pages || []).length || sl.length) : sl.length;
+    if(DOCP_PAGE < 0) DOCP_PAGE = 0;
+    if(DOCP_PAGE > total - 1) DOCP_PAGE = total - 1;
+    docpPaintStage(bd);
+    Array.prototype.forEach.call(bd.querySelectorAll('.dp-slide'), function(el, i){
+      el.classList.toggle('dp-cur', i === DOCP_PAGE);
+    });
+    var bar = bd.querySelector('.dp-pagebar span');
+    if(bar) bar.textContent = '第 ' + (DOCP_PAGE + 1) + ' / ' + total + ' 页　点下面的卡片可直接跳页';
   }
   function docpRenderSlides(bd){
     var deck = docpBuildDeck(), sl = deck.slides || [];
