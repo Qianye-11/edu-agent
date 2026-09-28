@@ -9,6 +9,30 @@
 
 ## 1. 资产盘点（实读 `.deps/ppt-master` 与只读参考副本）
 
+> **2026-09-28 补：内置模板的"两条轴"与真实数量**（老师提到 34 套 Bold / 12 套预设、水墨·毛玻璃·孟菲斯·杂志·财经·瑞士等）。
+> 我们**实读了两份**：pin 的 `481e057`（2026-09-23）与上游最新 `680de11`（2026-09-27，拉在 `data/tmp/ppt-master-next`，隔离目录不动线上）。
+> **结论**：老师点名的那些风格名**已经在装的这份里**，它们属于 `references/visual-styles/`（**视觉风格**），
+> 与 `templates/styles/`（**沟通方法工作区**）是**两条不同的轴**；"34 / 12"这两个数字在仓库里对不上（真实数量见下表）。
+
+### 1.0 真实目录（两份一致，均已实读）
+
+| 轴 / 资产 | 位置 | 数量 | 形态 |
+|---|---|---|---|
+| **视觉风格**（决定"页面怎么呈现"） | `skills/ppt-master/references/visual-styles/*.md` | **18 套**：blueprint · brutalist · chalkboard · dark-tech · data-journalism · editorial · **glassmorphism** · ink-notes · **ink-wash** · **memphis** · paper-cut · photo-editorial · pixel-art · sketch-notes · soft-rounded · **swiss-minimal** · vintage-poster · zine | **散文规则**（形状/排版性格/用色纪律/纹理/配对图像），**明说"不含 HEX"** |
+| **沟通模式**（决定"deck 怎么表达"） | `references/modes/*.md` | **5 种**：pyramid · narrative · instructional · showcase · briefing（+ `_index`） | 散文规则 |
+| **风格工作区** | `templates/styles/<名>/templates/design_spec.md` | **14 套**：academic-research · consulting-decision · creative-pitch · duty-manual · incident-postmortem · investor-pitch · mbb-consulting · narrative-keynote · operating-review · product-launch · science-explainer · solution-proposal · technical-deepdive · workshop-teaching | 方法论散文（含 YAML 头：`style_id/kind/summary/keywords`） |
+| **品牌** | `templates/brands/<名>/` | **21 家**（google · microsoft · tencent · alibaba · huawei · accenture · mckinsey · bcg · bain · deloitte · pwc · ibm · nvidia · aws · jpmorgan · anthropic …） | `design_spec.md` **带色值**（primary/secondary/accent/text/bg，标 `fact`/`approx`）+ logo/字标素材 |
+| **版式族** | `templates/layouts/<族>/templates/*.svg` | **7 族 / 86 个版式**：presentation_core **20** · presentation_core_43 **16** · report_core **13** · editorial_bleed **10** · xiaohongshu_post **10** · story_vertical **9** · moments_square **8** | **槽位化 SVG**（`data-pptx-placeholder` / `-bounds` / `-layer` / `{{PAGE_TITLE}}`） |
+| **成品 deck** | `templates/decks/` | **2 套**（中国电信 / 中汽研） | 每套 `templates/*.svg` + `design_spec.md` + `images/` |
+| **图像三件套** | `references/{image-renderings,image-palettes,image-type-templates}/` | 21 / 15 / 12 | 配图风格与调色板（配"视觉风格"用） |
+| **规格与脚手架** | `templates/scaffolds/` · `templates/schemas/` | `design_spec.md` · `spec_lock.md` + 两个 JSON Schema | 编译器的输入契约 |
+| **入口** | `workflows/create-template.md`(40KB) · `generate-pptx.md`(46KB) · `edit-native-pptx.md`(19KB) · `routing.md` | 3 条主管线 + 路由 | `/create-template` 把 pptx/SVG/图片/PDF 变成 brand/style/layout/deck 工作区 |
+
+**老师点名的名字 → 仓库里的真身**：中国水墨风 = `visual-styles/ink-wash`；毛玻璃 = `glassmorphism`；
+孟菲斯 = `memphis`；瑞士极简 = `swiss-minimal`；杂志图文 = `editorial`；财经数据 = `data-journalism`；
+另外还有 `dark-tech` / `blueprint` / `brutalist` / `chalkboard` / `paper-cut` / `pixel-art` / `vintage-poster` 等。
+⇒ **不用为了这几个风格升级**（`481e057` 里就有）；升级另议（见 §4 红线 3）。
+
 ### 1.1 ppt-master（**MIT** ⇒ 可放心用；仓库不入库，`docs/22` D12 锁 commit `481e057e`）
 
 | 资产 | 位置 | 数量 / 形态 | 对我们意味着什么 |
@@ -87,7 +111,48 @@ ppt-master 的版式 SVG 本来就是**槽位化**的，样例（`presentation_c
 
 ---
 
-## 3. 优化方案的接法（"能改"之外还要"能评")
+## 3. 两种使用方式（老师要的"两个都要"，落成两条产品路径）
+
+### 3.1 方式一：直接选用内置模板（在我们的面板里选，不给老师添步骤）
+
+**交互**：`设计` 组里给两个下拉（现有"主题 / 模板"两个控件升级为四个）——
+
+| 控件 | 取值 | 来源 |
+|---|---|---|
+| **视觉风格** | 18 套（水墨 / 瑞士极简 / 杂志 / 财经数据 / 毛玻璃 / 孟菲斯 / 蓝图 / 黑板 / 纸雕 / 像素 / 复古海报 / Zine …） | `references/visual-styles/*.md` |
+| **沟通模式** | 5 种（金字塔 / 叙事 / 教学 / 展示 / 简报） | `references/modes/*.md` |
+| **品牌**（可选） | 21 家色板 | `templates/brands/*/templates/design_spec.md` |
+| **版式族 / 版式** | 7 族 86 个版式里挑常用的进白名单 | `templates/layouts/*/templates/*.svg` |
+
+**难点与解法（重要）**：`visual-styles` 是**散文规则、明确不含 HEX**（原文："HEX values come from confirmation `e`; this style only governs … discipline — it names no colors"）。
+所以"直接选用"必须由**我们给每种风格配一套数值**（否则就是空壳）：
+
+1. **数值化**：为每套视觉风格写一份 tokens（`content/ppt_templates/_builtin/<style>.json`）——
+   色板按风格的纪律定（例：`ink-wash` 宣纸底 + 墨黑字 + **单一朱红印色**；`swiss-minimal` 灰阶 + 单一高饱和锚点 + 直角禁渐变），
+   字号/边距/几何沿用我们已验收的阶梯，`source` 字段记 `ppt-master references/visual-styles/<名>.md @<commit>`；
+2. **纪律落地**：把风格的"几何/装饰纪律"变成**版式装饰层**与**审计检查**（例：ink-wash 禁重复卡片网格、要大片留白；
+   memphis 允许高饱和撞色几何块但禁阴影；swiss-minimal 直角纯色、禁渐变/阴影/圆角）；
+3. **配图对接**：风格里写了"配对图像渲染"（如 ink-wash ↔ `ink-notes`/`watercolor`），接到我们的配图三件套
+   （`image-renderings` 21 / `image-palettes` 15 / `image-type-templates` 12）与"联网取图 / AI 生图"。
+4. **样张先行**：每种风格先出 3 页样张（封面 / 要点 / 图文）给老师挑，挑中的进正式主题库（照 `docs/22` 第 1 步的老规矩：**口味由老师定，数值由工程定**）。
+
+### 3.2 方式二：导入自己的 .pptx 当模板（对齐它的 `/create-template`）
+
+**现状**：我们已经有 `模板+`（导入 .pptx → 读主题色/字体/字号 + 推断槽位 → `填充` → 预览走 `pptx_to_svg` → 导出走 python-pptx **原地改，保留模板设计**）。
+**要补的**是 `/create-template` 那套"**抽成可复用工作区**"的深度：
+
+| 它做什么（`workflows/create-template.md`） | 我们对应做什么 |
+|---|---|
+| 从 .pptx/SVG/图片/PDF 抽取 → 归类成 **brand / style / layout / deck** 四类工作区（写 `design_spec.md` + `spec_lock.md`，过 Schema 校验） | 接 `pptx_template_import.py`（抽取）→ `register_template.py`（登记）→ `template_validation.py`（校验）→ 存进我们的模板库（`content/ppt_templates/`），面板"模板"下拉里直接可选 |
+| 生成时**复用**这套工作区（母版 / 版式继承 / logo / 字体规范） | 生成时用 `apply_template.py` 套规格；导出仍走"python-pptx 原地改 + 内容零丢失校验" |
+| **是 AI 工作流**（要 agent 读材料、写规格、过确认） | 两条子路都给：① **脚本直抽**（deterministic，快，覆盖配色/字体/母版/版式几何）② **深度抽取**（跑它的 create-template 流程，产出完整 design_spec；需要模型 + 上下文，做成一个可选的"深度抽取"按钮） |
+
+**红线不变**：模板原稿**只读**（导入只在 `content/ppt_templates/` 建副本 + 回收站机制）；
+`content/plans/` 一个字不写；`.deps/ppt-master` 只读。
+
+---
+
+## 4. 优化方案的接法（"能改"之外还要"能评")
 
 | 来源 | 怎么用 | 现状 |
 |---|---|---|
@@ -100,7 +165,7 @@ ppt-master 的版式 SVG 本来就是**槽位化**的，样例（`presentation_c
 
 ---
 
-## 4. 红线（照 `docs/22` D11/D12 与 `docs/24` §7.3）
+## 5. 红线（照 `docs/22` D11/D12 与 `docs/24` §7.3）
 
 1. **AGPL 隔离**：guizang 的模板/脚本/HTML **不入库、不进产品链路**；只借数值与规则，并在 tokens/代码注释里标 `source`；
 2. **MIT 也要守规矩**：`ppt-master` 只在**外面调用**，**不许改 `.deps/ppt-master` 下任何文件**（启动有完整性校验）；它 **不入库**，所以我们编译产物必须**自包含**（不能运行时去读它的文件当依赖，读一次生成 JSON 即可）；
@@ -111,22 +176,22 @@ ppt-master 的版式 SVG 本来就是**槽位化**的，样例（`presentation_c
 
 ---
 
-## 5. 分期（每期都能单独验收，建议先做 R27）
+## 6. 分期（每期都能单独验收；老师要求"两种使用方式都要"，故 R27/R28 各一条）
 
 | 期 | 做什么 | 验收 |
 |---|---|---|
-| **R27 · 版式第一批** | 版式编译器 + `presentation_core` 里最常用的 **6 个**：`title_content` / `two_content` / `comparison` / `section_header` / `content_caption` / `hero_statement`（我们已有的 `bullets` / `two-col` / `section` / `cover` / `end` 保留不删，做映射） | 样张对比页（6 版式 × 3 主题）；`slide_audit --gate` error 0；导出 pptx 过 §6.2 四条硬验收；面板里能选到新版式且**页内编辑照旧** |
-| **R28 · 主题与品牌** | 主题编译器 + 8 套 style 的"内容策略" + 3–5 个品牌色板（先挑教育场景常用的） | 每套 tokens 过 `tests/test_ppt_tokens.py`（字号在区间、字体本机已装、禁项扫描）；样张 3 页/套 |
-| **R29 · 模板直通** | 接 `pptx_template_import` / `template_validation`，把 1 个族 + 1 套成品变成可导入模板 | 导入 → 填充 → 预览 → 导出全通；内容零丢失校验通过 |
-| **R30 · 优化方案补全** | guizang 的 P0 对齐四法则做成审计新检查（可测部分）+ 面板"一键按建议修" | 负样本自证（`slide_audit --selftest` 扩例）；面板能一键应用 |
-| R31+ · 剩余版式 | 其余 14 个 `presentation_core` 版式 + `editorial_bleed` / `report_core` / `story_vertical` 等族 + guizang 22 版式里适合课件的若干 | 同上（每个版式都要过闸门） |
+| **R27 · 方式一（直选内置模板）** | 视觉风格编译器 + 版式编译器：先上 **3 套视觉风格**（`ink-wash` 水墨 / `swiss-minimal` 瑞士极简 / `editorial` 杂志）× **6 个版式**（`title_content` / `two_content` / `comparison` / `section_header` / `content_caption` / `hero_statement`）；`设计` 组里加"视觉风格"下拉 | 「3 风格 × 6 版式 × 3 主题」**样张对比页**给老师挑；`slide_audit --gate` error 0；导出 pptx 过 `docs/22` §6.2 四条硬验收；面板可选且**页内编辑照旧** |
+| **R28 · 方式二（导入自己的 pptx）** | 接 `pptx_template_import` / `register_template` / `template_validation`，把导入的 .pptx 抽成我们模板库里的登记项（母版/配色/字体/版式几何），生成时可复用 | 导入一份真实学校/答辩模板 → 填 → 预览（`pptx_to_svg`）→ 导出，**未改页面逐字节保留**、内容零丢失校验通过；原稿只读 |
+| **R29 · 剩下 15 套视觉风格** | 按 R27 的流程批量数值化（memphis / dark-tech / blueprint / chalkboard / paper-cut / pixel-art / vintage-poster / zine …）+ 5 种沟通模式接进"内容策略" | 每套 3 页样张；tokens 单测（字号在区间/字体本机已装/禁项扫描）全绿 |
+| **R30 · 其余版式族** | `report_core` / `editorial_bleed` / `story_vertical` / `presentation_core_43` 等族的常用版式继续编译（共 86 个，按需） | 同上（每个版式过闸门） |
+| **R31 · 优化方案补全** | guizang 的 P0 对齐四法则做成审计新检查 + 面板"一键按建议修"；`svg_quality_checker` 的建议接进结果条 | 负样本自证（`slide_audit --selftest` 扩例） |
 
-**为什么先做 R27**：老师要的是"预览里的 PPT 更好看"，而**版式**是观感的第一来源（`docs/22` §0 那三条难看的原因里两条与版式有关）；
-主题只是换色，边际收益小；模板直通会牺牲页内编辑，放后面让老师按需选。
+**为什么 R27 先上 3 套视觉风格 + 6 个版式**：这是老师真正会挑的粒度（风格=外观口味，版式=页面排法），
+一套做完就能拿去选；一下子上 18 套 × 86 版式只会做出一堆没人看的样张。
 
 ---
 
-## 6. 给同事 agent 的接口（与 `docs/24` §7 对齐）
+## 7. 给同事 agent 的接口（与 `docs/24` §7 对齐）
 
 * 新版式/新主题一旦登记，agent **不用改代码**：`GET /api/slide/fill/plan` 与 `GET /api/slide/render` 的响应里会多出可选 `layout` 与 `themes`；
 * agent 想用某个品牌风格：`theme_id` 给我们的新 id（例：`brand-google`）；
