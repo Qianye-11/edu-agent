@@ -486,6 +486,17 @@ def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
     boxes_all: list[list[dict]] = []
     chars = 0
     for i, slide in enumerate(items):
+        # R27c：**整页 SVG 逃生口** —— 这一页由 agent 直接给 SVG（预览与导出都用它，不重画）。
+        # 校验在 clean_slides 里做过（必须是 <svg> 且带 viewBox、无 script/外链）；
+        # 这里再兜一层：形状不对就退回正常渲染，绝不让坏 SVG 进导出。
+        override = svg_override_of(slide)
+        if override:
+            layouts.append("svg-override")
+            pages.append(override)
+            if annotate:
+                boxes_all.append([])          # 自由页没有槽位盒子（页面整体是 agent 画的）
+            chars += sum(len(str(v)) for v in (slide.get("bullets") or []))
+            continue
         layout, slots = to_slots(slide, i, total, doc_title=_text(title))
         layouts.append(layout)
         page_boxes: list[dict] | None = [] if annotate else None
@@ -508,6 +519,33 @@ def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
 def slide_warnings(theme_id: str, slides: list[dict] | None, title: str = "") -> list[str]:
     """只跑"密度/上限"检查（面板提示用），不返回 SVG。"""
     return build_deck(theme_id, slides, title).get("warnings") or []
+
+
+#: 整页 SVG 逃生口（R27c）的上限与硬约束
+MAX_OVERRIDE_BYTES = 200_000
+_OVERRIDE_FORBIDDEN = ("<script", "javascript:", "<foreignObject", "<image", "xlink:href", "href=\"http",
+                       "href='http", "<iframe", "<use")
+
+
+def svg_override_of(slide: dict) -> str:
+    """取这一页的整页 SVG 覆盖（没有/不可用就返回空串 —— 调用方退回正常渲染）。"""
+    raw = slide.get("svg_override") if isinstance(slide, dict) else None
+    if not isinstance(raw, str):
+        return ""
+    s = raw.strip()
+    if not s or len(s.encode("utf-8", "ignore")) > MAX_OVERRIDE_BYTES:
+        return ""
+    low = s.lower()
+    if not low.startswith("<svg") or "viewbox=" not in low or low.count("<svg") != 1:
+        return ""
+    if any(bad.lower() in low for bad in _OVERRIDE_FORBIDDEN):
+        return ""
+    return s
+
+
+def clean_override(raw: object) -> str:
+    """清洗器用的入口：不合规一律丢掉（**不报错、不截断**，让 agent 自己看响应里的 warnings）。"""
+    return svg_override_of({"svg_override": raw})
 
 
 #: 画布尺寸（与 tokens 一致；面板的等比缩放以此为准）
@@ -895,6 +933,11 @@ def clean_slides(slides: list[dict] | None) -> list[dict]:
         notes = _text(raw.get("notes"))[:2000]              # R16 预留：每一页的备注
         if notes:
             s["notes"] = notes
+        # R27c：整页 SVG 逃生口（agent 想完全自由地画这一页时用）。**不合规一律丢掉**，
+        # 不报错也不截断 —— 让 agent 从响应里的 warnings 自己发现（与 clean_objects 一个思路）。
+        ov = clean_override(raw.get("svg_override"))
+        if ov:
+            s["svg_override"] = ov
         if s.get("name") or s.get("title") or s.get("bullets") or s.get("blocks") or s.get("left"):
             out.append(s)                       # 全空的一页直接丢，别留下空白页
     return out
@@ -1108,15 +1151,17 @@ def verify_pptx(pptx: Path, pages: list[str], notes: list[str] | None = None) ->
 
 
 def export_deck_pptx(theme_id: str, slides: list[dict] | None, title: str = "", *,
-                     out_dir: str | Path | None = None) -> dict:
+                     out_dir: str | Path | None = None, tokens: dict | None = None) -> dict:
     """把幻灯片导出成**原生可编辑 pptx**（同一份 SVG 交给 ppt-master 转换）。
 
     落盘规则（`docs/23` §5）：中间件进 `data/tmp/ppt_jobs/<job>/`（24h 自清），
     产物进 `data/ppt_out/`（或老师选的目录）；**`content/plans/` 一个字不写**。
+
+    `tokens` 给了就用它（R27c：`design` 解析出来的数值）—— 预览与导出因此仍是同一份 SVG。
     """
     from . import ppt_polish                       # 复用它的 home/scripts/workroot/outdir
 
-    built = build_deck(theme_id, slides, title=title)
+    built = build_deck(theme_id, slides, title=title, tokens=tokens)
     pages = built["pages"]
     if not pages:
         return {"ok": False, "error": "没有可导出的页（slides 为空？）", "backend": "native"}

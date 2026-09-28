@@ -201,6 +201,24 @@ def catalog(*, full: bool = False) -> dict:
     }
 
 
+def apply_to_slides(slides: list[dict] | None, resolved: "Resolved") -> list[dict]:
+    """把 `design.per_page` 的版式落到 `slides` 上（**不改动原对象**，返回新列表）。
+
+    规则：`per_page[i].layout` 只覆盖**那一页**；没给到的页保持原样。
+    未知版式在 `resolve()` 里已经记了 warn，这里不重复报错（渲染时会有兜底）。
+    """
+    out: list[dict] = []
+    per = resolved.per_page or []
+    for i, s in enumerate(slides or []):
+        if not isinstance(s, dict):
+            continue
+        item = dict(s)
+        if i < len(per) and per[i].get("layout"):
+            item["layout"] = per[i]["layout"]
+        out.append(item)
+    return out
+
+
 @dataclass
 class Resolved:
     """一份 `design` 解析出来的东西：数值 + 版式 + 说明。"""

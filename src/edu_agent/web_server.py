@@ -1024,11 +1024,66 @@ class SlideDeckReq(BaseModel):
     outDir: str = ""
     confirm: bool = False
     session_id: str = ""
+    #: R27c：**设计规格**（视觉风格 / 沟通模式 / 品牌 / 数值覆盖 / 逐页版式）。
+    #: 不给 = 与以前完全一致（向后兼容）；给了就用它解析出的 tokens 渲染 **同一份 SVG**（预览=导出不变）。
+    design: dict | None = None
+
+
+class SlideDesignPreviewReq(BaseModel):
+    """**R27c 的预览端**：给一份 `design`（可带 slides 或让服务端用会话里那份）→ 立刻出预览 SVG。
+
+    只读、不落盘 —— 所以不需要 `confirm`（与 `/api/slide/render` 同一档）。
+    """
+
+    design: dict | None = None
+    slides: list[dict] | None = None
+    title: str = ""
+    session_id: str = ""
+    annotate: bool = True                 # 默认带可编辑盒子（预览要能点着改）
+
+
+@app.post("/api/slide/design/preview")
+def api_slide_design_preview(body: SlideDesignPreviewReq):
+    """按设计规格出**预览**（R27c）：`design` → 解析数值 → 渲染每页 SVG（不落盘）。
+
+    返回 `{ok, pages, boxes, layouts, resolved, applied, warnings, checks}`：
+    * `resolved` 是最终生效的数值（palette/type/geometry/density/逐页版式）—— agent 据此知道自己调成了什么；
+    * `warnings` 里是"越界被夹/不认识的风格/版式"这类说明（**界面不显示，agent 必须读**）；
+    * `pages` 与导出用的是**同一份渲染**（`slide_deck.build_deck`），所以"预览=导出"没被破坏。
+    """
+    from edu_agent import design_spec as _ds
+    from edu_agent import slide_deck as _sd
+
+    slides_in = body.slides
+    if not slides_in:
+        doc = _store.get_session_doc(str(body.session_id or "").strip() or (_store.current_id() or ""))
+        slides_in = doc.get("slides") or []
+    slides = _sd.clean_slides(slides_in)
+    if not slides:
+        return JSONResponse({"ok": False, "schema": "edu-agent.design-preview.v1",
+                             "error": "没有可渲染的页：给 slides，或先让会话里有一份教案"},
+                            status_code=400)
+    r = _ds.resolve(body.design)
+    slides = _ds.apply_to_slides(slides, r)
+    tokens = r.as_tokens()
+    built = _sd.build_deck(r.visual_style or body.title or "design", slides,
+                           title=str(body.title or "").strip(), tokens=tokens,
+                           annotate=bool(body.annotate))
+    if not built.get("ok"):
+        return JSONResponse({"ok": False, "schema": "edu-agent.design-preview.v1",
+                             "error": built.get("error") or "渲染失败"}, status_code=200)
+    return {"ok": True, "schema": "edu-agent.design-preview.v1",
+            "pages": built["pages"], "layouts": built["layouts"],
+            "boxes": built.get("boxes") or [], "canvas": built.get("canvas"),
+            "fonts": built.get("fonts"), "stats": built.get("stats"),
+            "resolved": r.summary(), "applied": r.applied,
+            "warnings": list(r.warnings) + list(built.get("warnings") or []),
+            "locked": _ds.locked()}
 
 
 @app.post("/api/slide/deck")
 def api_slide_deck(body: SlideDeckReq):
-    """一步出稿：`lesson` → pptx（有模板走填充，没模板走我们的 6 版式）。"""
+    """一步出稿：`lesson` → pptx（有模板走填充，没模板走我们的版式；`design` 给了就按规格渲染）。"""
     from edu_agent import permissions
     from edu_agent import slide_fill
 
@@ -1046,7 +1101,24 @@ def api_slide_deck(body: SlideDeckReq):
     if tid:
         out = slide_fill.fill_pptx(tid, slides, title=title, out_dir=out_dir)
     else:
-        out = slide_deck.export_deck_pptx(body.theme_id, slides, title=title, out_dir=out_dir)
+        tokens = None
+        if isinstance(body.design, dict) and body.design:
+            from edu_agent import design_spec as _ds
+            from edu_agent import slide_deck as _sd
+
+            r = _ds.resolve(body.design)
+            slides = _ds.apply_to_slides(_sd.clean_slides(slides), r)
+            tokens = r.as_tokens()
+            out = _sd.export_deck_pptx(body.theme_id, slides, title=title, out_dir=out_dir,
+                                       tokens=tokens)
+            out["design"] = {"resolved": r.summary(), "applied": r.applied,
+                             "warnings": list(r.warnings)}
+        else:
+            out = slide_deck.export_deck_pptx(body.theme_id, slides, title=title, out_dir=out_dir)
+    # 契约（docs/24 §7）说成功响应里带 `checks[]`：导出内核把它放在 `verify.checks`，
+    # 这里**拉平一层**（agent 不必知道我们的内部结构）。
+    if isinstance(out, dict) and "checks" not in out:
+        out["checks"] = (out.get("verify") or {}).get("checks") or []
     out["schema"] = slide_fill.SCHEMA
     return out
 
