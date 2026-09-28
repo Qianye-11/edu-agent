@@ -58,19 +58,16 @@ class _NoDiskWrites(unittest.TestCase):
     """红线：渲染是纯内存的（预览不落盘）。
 
     ⚠️ 这条断言原来写成"整棵 `data/tmp` 的快照必须一模一样"，结果**并行跑闸门时经常假失败**：
-    在跑的 Web 服务（写 `data/tmp/ppt_jobs`）、截图工具（写 `data/tmp/wzshots`）、另一个测试进程
-    都会往同一棵树里加文件，和"渲染落不落盘"毫无关系（踩过好几次，浪费在查假失败上的时间最多）。
-    现在拆成两件事：
-      ① 这里只比对**快照时已存在的文件有没有被改/删**（谁新加了文件不算——那不是本用例的锅）；
-      ② 真正"渲染自己不写盘"的直接证据放在 `_RenderWritesNothing`：给一个**空的数据目录**，
-         渲染完它必须还是空的。
+    在跑的 Web 服务（写 `data/tmp/ppt_jobs`）、截图工具（写 `data/tmp/wzshots`）、
+    `tools/ppt_smoke.py`（**改写** `data/tmp/smoke_out|smoke_edge` 里的同名文件）、另一个测试进程
+    —— 它们和"渲染落不落盘"毫无关系，却会把断言弄红（查这种假失败最浪费时间）。
+    现在只盯**渲染绝不该碰**的两处：`content/plans`（教案正文）与 `data/uploads`（老师上传/取回的图）；
+    别的工具的工作目录不在监视范围里。真正"渲染自己不写盘"的直接证据在 `_RenderWritesNothing`：
+    给一个**空的数据目录**，渲染完它必须还是空的（这个断言并行跑也成立）。
     """
 
-    WATCH = (_PROJ / "data" / "tmp", _PROJ / "content" / "plans")
-    #: `ppt_jobs/` 是导出/导入任务**该写**的地方（`docs/22` §6.3），渲染用例不碰它；
-    #: 不跳过的话，每次跑闸门都要 stat 上万个任务文件（实测 15,577 个 / 793 MB → 整套单测慢十几分钟）。
-    #: 关心导出写盘行为的用例（`ExportTest`）自己把它设成 `()` 再逐条看。
-    SKIP = ("ppt_jobs",)
+    WATCH = (_PROJ / "content" / "plans", _PROJ / "data" / "uploads")
+    SKIP = ()
 
     def setUp(self):
         self.before = _snapshot(*self.WATCH, skip=self.SKIP)

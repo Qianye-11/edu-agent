@@ -3487,7 +3487,7 @@ body.wz-dragging{cursor:grabbing}
     var others = rest.map(function(g){ return sl[g]; });
     var out = others.slice(0, insertAt).concat(moving, others.slice(insertAt));
     if(JSON.stringify(out) === JSON.stringify(sl)) return;      /* 没动就不折腾 */
-    var step = docpPushPagesUndo();                             /* 排序也能撤回（R19/R20） */
+    var step = docpPushPagesUndo(moving.length > 1 ? ('挪 ' + moving.length + ' 页') : '拖动排序');
     DOCP.slides = out;
     DOCP_SL.sig = '';
     var newSel = [], firstNew = insertAt;
@@ -3536,14 +3536,12 @@ body.wz-dragging{cursor:grabbing}
     var m = document.getElementById('wzRailMenu');
     if(m && m.parentNode) m.parentNode.removeChild(m);
   }
-  /* 页级撤销（R20 的预支）：删/排序/加页之前先拍一份快照 —— 批量删页最容易误删丢内容。
+  /* 页级撤销（R20）：删/排序/加页/粘贴/替换/配图之前先拍一份快照 —— 批量删页最容易误删丢内容。
      返回 step（调用方改完之后调 `docpPagesUndoClose(step)` 补上 after，这样**重做**也成立）。 */
-  function docpPushPagesUndo(){
-    var step = { type: 'pages', index: DOCP_PAGE,
+  function docpPushPagesUndo(label){
+    var step = { type: 'pages', label: label || '页面改动', index: DOCP_PAGE,
                  before: JSON.parse(JSON.stringify((DOCP && DOCP.slides) || [])) };
-    DOCP_SL.undo.push(step);
-    if(DOCP_SL.undo.length > 20) DOCP_SL.undo.shift();
-    DOCP_SL.redo.length = 0;
+    docpUndoPush(step);
     return step;
   }
   function docpPagesUndoClose(step){
@@ -3554,7 +3552,7 @@ body.wz-dragging{cursor:grabbing}
     var sl = (DOCP && DOCP.slides) || [];
     var idx = list.filter(function(i){ return sl[i]; }).sort(function(a, b){ return a - b; });
     if(!idx.length) return;
-    var step = docpPushPagesUndo();
+    var step = docpPushPagesUndo(idx.length > 1 ? ('复制 ' + idx.length + ' 页') : '复制一页');
     var made = [];
     idx.slice().reverse().forEach(function(i){
       var copy = JSON.parse(JSON.stringify(sl[i]));
@@ -3579,7 +3577,7 @@ body.wz-dragging{cursor:grabbing}
       showToast('不能把页删光（至少留一页）—— 要清空就新建一个会话', false);
       return;
     }
-    var step = docpPushPagesUndo();
+    var step = docpPushPagesUndo(idx.length > 1 ? ('删 ' + idx.length + ' 页') : '删掉一页');
     idx.slice().reverse().forEach(function(i){ sl.splice(i, 1); });
     DOCP_PAGE = Math.max(0, Math.min(idx[0], sl.length - 1));
     wzRailSelClear();
@@ -4321,6 +4319,8 @@ body.wz-dragging{cursor:grabbing}
                   imgState: '', imgHint: '',
                   /* R18：多选 / 剪贴板 / 查找替换 */
                   multi: [], clip: null,
+                  /* R20：操作栈事务（开着时细步先攒着，关掉时合成一步） */
+                  tx: null,
                   find: { open: false, replace: false, query: '', replaceWith: '', hits: [], cur: -1 },
                   keyOpen: false };
   var DOCP_LAYOUTS = [['cover', '封面'], ['section', '章节'], ['bullets', '要点'],
@@ -4645,6 +4645,10 @@ body.wz-dragging{cursor:grabbing}
   function docpAfterEdit(structural){
     var bd = docpEl('wzDocBody');
     if(!bd) return;
+    /* ⚠️ 本地一改，**在途的那些回传就都过期了**（它们带的是改动前的 slides）。
+       不作废的话，加了一块之后，早先发出的 /api/slide/slot 响应回来会把新块抹掉
+       —— 判断依据是 `DOCP_SL.seq`，所以这里必须自增（R20 面板检查逮到的真 bug）。 */
+    DOCP_SL.seq++;
     DOCP_SL.sig = '';                            /* 数据变了就必须重出 SVG（否则改动看不见） */
     if(structural){ docpRenderSlides(bd); }
     else{
@@ -4655,7 +4659,7 @@ body.wz-dragging{cursor:grabbing}
   }
   function docpAddPage(){
     var sl = (DOCP && DOCP.slides) || [];
-    var step = docpPushPagesUndo();
+    var step = docpPushPagesUndo('加一页');
     sl.push({ name: '新的一页', layout: 'bullets', bullets: [''] });
     DOCP_SL.editing = sl.length - 1;
     DOCP_PAGE = sl.length - 1;
@@ -4668,7 +4672,7 @@ body.wz-dragging{cursor:grabbing}
     var sl = (DOCP && DOCP.slides) || [];
     var j = i + delta;
     if(j < 0 || j >= sl.length) return;
-    var step = docpPushPagesUndo();                        /* 排序也进撤销栈（R19/R20） */
+    var step = docpPushPagesUndo(delta < 0 ? '上移一页' : '下移一页');
     var tmp = sl[i]; sl[i] = sl[j]; sl[j] = tmp;
     DOCP_SL.editing = j;
     DOCP_PAGE = j;
@@ -5084,9 +5088,11 @@ body.wz-dragging{cursor:grabbing}
   function docpObjDelete(bd){
     var slots = docpSelList();
     if(!slots.length){ showToast('先点一下要删的文字', false); return; }
-    slots.forEach(function(slot){ docpDeleteOne(bd, slot); });
+    docpTx('删掉 ' + slots.length + ' 处文字', function(){
+      slots.forEach(function(slot){ docpDeleteOne(bd, slot); });
+    });
     docpSelect(bd, '');
-    showToast(slots.length > 1 ? ('删掉了 ' + slots.length + ' 处（Ctrl+Z 能撤回）')
+    showToast(slots.length > 1 ? ('删掉了 ' + slots.length + ' 处（一次 Ctrl+Z 全回来）')
                                : '删掉了（Ctrl+Z 能撤回）');
   }
   /* 删一处：槽位层用 `hidden`（不画、字还在、索引不乱，能撤销）；填充层就是"清空这一格"。 */
@@ -5111,12 +5117,14 @@ body.wz-dragging{cursor:grabbing}
     var slots = docpSelList();
     if(!slots.length){ showToast('先点一下要调层级的文字', false); return; }
     var done = 0, same = 0;
-    slots.forEach(function(slot){
-      var cur = docpNum(docpOverrideOf(bd, slot).z, 0);
-      var z = Math.max(-9, Math.min(9, cur + delta));
-      if(z === cur){ same += 1; return; }
-      docpGeoCommit(bd, slot, { z: z }, docpOverrideOf(bd, slot));
-      done += 1;
+    docpTx(slots.length > 1 ? ('调 ' + slots.length + ' 处的层级') : '调层级', function(){
+      slots.forEach(function(slot){
+        var cur = docpNum(docpOverrideOf(bd, slot).z, 0);
+        var z = Math.max(-9, Math.min(9, cur + delta));
+        if(z === cur){ same += 1; return; }
+        docpGeoCommit(bd, slot, { z: z }, docpOverrideOf(bd, slot));
+        done += 1;
+      });
     });
     showToast(done ? ((delta > 0 ? '上移一层' : '下移一层') + (done > 1 ? ('（' + done + ' 处）') : ''))
                    : (delta > 0 ? '已经在最上层了' : '已经在最下层了'));
@@ -5157,19 +5165,65 @@ body.wz-dragging{cursor:grabbing}
     else return;
     ev.preventDefault();
     var bd = docpEl('wzDocBody');
-    /* 多选时一起挪（R18）：每一格按自己的现值加同一个增量 */
-    docpSelList().forEach(function(slot){
-      var cur = docpOverrideOf(bd, slot);
-      var patch = {};
-      if(d.dx) patch.dx = docpRound1(docpNum(cur.dx, 0) + d.dx);
-      if(d.dy) patch.dy = docpRound1(docpNum(cur.dy, 0) + d.dy);
-      docpGeoCommit(bd, slot, patch, cur);
+    /* 多选时一起挪（R18/R20）：每一格按自己的现值加同一个增量，**整批算一步** */
+    var list = docpSelList();
+    docpTx(list.length > 1 ? ('微调 ' + list.length + ' 处') : '微调', function(){
+      list.forEach(function(slot){
+        var cur = docpOverrideOf(bd, slot);
+        var patch = {};
+        if(d.dx) patch.dx = docpRound1(docpNum(cur.dx, 0) + d.dx);
+        if(d.dy) patch.dy = docpRound1(docpNum(cur.dy, 0) + d.dy);
+        docpGeoCommit(bd, slot, patch, cur);
+      });
     });
   }
+  /* ==== 操作栈（R20 · D10：上面所有操作都能 Ctrl+Z 撤回）=========================
+     一条规矩：**一次操作 = 一步**。拖三处、删三处、批量改样式，都只该按一次 Ctrl+Z。
+     实现：`docpUndoPush` 是"收集器" —— 开着事务时细步进事务，关掉时（细步 >1）合成 `group` 一步。
+     为什么不用"记整册快照"统一了事：那会把"挪一个盒子"也存成整份 slides（内存与回传都白花），
+     而且丢掉了"这一步是什么"的信息（工具提示要显示它）。 */
+  function docpTx(label, fn){
+    var outer = DOCP_SL.tx;
+    DOCP_SL.tx = outer || { label: label || '', steps: [] };
+    try{ fn(); }
+    finally{
+      var tx = DOCP_SL.tx;
+      DOCP_SL.tx = outer;
+      if(!outer && tx && tx.steps.length){
+        if(tx.steps.length === 1) docpUndoPush(Object.assign({}, tx.steps[0], { label: tx.label }));
+        else docpUndoPush({ type: 'group', label: tx.label, index: DOCP_PAGE, steps: tx.steps });
+      }
+    }
+  }
   function docpUndoPush(step){
+    if(!step) return;
+    if(DOCP_SL.tx){ DOCP_SL.tx.steps.push(step); return; }        /* 收集器：事务里先攒着 */
     DOCP_SL.undo.push(step);
-    if(DOCP_SL.undo.length > 20) DOCP_SL.undo.shift();
+    if(DOCP_SL.undo.length > 40) DOCP_SL.undo.shift();
     DOCP_SL.redo.length = 0;
+    docpUndoPaint();
+  }
+  /* 撤销/重做按钮：标题写清"这一步是什么"，空栈就置灰（WPS 也这样） */
+  function docpUndoPaint(){
+    var bd = docpEl('wzDocBody'); if(!bd) return;
+    var u = DOCP_SL.undo[DOCP_SL.undo.length - 1], r = DOCP_SL.redo[DOCP_SL.redo.length - 1];
+    var ub = bd.querySelector('#dpUndo'), rb = bd.querySelector('#dpRedo');
+    if(ub){ ub.disabled = !u; ub.title = u ? ('撤销：' + docpStepLabel(u)) : '没有可撤销的'; }
+    if(rb){ rb.disabled = !r; rb.title = r ? ('重做：' + docpStepLabel(r)) : '没有可重做的'; }
+  }
+  /* 撤销栈的"取消最后一步"（R20）：操作用到最后发现没改动，就把刚拍的快照拿掉，
+     别在栈里留一个"按了没反应"的空步骤。 */
+  function docpUndoPop(){
+    DOCP_SL.undo.pop();
+    docpUndoPaint();
+  }
+  function docpStepLabel(step){
+    if(!step) return '';
+    if(step.label) return step.label;
+    if(step.type === 'pages') return '页面改动';
+    if(step.type === 'geo') return /^fill:/.test(step.slot || '') ? '模板这一格的位置/样式' : ('「' + step.slot + '」的位置/样式');
+    if(step.type === 'group') return (step.steps || []).length + ' 步操作';
+    return '「' + (step.slot || '') + '」改字';
   }
   /* 顶栏那条"选中了什么"的操作条（按钮与键盘走同一套函数） */
   function docpObjBarPaint(bd){
@@ -5377,32 +5431,62 @@ body.wz-dragging{cursor:grabbing}
     if(slot === 'title'){ s.name = text; s.title = text; }
     else s[slot] = text;
   }
-  /* 撤销 / 重做（本地 20 步；恢复后同样回传服务端）。
-     R14 起栈里有两类步骤：改字（`before/after` 是文字）与几何/层级/删除（`before/after` 是覆盖对象）。 */
+  /* 撤销 / 重做（R20：栈里四类步骤 —— 改字 / 几何·层级·删除 / 页级快照 / 组合）。
+     恢复后同样回传服务端。 */
   function docpUndo(bd){
     var step = DOCP_SL.undo.pop();
     if(!step){ showToast('没有可撤销的了'); return; }
     DOCP_SL.redo.push(step);
-    DOCP_PAGE = step.index;
-    docpStepApply(bd, step, step.before, step.after);
+    DOCP_PAGE = docpStepPage(step);
+    docpStepApply(bd, step, 'undo');
+    docpUndoPaint();
   }
   function docpRedo(bd){
     var step = DOCP_SL.redo.pop();
     if(!step){ showToast('没有可重做的了'); return; }
     DOCP_SL.undo.push(step);
-    DOCP_PAGE = step.index;
-    docpStepApply(bd, step, step.after, step.before);
+    DOCP_PAGE = docpStepPage(step);
+    docpStepApply(bd, step, 'redo');
+    docpUndoPaint();
+  }
+  function docpStepPage(step){
+    var i = docpNum(step && step.index, DOCP_PAGE);
+    if(step && step.type === 'group' && step.steps && step.steps.length){
+      var withPage = step.steps.filter(function(s){ return s.index != null; });
+      if(withPage.length) i = docpNum(withPage[0].index, i);
+    }
+    return Math.max(0, Math.min(i, Math.max(0, (((DOCP && DOCP.slides) || []).length - 1))));
+  }
+  /* `dir`：'undo' 用 `before`，'redo' 用 `after`。组合步骤：撤销**反序**、重做**正序** —— 
+     顺序反了的话，"先在 A 处改字再把它删掉"这种组合会还原成中间状态。 */
+  function docpStepApply(bd, step, dir){
+    if(step.type === 'group'){
+      var steps = (step.steps || []).slice();
+      if(dir === 'undo') steps.reverse();
+      if(!steps.length){ showToast('这一步是空的'); return; }
+      steps.forEach(function(st){ docpStepApplyOne(bd, st, dir, true); });
+      DOCP_SL.sig = '';
+      docpRenderSlides(bd);
+      showToast((dir === 'undo' ? '撤销了：' : '重做了：') + docpStepLabel(step) +
+                (steps.length > 1 ? ('（' + steps.length + ' 处）') : ''));
+      return;
+    }
+    docpStepApplyOne(bd, step, dir, false);
   }
   /* 把一步"变成"某个状态：几何步骤写覆盖，文字步骤写字段（都回传服务端） */
-  function docpStepApply(bd, step, want, other){
+  function docpStepApplyOne(bd, step, dir, quiet){
+    var want = dir === 'undo' ? step.before : step.after;
+    var other = dir === 'undo' ? step.after : step.before;
     if(step.type === 'pages'){
-      /* 页级步骤（R19/R20）：`want` 是整份 slides 的快照 —— 删页/排序/加页都能整批找回 */
+      /* 页级步骤（R19/R20）：`want` 是整份 slides 的快照 —— 删页/排序/加页/替换/配图都能整批找回 */
       if(DOCP) DOCP.slides = JSON.parse(JSON.stringify(want || []));
       DOCP_PAGE = Math.max(0, Math.min(step.index || 0, ((DOCP && DOCP.slides) || []).length - 1));
       wzRailSelClear();
       DOCP_SL.sig = '';
-      docpAfterEdit(true);
-      showToast('页面已恢复（Ctrl+Z 可继续往回撤）');
+      if(!quiet){
+        docpAfterEdit(true);
+        showToast(dir === 'undo' ? '页面已恢复（Ctrl+Z 可继续往回撤）' : '页面已重做');
+      }
       return;
     }
     if(step.type === 'geo'){
@@ -5413,10 +5497,12 @@ body.wz-dragging{cursor:grabbing}
           if(want.hasText) DOCP_SL.fillOverrides[si] = want.text == null ? '' : want.text;
           else delete DOCP_SL.fillOverrides[si];
         }
-        DOCP_SL.sel = step.slot;
-        docpBoxesPaint(bd);
-        docpFillPendingPaint(bd);
-        showToast('撤销了这一步 —— 点「应用修改」才写进 pptx');
+        if(!quiet){
+          DOCP_SL.sel = step.slot;
+          docpBoxesPaint(bd);
+          docpFillPendingPaint(bd);
+          showToast('撤销了这一步 —— 点「应用修改」才写进 pptx');
+        }
         return;
       }
       var s = docpSlideAt(step.index);
@@ -5427,9 +5513,11 @@ body.wz-dragging{cursor:grabbing}
         if(Object.keys(next).length) s.slots[step.slot] = next; else delete s.slots[step.slot];
         if(!Object.keys(s.slots).length) delete s.slots;
       }
-      DOCP_SL.sel = other && other.deleted ? '' : step.slot;
-      DOCP_SL.sig = '';
-      docpRenderSlides(bd);
+      if(!quiet){
+        DOCP_SL.sel = other && other.deleted ? '' : step.slot;
+        DOCP_SL.sig = '';
+        docpRenderSlides(bd);
+      }
       var seq = ++DOCP_SL.seq;
       var patch = JSON.parse(JSON.stringify(want || {}));
       delete patch.hasText; delete patch.text; delete patch.deleted;
@@ -5442,11 +5530,11 @@ body.wz-dragging{cursor:grabbing}
       return;
     }
     docpSlotApplyLocal(docpSlideAt(step.index), step.slot, want);
-    docpSlotPush(bd, step.index, step.slot, want);
+    docpSlotPush(bd, step.index, step.slot, want, quiet);
   }
-  function docpSlotPush(bd, index, slot, text){
+  function docpSlotPush(bd, index, slot, text, quiet){
     DOCP_SL.sig = '';
-    docpRenderSlides(bd);                                /* 撤回可能改了块数，整块重画最稳 */
+    if(!quiet) docpRenderSlides(bd);                     /* 撤回可能改了块数，整块重画最稳 */
     var seq = ++DOCP_SL.seq;
     spJson('/api/slide/slot', 'POST', { session_id: CUR || '', index: index, slot: slot,
                                         text: text, title: (DOCP && DOCP.title) || '' })
@@ -5780,20 +5868,32 @@ body.wz-dragging{cursor:grabbing}
     var lay = bd.querySelector('#dpLayout');
     if(lay) lay.addEventListener('change', function(){
       var s = docpSlideAt(DOCP_PAGE);
-      if(s){ s.layout = lay.value; docpAfterEdit(true); }
+      if(s){
+        var step = docpPushPagesUndo('换版式');            /* R20：换版式也能撤回 */
+        s.layout = lay.value;
+        docpPagesUndoClose(step);
+        docpAfterEdit(true);
+      }
     });
     var mins = bd.querySelector('#dpMinutes');
     if(mins) mins.addEventListener('change', function(){
       var s = docpSlideAt(DOCP_PAGE);
-      if(s){ s.minutes = parseInt(mins.value, 10) || 0; docpAfterEdit(false); }
+      if(s){
+        var step = docpPushPagesUndo('改时长');
+        s.minutes = parseInt(mins.value, 10) || 0;
+        docpPagesUndoClose(step);
+        docpAfterEdit(false);
+      }
     });
     var addBlk = bd.querySelector('#dpAddBlock');
     if(addBlk) addBlk.addEventListener('click', function(){
       var s = docpSlideAt(DOCP_PAGE);
       if(!s) return;
+      var step = docpPushPagesUndo('加一块');               /* R20：加块/删块也能撤回 */
       var blocks = docpBlocksOf(s);
       blocks.push({ label: '', text: '新要点' });     /* 给个占位文字：空块存不住（clean_slides 会丢） */
       docpSetBlocks(s, blocks);
+      docpPagesUndoClose(step);
       docpAfterEdit(true);
       showToast('加了，直接点页面上的「新要点」改字');
     });
@@ -5962,15 +6062,17 @@ body.wz-dragging{cursor:grabbing}
     var slots = docpSelList();
     if(!slots.length){ showToast('先点一下要改的文字', false); return; }
     var steps = docpSizeSteps();
-    slots.forEach(function(slot){
-      var b = bd.querySelector('.dp-box[data-slot="' + slot + '"]');
-      var boxSize = docpNum(b && b.style.fontSize, 24);
-      var cur = docpNum((docpOverrideOf(bd, slot) || {}).size, 0) || boxSize;
-      var next = null;
-      if(delta > 0) next = steps.filter(function(s){ return s > cur + 0.01; })[0];
-      else next = steps.filter(function(s){ return s < cur - 0.01; }).pop();
-      docpGeoCommit(bd, slot, { size: next || Math.max(8, Math.min(200, cur + delta)) },
-                    docpOverrideOf(bd, slot));
+    docpTx(slots.length > 1 ? ('改 ' + slots.length + ' 处的字号') : '改字号', function(){
+      slots.forEach(function(slot){
+        var b = bd.querySelector('.dp-box[data-slot="' + slot + '"]');
+        var boxSize = docpNum(b && b.style.fontSize, 24);
+        var cur = docpNum((docpOverrideOf(bd, slot) || {}).size, 0) || boxSize;
+        var next = null;
+        if(delta > 0) next = steps.filter(function(s){ return s > cur + 0.01; })[0];
+        else next = steps.filter(function(s){ return s < cur - 0.01; }).pop();
+        docpGeoCommit(bd, slot, { size: next || Math.max(8, Math.min(200, cur + delta)) },
+                      docpOverrideOf(bd, slot));
+      });
     });
     docpPropsPaint(bd);
   }
@@ -5987,10 +6089,12 @@ body.wz-dragging{cursor:grabbing}
       ["bold", "italic", "underline"].forEach(function(k){
         if(k in p) p[k] = !docpOverrideOf(bd, slots[0])[k];
       });
-      slots.forEach(function(slot){
-        docpGeoCommit(bd, slot, Object.assign({}, p), docpOverrideOf(bd, slot));
+      docpTx('改 ' + slots.length + ' 处的样式', function(){
+        slots.forEach(function(slot){
+          docpGeoCommit(bd, slot, Object.assign({}, p), docpOverrideOf(bd, slot));
+        });
       });
-      showToast('改到 ' + slots.length + ' 处');
+      showToast('改到 ' + slots.length + ' 处（一次 Ctrl+Z 全回来）');
     }
     docpPropsPaint(bd);
   }
@@ -6057,6 +6161,7 @@ body.wz-dragging{cursor:grabbing}
   function docpResetScope(bd, scope){
     var sl = (DOCP && DOCP.slides) || [];
     var n = 0;
+    var step = docpPushPagesUndo(scope === 'page' ? '本页复原' : '整册复原');   /* R20：复原也能撤回 */
     sl.forEach(function(s, i){
       if(scope === 'page' && i !== DOCP_PAGE) return;
       if(s.slots && Object.keys(s.slots).length){ n += Object.keys(s.slots).length; delete s.slots; }
@@ -6065,6 +6170,7 @@ body.wz-dragging{cursor:grabbing}
     DOCP_SL.sig = '';
     DOCP_SL.fillOverrides = {};
     DOCP_SL.fillGeos = {};
+    docpPagesUndoClose(step);
     docpRenderSlides(bd);
     docpSaveSlides();                       /* 整份存回会话（不用逐槽回传） */
     showToast(scope === 'page' ? ('本页复原了 ' + n + ' 处改动') : ('整册复原了 ' + n + ' 处改动'));
@@ -6289,6 +6395,7 @@ body.wz-dragging{cursor:grabbing}
     var wasMedia = (s.layout === 'media');
     var oldLayout = s.layout;
     if(!wasMedia){ s.layout = 'media'; }           /* 图只有"图文"版式有位置：先说清楚再换 */
+    var step = docpPushPagesUndo('挂一张图');       /* R20：取图/卸图都能一次 Ctrl+Z 撤回 */
     var btn = bd.querySelector('#dpImgGet');
     if(btn){ btn.disabled = true; btn.textContent = '正在取图…'; }
     spJsonPermission('/api/slide/image/attach', 'POST', {
@@ -6361,8 +6468,10 @@ body.wz-dragging{cursor:grabbing}
     if(!clip){ showToast('剪贴板是空的（先 Ctrl+C 复制一处或一页）', false); return; }
     if(clip.kind === 'page'){
       var sl = (DOCP && DOCP.slides) || [];
+      var step = docpPushPagesUndo('粘贴一页');
       sl.splice(DOCP_PAGE + 1, 0, JSON.parse(JSON.stringify(clip.slide)));
       DOCP_PAGE = DOCP_PAGE + 1;
+      docpPagesUndoClose(step);
       docpAfterEdit(true);
       showToast('粘上了（新的一页）');
       return;
@@ -6373,10 +6482,12 @@ body.wz-dragging{cursor:grabbing}
       var boxes = (DOCP_SL.fillPreview ? docpFillBoxes() : ((DOCP_SL.boxes || [])[DOCP_PAGE] || [])) || [];
       var slots = boxes.map(function(b){ return b.slot; });
       var n = Math.min(slots.length, clip.items.length);
-      for(var i = 0; i < n; i++){
-        docpGeoCommit(bd, slots[i], Object.assign({}, clip.items[i].ov), docpOverrideOf(bd, slots[i]));
-        docpSlotCommit(bd, slots[i], clip.items[i].text, docpSlotText(docpSlideAt(DOCP_PAGE) || {}, slots[i]));
-      }
+      docpTx('粘贴 ' + n + ' 处', function(){
+        for(var i = 0; i < n; i++){
+          docpGeoCommit(bd, slots[i], Object.assign({}, clip.items[i].ov), docpOverrideOf(bd, slots[i]));
+          docpSlotCommit(bd, slots[i], clip.items[i].text, docpSlotText(docpSlideAt(DOCP_PAGE) || {}, slots[i]));
+        }
+      });
       showToast('粘上了 ' + n + ' 处' + (clip.items.length > n ? ('（有 ' + (clip.items.length - n) + ' 处没地方放）') : ''));
       return;
     }
@@ -6407,19 +6518,27 @@ body.wz-dragging{cursor:grabbing}
                     slides: (DOCP && DOCP.slides) || [], title: (DOCP && DOCP.title) || '' };
     var btn = bd.querySelector(doReplace ? '#dpFindAll' : '#dpFindGo');
     if(btn) btn.disabled = true;
+    /* R20：替换会成批改字，先拍一份快照 —— 撤一次就全回来（服务端一次算完、一次落库） */
+    var step = doReplace ? docpPushPagesUndo('替换「' + q + '」') : null;
     spJson('/api/slide/find', 'POST', payload).then(function(d){
       if(btn) btn.disabled = false;
-      if(!d || !d.ok){ showToast('查找失败：' + ((d && d.error) || ''), false); return; }
+      if(!d || !d.ok){
+        if(step) docpUndoPop();                       /* 失败就别在栈里留个空步骤 */
+        showToast('查找失败：' + ((d && d.error) || ''), false);
+        return;
+      }
       DOCP_SL.find.query = q;
       if(doReplace){
         DOCP.slides = d.slides || DOCP.slides;
         DOCP_SL.sig = '';
         DOCP_SL.find.hits = [];
         if(d.pages && d.pages.length) DOCP_PAGE = d.pages[0];
+        docpPagesUndoClose(step);
         docpRenderSlides(bd);
         docpFindPaint(bd);
-        showToast(d.changed ? ('替换了 ' + d.changed + ' 处（' + d.page_count + ' 页）')
+        showToast(d.changed ? ('替换了 ' + d.changed + ' 处（' + d.page_count + ' 页）· Ctrl+Z 能整批撤回')
                             : '没找到要替换的字', !!d.changed);
+        if(!d.changed && step) docpUndoPop();
         return;
       }
       DOCP_SL.find.hits = d.hits || [];
@@ -6527,6 +6646,7 @@ body.wz-dragging{cursor:grabbing}
     DOCP_SL.themeId = docpThemeGet();
     bd.innerHTML = docpSlidesHtml(sl);   /* R6-5：PPT 优化不再作为独立模块出现在面板（内核已并进导出/填充） */
     docpSlidesWire(bd, sl);
+    docpUndoPaint();                     /* R20：撤销/重做按钮的可用态与"这一步是什么" */
     docpPaintStage(bd);                  /* 先出兜底内容（有缓存就直接是 SVG），避免空台 */
     docpThemesEnsure(function(){
       DOCP_SL.themeId = docpThemeGet();

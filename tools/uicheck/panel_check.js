@@ -185,14 +185,24 @@ function makeDom(opts) {
                 wantAnnotate = !!body0.annotate; } catch (e) {}
           renderCalls.push(n);
           /* 真实接口只在 annotate=true 时回 boxes —— 桩也照这个规矩来（免得测出一条假链路）。
-             覆盖有两处来源（真服务端也一样）：请求里 slides[i].slots（老师刚改的）+ 之前 patch 过的。 */
-          const base = [
-            { slot: 'title', kind: 'text', align: 'start', x: 72, y: 60, w: 1136, h: 80, size: 40 },
-            { slot: 'block:0', kind: 'text', align: 'start', x: 96, y: 240, w: 1112, h: 60, size: 24 },
-            { slot: 'block:1', kind: 'text', align: 'start', x: 96, y: 340, w: 1112, h: 60, size: 24 },
-          ];
+             覆盖有两处来源（真服务端也一样）：请求里 slides[i].slots（老师刚改的）+ 之前 patch 过的。
+             boxes 也要**按内容算**（真服务端就是 build_deck 从 blocks 出盒子）：写死三条的话，
+             "加一块 / 删一块"这类结构改动在面板检查里永远看不出来（R20 踩过）。 */
+          const baseFor = (s) => {
+            const rows = (s && Array.isArray(s.blocks) && s.blocks.length)
+              ? s.blocks
+              : (((s && s.bullets) || []).map((t) => ({ text: t })));
+            const out = [{ slot: 'title', kind: 'text', align: 'start', x: 72, y: 60, w: 1136, h: 80, size: 40 }];
+            rows.forEach((b, i) => out.push({ slot: 'block:' + i, kind: 'text', align: 'start',
+              x: 96, y: 240 + i * 100, w: 1112, h: 60, size: 24 }));
+            return out.length > 1 ? out : [{ slot: 'title', kind: 'text', align: 'start',
+              x: 72, y: 60, w: 1136, h: 80, size: 40 }];
+          };
+          const sentList = body0.slides;
           const boxes = wantAnnotate
-            ? Array.from({ length: n }, (_, pi) => base.map((b) => {
+            ? Array.from({ length: n }, (_, pi) => {
+                const base = baseFor(sentList ? sentList[pi] : DOC_STUB.slides[pi]);
+                return base.map((b) => {
                 /* 覆盖只认**这次请求里带的 slides**（真服务端就是这么做的：build_deck 用 slides[i].slots）；
                     没带 slides 的请求（只回传了一格文字）才退回 patch 记录。 */
                 const sentSlides = body0.slides;
@@ -206,7 +216,8 @@ function makeDom(opts) {
                          ...(p.dx ? { dx: p.dx } : {}), ...(p.dy ? { dy: p.dy } : {}),
                          ...(p.dw ? { dw: p.dw } : {}), ...(p.dh ? { dh: p.dh } : {}),
                          ...(p.z ? { z: p.z } : {}) };
-              }).filter(Boolean))
+              }).filter(Boolean);
+              })
             : undefined;
           return new Response(JSON.stringify({ ok: true, enabled: true, theme_id: THEMES.default,
             pages: Array.from({ length: n }, (_, i) => svgPageAnnotated(i, wantAnnotate)),
@@ -891,6 +902,15 @@ async function openDocPanel(doc) {
       await sleep(300);
       check('再按 Esc 退出（可反复进出）', !showLayer());
 
+      /* 选了几处：状态条会写"已选 N 处"，没多选就是主选那一处（R18/R19/R20 都用） */
+      const docpSelCount = () => {
+        const m = txt(doc.getElementById('dpSelName')).match(/已选\s*(\d+)/);
+        return m ? parseInt(m[1], 10) : (doc.getElementById('dpSel') ? 1 : 0);
+      };
+      const boxSlotList = () => Array.from(doc.querySelectorAll('#wzDocPane .dp-canvas .dp-box'))
+        .map((b) => b.dataset.slot);
+      const boxAt = (slot) => doc.querySelector('#wzDocPane .dp-canvas .dp-box[data-slot="' + slot + '"]');
+
       /* R18：快捷键 + 剪贴板 + 查找替换 */
       {
         const key = (k, opt) => doc.dispatchEvent(new w.KeyboardEvent('keydown',
@@ -914,17 +934,20 @@ async function openDocPanel(doc) {
         for (let i = 0; i < 12 && saves.length <= nSave; i++) await sleep(250);
         check('Ctrl+S 立刻保存（不等防抖）', saves.length > nSave, saves.length + ' 次');
 
-        /* Ctrl+A 多选 → 批量 Delete */
-        boxOf('block:0').click(); await sleep(200);
-        ctrl('a'); await sleep(300);
-        const nSel = doc.querySelectorAll('#wzDocPane #dpCanvas .dp-selm').length + 1;
-        check('Ctrl+A 选中本页全部文字（细框标出其余几处）', nSel >= 3 && /已选/.test(txt(doc.getElementById('dpSelName'))),
-          nSel + ' 处 · ' + txt(doc.getElementById('dpSelName')));
+        /* Ctrl+A 多选 → 批量 Delete（选中的处数应与页面上盒子数一致） */
+        const boxSlots = boxSlotList;
+        boxOf(boxSlots()[0]).click(); await sleep(250);
+        ctrl('a'); await sleep(350);
+        const nBoxes = boxSlots().length;
+        const nSel = docpSelCount();
+        check('Ctrl+A 选中本页全部文字（细框标出其余几处）',
+          nSel === nBoxes && nSel >= 2 && /已选/.test(txt(doc.getElementById('dpSelName'))),
+          nSel + ' 处（页面共 ' + nBoxes + ' 个盒子）· ' + txt(doc.getElementById('dpSelName')));
         doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await sleep(200);
 
         /* Ctrl+B/I/U + 对齐 + 字号：逐条验 */
-        boxOf('block:0').click(); await sleep(200);
+        boxOf(boxSlots()[0]).click(); await sleep(200);
         let n0 = slots.length;
         ctrl('b'); await sleep(400);
         check('Ctrl+B 加粗', slots.length > n0 && lastPatch2().bold === true, JSON.stringify(lastPatch2()));
@@ -955,17 +978,19 @@ async function openDocPanel(doc) {
           doc.querySelector('#wzDocPane .dp-slidewrap').dataset.scale === '0.3750',
           doc.querySelector('#wzDocPane .dp-slidewrap').dataset.scale);
 
-        /* 剪贴板：复制一处 → 粘到另一处 */
-        boxOf('block:0').click(); await sleep(200);
+        /* 剪贴板：复制一处 → 粘到另一处（用页面上真实的盒子，别写死槽位名） */
+        const bsNow = boxSlots();
+        const srcSlot = bsNow[0], dstSlot = bsNow[bsNow.length - 1];
+        boxOf(srcSlot).click(); await sleep(250);
         ctrl('c'); await sleep(250);
         check('Ctrl+C 复制一处（提示带"复制了"）', /复制了/.test(toast()), toast());
-        boxOf('block:1').click(); await sleep(200);
+        boxOf(dstSlot).click(); await sleep(250);
         const nSlot = slots.length;
         ctrl('v');
         for (let i = 0; i < 12 && slots.length <= nSlot; i++) await sleep(250);
         check('Ctrl+V 粘到选中的那一格（文字 + 样式）',
-          slots.length > nSlot && slots[slots.length - 1].slot === 'block:1',
-          JSON.stringify(slots[slots.length - 1] || {}).slice(0, 80));
+          slots.length > nSlot && slots[slots.length - 1].slot === dstSlot,
+          dstSlot + ' ← ' + srcSlot + ' · ' + JSON.stringify(slots[slots.length - 1] || {}).slice(0, 60));
         const nThumb0 = doc.querySelectorAll('#wzLeft .wz-thumb').length;
         ctrl('d'); await sleep(700);
         check('Ctrl+D 复制这一页', doc.querySelectorAll('#wzLeft .wz-thumb').length === nThumb0 + 1,
@@ -1138,6 +1163,111 @@ async function openDocPanel(doc) {
         await sleep(300);
         check('「取消选择」清空多选', !doc.querySelectorAll('#wzLeft .wz-thumb.wz-sel').length);
         check('无运行时错误（R19 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+      }
+
+      /* R20：操作栈统一 —— 拖动 / 插入 / 删除 / 属性 / 批量，各撤一次（批量只按一次） */
+      {
+        const key = (k, opt) => doc.dispatchEvent(new w.KeyboardEvent('keydown',
+          Object.assign({ key: k, bubbles: true, cancelable: true }, opt || {})));
+        const ctrlZ = () => key('z', { ctrlKey: true });
+        const ctrlY = () => key('y', { ctrlKey: true });
+        const boxOf = (slot) => boxAt(slot);
+        const lastPatch3 = () => (slots.filter((s) => s.patch).pop() || {}).patch || {};
+        const undoBtn = () => doc.getElementById('dpUndo');
+
+        /* 撤销按钮的说明跟着栈走（有历史就写清"这一步是什么"；空栈的置灰在最后一条验） */
+        check('撤销按钮的 title 跟着栈走（撤销：这一步是什么）',
+          !!(undoBtn() && (undoBtn().disabled || /^撤销：/.test(undoBtn().title || ''))),
+          undoBtn() ? (undoBtn().disabled + ' · ' + undoBtn().title) : '(没按钮)');
+
+        /* 1) 拖动 → 撤一次 */
+        boxOf('block:0').click(); await sleep(250);
+        doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        await sleep(500);
+        check('方向键微调后按钮可点，title 写清"这一步是什么"',
+          !!(undoBtn() && !undoBtn().disabled) && /撤销：/.test(undoBtn().title || ''),
+          undoBtn() ? undoBtn().title : '(没按钮)');
+        let n0 = slots.length;
+        ctrlZ(); await sleep(600);
+        check('拖动/微调能撤一次（回传的是回退值）',
+          slots.length > n0 && lastPatch3().dx === 0, JSON.stringify(lastPatch3()));
+
+        /* 2) 属性（加粗）→ 撤一次：看**页面上那一格**不再加粗（回传的可能是"清空覆盖"的通用值） */
+        n0 = slots.length;
+        key('b', { ctrlKey: true }); await sleep(500);
+        const boldOn = lastPatch3().bold === true;
+        n0 = slots.length;
+        ctrlZ(); await sleep(700);
+        const boxNow = boxOf('block:0');
+        check('属性（Ctrl+B）能撤一次（页面上不再加粗）',
+          boldOn && slots.length > n0 && !!boxNow &&
+          String(boxNow.style.fontWeight || '') !== '700',
+          'bold=' + boldOn + ' · font-weight=' + (boxNow ? boxNow.style.fontWeight : '?'));
+
+        /* 3) 删除 → 撤一次 */
+        boxOf('block:0').click(); await sleep(250);
+        n0 = slots.length;
+        key('Delete'); await sleep(600);
+        const hid = lastPatch3().hidden === true;
+        n0 = slots.length;
+        ctrlZ(); await sleep(600);
+        check('删除能撤一次（hidden 回 false）', hid && slots.length > n0 && lastPatch3().hidden === false,
+          JSON.stringify(lastPatch3()));
+
+        /* 4) 插入（加一块）→ 撤一次。先换回"要点"版式：别的版式下要点不叫 block，数不出来 */
+        const blocksNow = () => doc.querySelectorAll('#wzDocPane .dp-box[data-slot^="block:"]').length;
+        const laySel = doc.getElementById('dpLayout');
+        laySel.value = 'bullets';
+        laySel.dispatchEvent(new w.Event('change', { bubbles: true }));
+        await sleep(900);
+        const nBlk = blocksNow();
+        check('换版式到「要点」后能数出要点盒子', nBlk >= 1, nBlk + ' 块');
+        doc.getElementById('dpAddBlock').click(); await sleep(900);
+        const allSlots = Array.from(doc.querySelectorAll('#wzDocPane .dp-canvas .dp-box'))
+          .map((b) => b.dataset.slot).join(',');
+        check('「加一块」页面上多了一块', blocksNow() === nBlk + 1,
+          nBlk + ' → ' + blocksNow() + ' · 提示=' + toast() + ' · 盒子=' + allSlots +
+          ' · 版式=' + txt(doc.getElementById('dpLayout')));
+        ctrlZ(); await sleep(900);
+        check('插入（加一块）能撤一次', blocksNow() === nBlk, blocksNow() + ' 块');
+
+        /* 5) 批量：Ctrl+A 全选后改样式，**一次** Ctrl+Z 全回来（R20 的核心） */
+        boxOf('block:0').click(); await sleep(250);
+        key('a', { ctrlKey: true }); await sleep(400);
+        const nSel = docpSelCount();
+        n0 = slots.length;
+        key('b', { ctrlKey: true });
+        for (let i = 0; i < 16 && slots.length < n0 + nSel; i++) await sleep(200);
+        check('批量改样式一次写 ' + nSel + ' 处（一步操作）', slots.length >= n0 + nSel,
+          nSel + ' 处 → ' + (slots.length - n0) + ' 次回传');
+        const nMid = slots.length;
+        ctrlZ();
+        for (let i = 0; i < 16 && slots.length < nMid + nSel; i++) await sleep(200);
+        check('批量操作**按一次** Ctrl+Z 全部回来（不是一次撤一处）',
+          slots.length >= nMid + nSel && /撤销了：/.test(toast()),
+          (slots.length - nMid) + ' 次回退 · ' + toast());
+        const nAfterUndo = slots.length;
+        ctrlY();
+        for (let i = 0; i < 16 && slots.length < nAfterUndo + nSel; i++) await sleep(200);
+        check('批量操作也能一次 Ctrl+Y 重做', slots.length >= nAfterUndo + nSel,
+          (slots.length - nAfterUndo) + ' 次重做');
+        ctrlZ(); await sleep(800);                      /* 收拾干净，别影响后面的用例 */
+        key('Escape'); await sleep(200);
+
+        /* 6) 粘贴整页 → 撤一次（R18 的剪贴板 + R20 的栈） */
+        const nThumb = doc.querySelectorAll('#wzLeft .wz-thumb').length;
+        key('c', { ctrlKey: true }); await sleep(300);
+        key('v', { ctrlKey: true }); await sleep(900);
+        check('Ctrl+C/Ctrl+V 整页粘贴', doc.querySelectorAll('#wzLeft .wz-thumb').length === nThumb + 1,
+          nThumb + ' → ' + doc.querySelectorAll('#wzLeft .wz-thumb').length);
+        ctrlZ(); await sleep(900);
+        check('粘贴整页能撤一次', doc.querySelectorAll('#wzLeft .wz-thumb').length === nThumb,
+          doc.querySelectorAll('#wzLeft .wz-thumb').length + ' 页');
+
+        /* 7) 一路撤到底：栈空了按钮又变灰 */
+        for (let i = 0; i < 30 && !undoBtn().disabled; i++) { ctrlZ(); await sleep(220); }
+        check('撤回到底后按钮变灰（栈空）', undoBtn().disabled, undoBtn().title || '');
+        check('无运行时错误（R20 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
       }
 
       /* 回到第 1 页：下面的老用例（本页属性条那几条）默认在第 1 页上跑 */
