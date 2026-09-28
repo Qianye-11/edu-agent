@@ -83,6 +83,30 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 新增（R23 · 导出 PNG / JPEG / PDF + 交付体检，2026-09-27）
+
+> 计划书 `docs/26` §5 R23／D11，记录见 `docs/26` §18。
+
+1. **一条渲染源，四种出口**：预览 / pptx / PNG / JPEG / PDF 全部来自 `slide_deck.build_deck`
+   那一份 SVG；PNG 走**每页 SVG → Edge 无头 `--screenshot`（1280×720）**，JPEG 由 Pillow 转，
+   PDF 由 Pillow 多页拼（不引 cairosvg/rsvg —— 少一个系统级依赖，中文也不会豆腐块）。
+2. **「下载▾」多三项**：PDF / PNG 图片 / JPEG 图片（`POST /api/wps/export` 的 `kind: pdf|png|jpeg`）；
+   这三项**不受 WPS 开关影响**（`expGate` 单独放行 —— 走浏览器截图，不调 WPS）；
+   结果条列出检查：**每页尺寸 1280×720 · 每页都有内容 · 页数与幻灯片一致**；
+   产物落 `data/ppt_out/<标题>_<kind>_<时间戳>/`。
+3. **交付体检**（`pptx_delivery_check.py`，**只读**）：pptx 导出成功后顺带跑一次，
+   摘要进结果条与响应 `delivery`（字体缺失/外链/媒体缺失提前暴露）。**只报告、不阻断**；
+   工具不在或跑挂了如实说。实测示例稿 `passed`、0 条风险。
+4. **实测**：PNG 3 张（1280×720、墨迹 0.018~0.053）· JPEG 3 张 22KB · PDF 1 份 3 页 69KB
+   （首页 960×540pt = 1280×720px @96dpi）· **人眼看 PDF 首页中文清晰无豆腐块**。
+5. **两个小坑**：① `--force-device-scale-factor` 与 `--window-size` 都乘 → 2× 变成 5120×2880
+   （修法：窗口恒 1280×720）；② "JPEG 一定比 PNG 小"是错的（纯文字页 PNG 更小）——
+   这种断言只会制造假失败，已改成"尺寸对、不是空白、体积受控"。
+
+配套：单测 574 → **584**（新 `tests/test_slide_media.py` 10 例）、面板检查 290 → **298**（+8 条）、
+`tools/ppt_acceptance.py` 新增 **[10] 导出 PNG/JPEG/PDF**（30/30 → **33/33**）、
+审计 `--gate` error 0、`ppt_smoke` 49/49、`jscheck` 通过。
+
 ### 新增（R22 · 插入图片（本地上传），2026-09-27）
 
 > 计划书 `docs/26` §5 R22〔接 ppt-master `image_treat.py` 做缩放〕，记录见 `docs/26` §17。

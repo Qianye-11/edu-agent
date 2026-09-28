@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import collections
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -127,6 +128,43 @@ def slide_deck_build() -> dict:
     from edu_agent import slide_deck
 
     return slide_deck.build_deck("tech-editorial", slide_deck.SAMPLE_DECK, title="3.3 幂函数")
+
+
+def media_export() -> None:
+    """R23：PNG / JPEG / PDF 导出验收（同一份 SVG → 无头浏览器截图 → 拼 PDF）。
+
+    "中文不豆腐块"没法自动判，这里抓的是**硬伤**：页数一致、每页 1280×720、不是空白。
+    字体是浏览器的字体栈（与面板里看到的一致），所以预览里能显示的中文，图上就有。
+    """
+    from edu_agent import slide_deck, slide_media
+
+    print("\n[10] 导出 PNG / JPEG / PDF（每页 SVG → 1280×720 截图）")
+    if not slide_media.edge_exe():
+        check("这台机器有 Edge/Chromium", False, "没有就导不了图片/PDF（会明确报错，不静默）")
+        return
+    deck = slide_deck.SAMPLE_DECK
+    pages = slide_deck.build_deck("tech-editorial", deck, title="3.3 幂函数")["pages"]
+    out_dir = Path(tempfile.mkdtemp(prefix="edu_media_acc_"))
+    shots = slide_media.render_png(pages, out_dir / "png", prefix="acc")
+    check("每页都截出图", shots.get("ok") and len(shots.get("files") or []) == len(pages),
+          shots.get("error") or f"{len(shots.get('files') or [])} / {len(pages)}")
+    if not shots.get("ok"):
+        return
+    stats = [slide_media.png_stats(f) for f in shots["files"]]
+    check("每页尺寸 1280×720", all((s["width"], s["height"]) == (1280, 720) for s in stats),
+          str(sorted({(s["width"], s["height"]) for s in stats})))
+    inks = [s["ink"] for s in stats]
+    check("每页都有内容（不是空白）", all(i > 0.005 for i in inks),
+          "墨迹占比 " + "、".join(f"{i:.3f}" for i in inks[:4]))
+    pdf = out_dir / "acc.pdf"
+    made = slide_media.make_pdf(shots["files"], pdf)
+    check("拼出 PDF 且页数一致", made.get("ok") and made.get("pages") == len(pages),
+          made.get("error") or f"{made.get('pages')} 页")
+    jpgs = slide_media.make_jpegs(shots["files"][:1], out_dir)
+    check("JPEG 也出得来（尺寸不变）",
+          jpgs.get("ok") and slide_media.png_stats(jpgs["files"][0])["width"] == 1280,
+          jpgs.get("error") or Path(jpgs["files"][0]).name)
+    print(f"       产物目录：{out_dir}")
 
 
 def slides_export(with_wps: bool = False) -> None:
@@ -236,6 +274,7 @@ def main() -> int:
     if not args.skip_slides:
         slides_audit()
         slides_export(with_wps=args.with_wps)
+        media_export()
 
     print(f"\n产物：{out}")
     print(f"任务目录：{job['dir']}")

@@ -940,6 +940,9 @@ body.wz-dragging{cursor:grabbing}
                   <button data-dl="docx"><b>Word（.docx）</b><span>经 WPS 导出 · 落盘</span></button>
                   <button data-dl="pptx-deck"><b>PPT（.pptx）</b><span>新版式 · 与预览同一份 · 字可改</span></button>
                   <button data-dl="pptx"><b>PPT（旧版式）</b><span>兼容导出 · 每环节一页</span></button>
+                  <button data-dl="pdf"><b>PDF</b><span>就是这份幻灯片 · 发学生用</span></button>
+                  <button data-dl="png"><b>PNG 图片</b><span>每页一张 · 1280×720</span></button>
+                  <button data-dl="jpeg"><b>JPEG 图片</b><span>每页一张 · 体积更小</span></button>
                   <button data-dl="html"><b>HTML</b><span>网页版 · 直接下载</span></button>
                   <button data-dl="outdir"><b>导出位置…</b><span id="wzOutDirNow">content/plans（项目内）</span></button>
                 </div>
@@ -3879,12 +3882,28 @@ body.wz-dragging{cursor:grabbing}
   /* ==== 导出/预览共用层：教案中心（编排台 · 模板工作台）与对话导出条都走这里 ==== */
   /* 结果条：文件名 + 目录 + 「下载到本机」 */
   function expResultHtml(r){
+    var checks = (r.checks || []).length
+      ? '<span style="color:var(--ink-400)">　' + r.checks.map(function(c){
+          return (c.ok ? '✅ ' : '⚠️ ') + escHtml(c.name);
+        }).join('；') + '</span>'
+      : '';
+    var dc = r.delivery || null;
+    if(dc && dc.ok){
+      var n = dc.risk_count || 0;
+      checks += '<span style="color:' + (n ? '#8A5A00' : 'var(--ink-400)') + '">　交付体检：' +
+        (n ? (n + ' 条待看') : '无风险') + '</span>';
+    }
     return '<span style="color:#16a34a">✓ ' + escHtml(r.filename) + '</span>' +
            '<span style="color:var(--ink-400)">　' + escHtml(r.outDir || '') + '</span>　' +
-           '<a class="pill-btn" style="text-decoration:none" href="' + escHtml(r.download_url || '#') + '">下载到本机</a>';
+           '<a class="pill-btn" style="text-decoration:none" href="' + escHtml(r.download_url || '#') + '">下载到本机</a>' +
+           checks;
   }
-  /* 前置校验：能力开关（与「MCP 服务」同源）与目录可写由服务端把关，这里先说清楚为什么不给导 */
+  /* 前置校验：能力开关（与「MCP 服务」同源）与目录可写由服务端把关，这里先说清楚为什么不给导。
+     PNG/JPEG/PDF 走的是"每页 SVG → 无头浏览器截图"这条路（R23），**不依赖 WPS**，
+     所以 WPS 关着也照样能给图 —— 别拿无关的开关拦住它。 */
   function expGate(kind){
+    var k = String(kind || '');
+    if(k === 'png' || k === 'jpeg' || k === 'jpg' || k === 'pdf' || k === 'html') return '';
     var w = capWps();
     if(w && !w.enabled){
       showToast('WPS Office 服务已关闭，请到「MCP 服务」开启后再导出', false);
@@ -4039,6 +4058,15 @@ body.wz-dragging{cursor:grabbing}
   function dzExportRun(kind, btn){
     try{
       var p = dzPayload();
+      var media = (kind === 'png' || kind === 'jpeg' || kind === 'pdf');
+      /* 图片/PDF 只看"有没有幻灯片"（R23）：它们从面板那份 SVG 出图，不需要教案骨架 */
+      if(media && (DOCP && (DOCP.slides || []).length)){
+        showToast('正在导出 ' + kind.toUpperCase() + '，请稍候…');
+        dzResult('处理中…');
+        expViaServer({ kind: kind, btn: btn, onResult: dzResult, slides: DOCP.slides,
+                       theme_id: docpThemeGet(), title: (DOCP && DOCP.title) || p.title });
+        return;
+      }
       if(!p.steps.length){ showToast('先在教案工作台生成骨架或添加环节', false); return; }
       dzResult('处理中…');
       showToast(kind === 'pptx' ? '正在生成 PPT，请稍候…' : '正在经 WPS 导出 Word，请稍候…');
@@ -6995,6 +7023,7 @@ body.wz-dragging{cursor:grabbing}
     ['Ctrl+E / Ctrl+L / Ctrl+R', '居中 / 左对齐 / 右对齐'],
     ['Ctrl+= / Ctrl+-', '字号加一档 / 减一档'], ['Ctrl+0', '缩放适应窗口'],
     ['Ctrl+Alt+T', '插入文本框'],
+    ['拖图片到画布', '插入图片（上传）'],
     ['Ctrl+F / Ctrl+H', '查找 / 替换（跨页）'],
     ['F5 / Shift+F5', '从头放映 / 从本页放映'], ['Shift+F9', '参考线（网格）'],
     ['Ctrl+/', '这张快捷键表'],

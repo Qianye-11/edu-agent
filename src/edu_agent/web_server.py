@@ -23,9 +23,12 @@ import hashlib
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
+import time
+import urllib.parse
 import uuid
 from pathlib import Path
 
@@ -1873,6 +1876,116 @@ def api_mcp_status():
 
 
 # ---------- WPS 导出（教案中心 -> .docx / .pptx） ----------
+def _export_media(body: dict) -> dict:
+    """导出 PNG / JPEG / PDF（R23）：**每页 SVG → Edge 无头截图 → Pillow 拼**。
+
+    与 pptx 同源（`slide_deck.build_deck` 出的那份 SVG），所以"预览=导出"在图片/PDF 上也成立。
+    产物落在 `data/ppt_out/<标题>_<kind>_<时间戳>/`（与 pptx 一个地方，老师找得到）。
+    """
+    from edu_agent import ppt_polish, slide_deck, slide_media
+
+    kind = str(body.get("kind") or "png").lower()
+    slides = [s for s in (body.get("slides") or []) if isinstance(s, dict)]
+    theme_id = str(body.get("theme_id") or "").strip()
+    title = str(body.get("title") or "").strip() or "教案"
+    sid = str(body.get("session_id") or "").strip()
+    if not slides and sid:
+        saved = _store.get_session_doc(sid)
+        if saved.get("slides"):
+            slides = saved["slides"]
+            title = str(body.get("title") or "").strip() or str(saved.get("title") or "") or title
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可导出的幻灯片（先在面板里生成教案）"},
+                            status_code=400)
+    built = slide_deck.build_deck(theme_id or slide_deck.DEFAULT_THEME, slides, title)
+    pages = built.get("pages") or []
+    if not pages:
+        return JSONResponse({"ok": False, "error": "这份稿没有可导出的页面"}, status_code=400)
+    safe = re.sub(r'[\\/:*?"<>|\s]+', "_", title)[:40] or "教案"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    base = Path(str(body.get("outDir") or "").strip() or ppt_polish.outdir())
+    out_dir = base / f"{safe}_{kind}_{stamp}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    shots = slide_media.render_png(pages, out_dir / "_png", prefix=safe)
+    if not shots.get("ok"):
+        return {"ok": False, "error": shots.get("error") or "截图失败",
+                "edge": shots.get("edge") or ""}
+    pngs = shots["files"]
+    stats = [slide_media.png_stats(p) for p in pngs]
+    sizes = {(s.get("width"), s.get("height")) for s in stats}
+    inks = [float(s.get("ink") or 0) for s in stats]
+    checks = [
+        {"name": "每页尺寸 1280×720", "ok": sizes == {(1280, 720)}, "detail": str(sorted(sizes))},
+        {"name": "每页都有内容（不是空白）", "ok": all(i > 0.005 for i in inks),
+         "detail": "墨迹占比 " + "、".join(f"{i:.3f}" for i in inks)},
+        {"name": "页数与幻灯片一致", "ok": len(pngs) == len(pages),
+         "detail": f"{len(pngs)} 张 / {len(pages)} 页"},
+    ]
+    if kind == "jpeg":
+        made = slide_media.make_jpegs(pngs, out_dir, prefix=safe)
+        if not made.get("ok"):
+            return {"ok": False, "error": made.get("error") or "转 JPEG 失败"}
+        files, filename = made["files"], f"{safe}.jpg（{len(made['files'])} 张）"
+        for p in pngs:                                   # JPEG 交付时不必留中间 PNG
+            Path(p).unlink(missing_ok=True)
+        try:
+            (out_dir / "_png").rmdir()
+        except OSError:
+            pass
+    elif kind == "pdf":
+        made = slide_media.make_pdf(pngs, out_dir / f"{safe}.pdf")
+        if not made.get("ok"):
+            return {"ok": False, "error": made.get("error") or "拼 PDF 失败"}
+        files, filename = [made["file"]], Path(made["file"]).name
+    else:
+        files, filename = pngs, f"{safe}.png（{len(pngs)} 张）"
+    ok = all(c["ok"] for c in checks)
+    out = {"ok": ok, "kind": kind, "filename": filename, "outDir": str(out_dir), "files": files,
+           "pages": len(pages), "size": shots.get("size"), "checks": checks,
+           "browser": Path(shots.get("edge") or "").name,
+           "download_url": "/api/wps/download?path=" + urllib.parse.quote(str(out_dir)),
+           "detail": (f"已导出 {len(pages)} 页（{kind.upper()} · 1280×720）· " +
+                      "；".join(("✅ " if c["ok"] else "⚠️ ") + c["name"] for c in checks))}
+    if str(body.get("delivery") or "") in ("1", "true", "yes"):
+        out["delivery"] = _delivery_check(str(out_dir / f"{safe}.pptx"))
+    return out
+
+
+def _delivery_check(pptx_path: str) -> dict:
+    """产物交付体检（R23）：ppt-master 的 `pptx_delivery_check.py`，**只读**。
+
+    为什么值得跑：老师要拿去上课、发给学生；字体缺失/外链/媒体缺失这类问题在 WPS 里
+    未必当场看得出来，这个脚本一次列出来。我们只把摘要写进结果条，**不阻断导出**。
+    """
+    if not pptx_path or not Path(pptx_path).is_file():
+        return {"ok": False, "error": "没有 pptx 可体检"}
+    from edu_agent import ppt_polish
+
+    tool = ppt_polish.scripts_dir() / "pptx_delivery_check.py"
+    if not tool.is_file():
+        return {"ok": False, "error": "ppt-master 不在（跑不了交付体检）"}
+    try:
+        proc = subprocess.run([sys.executable, str(tool), str(pptx_path)],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": f"体检没跑成：{type(exc).__name__}"}
+    raw = (proc.stdout or "").strip()
+    data: dict = {}
+    if raw:
+        try:
+            data = json.loads(raw[raw.find("{"):raw.rfind("}") + 1] or "{}")
+        except Exception:                             # noqa: BLE001 不是 JSON 就只留原文尾巴
+            data = {}
+    risks = data.get("risks") or data.get("issues") or data.get("findings") or []
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    return {"ok": True, "exit": proc.returncode, "risks": risks,
+            "risk_count": len(risks) if isinstance(risks, list) else summary.get("total", 0),
+            "summary": summary or {k: v for k, v in data.items()
+                                   if k in ("status", "ok", "passed", "warnings", "errors")},
+            "raw_tail": "" if data else raw[-400:]}
+
+
 def _export_pptx_deck(body: dict) -> dict:
     """幻灯片导出：**同一份 SVG**（面板预览用的那份）→ 原生可编辑 pptx。
 
@@ -1936,13 +2049,24 @@ def _export_pptx_deck(body: dict) -> dict:
 
     v = out.get("verify") or {}
     notes_n = int(out.get("notes_written") or 0)
+    dcheck = _delivery_check(out["file"])           # R23：产物交付体检（只读，不阻断导出）
+    dc_note = ""
+    if dcheck.get("ok"):
+        n = int(dcheck.get("risk_count") or 0)
+        dc_note = ("· 交付体检：无风险" if not n else f"· 交付体检：{n} 条待看")
+        if n:
+            dc_note += "（" + "、".join(str((r or {}).get("code") or (r or {}).get("name") or r)[:28]
+                                      for r in (dcheck.get("risks") or [])[:3]) + "）"
+    elif dcheck.get("error"):
+        dc_note = "· 交付体检没跑成：" + str(dcheck["error"])[:40]
     return {"ok": True, "backend": "native", "filename": out["filename"], "outDir": out["outDir"],
             "file": out["file"], "pages": out["pages"], "theme_id": out["theme_id"],
             "fallback": False,
             "notes_written": notes_n, "postcheck": out.get("postcheck") or {},
+            "delivery": dcheck,
             "detail": f"已导出 {out['pages']} 页（原生可编辑）" +
                       (f" · {notes_n} 页带讲稿备注" if notes_n else "") + " · " + "；".join(
-                f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in (v.get("checks") or [])),
+                f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in (v.get("checks") or [])) + dc_note,
             "verify": v, "download_url": "/api/wps/download?path=" + str(out["file"])}
 
 
@@ -1960,12 +2084,15 @@ def api_wps_export(body: dict):
         from edu_agent import permissions
 
         _kind = str(body.get("kind") or "docx").lower()
-        blocked = permissions.guard("export_pptx" if _kind.startswith("ppt") else "export_docx",
+        blocked = permissions.guard("export_pptx" if _kind.startswith("ppt")
+                                    or _kind in ("png", "jpeg", "jpg", "pdf") else "export_docx",
                                     bool(body.get("confirm")))      # 落盘 = 有副作用，先过权限闸门
         if blocked:
             return blocked
         if _kind in ("pptx-deck", "pptx-native"):
             return _export_pptx_deck(body)
+        if _kind in ("png", "jpeg", "jpg", "pdf"):
+            return _export_media(body)
         # WPS 可用 → 照旧；WPS 不可用且本机有 WSL 后路 → 改道 WSL 渲染（见 edu_agent/wsl_docx.py）
         from edu_agent import wsl_docx
 

@@ -173,11 +173,30 @@ function makeDom(opts) {
           let b = {};
           try { b = JSON.parse(op.body); } catch (e) {}
           exports.push(b);
+          const k = String(b.kind || '').toLowerCase();
+          if (k === 'png' || k === 'jpeg' || k === 'pdf') {
+            /* R23：图片/PDF 走"每页 SVG → 无头截图"，返回 checks + files（与真服务端同形状） */
+            const n = (b.slides || DOC_STUB.slides).length || 3;
+            const ext = k === 'jpeg' ? 'jpg' : k;
+            return new Response(JSON.stringify({ ok: true, kind: k,
+              filename: k === 'pdf' ? '教案_3.3 幂函数.pdf' : ('教案_3.3 幂函数.' + ext + '（' + n + ' 张）'),
+              outDir: 'F:\\edu-agent3\\data\\ppt_out\\教案_' + k,
+              files: Array.from({ length: k === 'pdf' ? 1 : n }, (_, i) => 'f' + (i + 1) + '.' + ext),
+              pages: n, size: [1280, 720], browser: 'msedge.exe',
+              checks: [{ name: '每页尺寸 1280×720', ok: true, detail: '[(1280, 720)]' },
+                       { name: '每页都有内容（不是空白）', ok: true, detail: '墨迹占比 0.018' },
+                       { name: '页数与幻灯片一致', ok: true, detail: n + ' 张 / ' + n + ' 页' }],
+              download_url: '/api/wps/download?path=x',
+              detail: '已导出 ' + n + ' 页（' + k.toUpperCase() + ' · 1280×720）· ✅ 每页尺寸 1280×720' }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
           const okBody = o.wpsFallback
             ? { ok: true, filename: '教案_旧版式.pptx', outDir: 'D:\\out', download_url: '/api/wps/download?path=x',
                 detail: '已用旧版式导出', fallback: true, reason: '新版式导出没通过验收：转换报告缺失' }
             : { ok: true, filename: '教案_3.3 幂函数.pptx', outDir: 'D:\\out', download_url: '/api/wps/download?path=x',
-                detail: '已导出 3 页（原生可编辑）· ✅ 页数一致；✅ 内容零丢失', fallback: false };
+                delivery: { ok: true, risk_count: 0, summary: { status: 'passed' } },
+                detail: '已导出 3 页（原生可编辑）· ✅ 页数一致；✅ 内容零丢失 · 交付体检：无风险',
+                fallback: false };
           return new Response(JSON.stringify(okBody), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
         if (p === '/api/slide/render') {
@@ -1753,8 +1772,10 @@ async function openDocPanel(doc) {
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
     const items = Array.from(doc.querySelectorAll('#wzDownMenu [data-dl]')).map((b) => b.dataset.dl);
-    check('下载菜单 = Word + 新旧两条 PPT + HTML',
-      items.join(',') === 'docx,pptx-deck,pptx,html,outdir', items.join(','));
+    check('下载菜单 = Word + 新旧两条 PPT + PDF/PNG/JPEG + HTML',
+      items.join(',') === 'docx,pptx-deck,pptx,pdf,png,jpeg,html,outdir', items.join(','));
+    check('PDF / PNG / JPEG 三项都在（R23）',
+      ['pdf', 'png', 'jpeg'].every((k) => items.indexOf(k) >= 0), items.join(','));
     check('新版式那项写明了与预览同源', /与预览同一份/.test(txt(doc.querySelector('[data-dl="pptx-deck"]'))),
       txt(doc.querySelector('[data-dl="pptx-deck"]')));
     doc.getElementById('wzDownBtn').click();
@@ -1770,6 +1791,26 @@ async function openDocPanel(doc) {
       /教案_3\.3 幂函数\.pptx/.test(txt(doc.getElementById('dzExportResult'))) &&
       !!doc.querySelector('#dzExportResult a[href*="/api/wps/download"]'),
       txt(doc.getElementById('dzExportResult')).slice(0, 60));
+    check('结果条顺带报交付体检（R23）',
+      /交付体检/.test(txt(doc.getElementById('dzExportResult'))),
+      txt(doc.getElementById('dzExportResult')).slice(-40));
+
+    /* R23：PDF / PNG / JPEG 三项各点一次，看 POST 的 kind 与结果条 */
+    for (const kind of ['pdf', 'png', 'jpeg']) {
+      const before = exports.length;
+      doc.getElementById('wzDownBtn').click();
+      doc.querySelector('[data-dl="' + kind + '"]').click();
+      for (let i = 0; i < 12 && exports.length <= before; i++) await sleep(250);
+      for (let i = 0; i < 12 && /处理中/.test(txt(doc.getElementById('dzExportResult'))); i++) await sleep(250);
+      const sent = exports[exports.length - 1] || {};
+      const shown = txt(doc.getElementById('dzExportResult'));
+      check('点「' + kind.toUpperCase() + '」POST kind=' + kind + ' 且带上 slides 与主题',
+        sent.kind === kind && (sent.slides || []).length > 0 && !!sent.theme_id,
+        JSON.stringify({ kind: sent.kind, pages: (sent.slides || []).length }));
+      check(kind.toUpperCase() + ' 结果条给文件名 + 尺寸/内容检查',
+        new RegExp('\\.' + (kind === 'jpeg' ? 'jpg' : kind)).test(shown) &&
+        /每页尺寸 1280×720/.test(shown), shown.slice(0, 70));
+    }
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
