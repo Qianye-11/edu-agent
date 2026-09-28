@@ -151,7 +151,36 @@
 
 ---
 
-## 6. 响应与错误码
+## 6. 自由层：你也可以直接给形状与文本框（2026-09-27 新增）
+
+`lesson.slides[i]` 里可以带 `objects[]`（老师面板上"插入"出来的同一套东西）——
+如果你想在某页上摆一个箭头、流程框或一行说明文字，不用我们代劳：
+
+```jsonc
+"objects": [
+  { "kind": "shape", "id": "o1", "shape": "rightArrow",
+    "x": 480, "y": 300, "w": 320, "h": 120, "fill": "#EEF2F8", "stroke": "#2F6BFF" },
+  { "kind": "text",  "id": "o2", "x": 120, "y": 430, "w": 400, "h": 60,
+    "text": "先看第一象限", "size": 28, "align": "start" }
+]
+```
+
+| 键 | 说明 |
+|---|---|
+| `kind` | `shape`（形状）或 `text`（文本框） |
+| `shape` | `rect` / `roundRect` / `ellipse` / `triangle` / `parallelogram` / `chevron` / `rightArrow` / `line`（DrawingML 预设名） |
+| `x` `y` `w` `h` | **绝对**设计像素（1280×720 坐标系）；不是槽位那套 `dx/dy` 增量 |
+| `fill` `stroke` `stroke_w` | 填充 / 描边（`#RRGGBB`；`fill` 省 = 默认浅色底，`stroke` 省 = 不描边） |
+| `text` `size` `color` `align` | 形状上叠的字也能给（`align`：`start` / `middle` / `end`） |
+| `bold` `italic` `underline` | 字重开关 |
+
+规矩：`id` 可省（我们按顺序编 `o1`、`o2`…；**撞车会自动重编**）；一页最多 **30** 个对象；
+数值越界会被夹到合法范围（不报错）。导出后它们是 pptx 里的**原生可编辑形状**（不是图片）。
+在面板上继续改用的是 `POST /api/slide/object`（`action: add | patch | delete | up | down | set`）。
+
+---
+
+## 7. 响应与错误码
 成功：`{ok: true, schema, filename, outDir, file, pages, checks[], adjustments[], download_url}`
 
 | 情况 | HTTP | body |
@@ -167,7 +196,7 @@
 
 ---
 
-## 7. 变更记录
+## 8. 变更记录
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
@@ -178,10 +207,11 @@
 | — | 2026-09-27 | R14：`POST /api/slide/slot` 新增可选 `patch`（`{dx,dy,dw,dh,size,color,align,lh,z,hidden}`，落进 `slides[i].slots[槽位]`）；`text` 变成可选（**不给 = 只改样子、不改字**；给 `""` = 清空那一格）。`boxes[]` 在老师调过层级时多一个 `z` |
 | — | 2026-09-27 | R15：`mapping[].fills[]` 追加样式键 `size/font/color/align/lh/bold/italic`；`POST /api/slide/render` 的响应追加 `fonts`（右栏字体清单，主题栈在前）与 `canvas` 的 `cols/gutter/content_w`（网格与吸附用）。**`0`/`""` 的语义**：`dx:0` = 回版式原位、`size:0` = 取消字号覆盖、`font:""` = 跟随主题（服务端从合并结果里去掉这些键）。代码审计新增两条 **warn**（不阻断）：`font-scale-off`（字号不在设计阶梯）、`font-family-off`（非主题字体） |
 | — | 2026-09-27 | **R18 前置（联网）**：新增 §5「配图：给我一个图片 URL 就行」；`POST /api/slide/image/attach`（`url`/`index`/`credit`/`action:"detach"`，需 `confirm:true`）；`lesson.slides[]` 支持 `image_url`/`image_credit`。skill `web-image`（默认开）。规矩：只认公网 http/https（拒内网）、≤10MB、png/jpg/webp/gif、落 `data/uploads/`。`GET /api/slide/image/providers` 报图源可用性（免 key 的两家本机连不上、Pexels/Pixabay 缺 key，都如实说） |
+| — | 2026-09-27 | **R21（自由层）**：新增 §6「你也可以直接给形状与文本框」；`lesson.slides[]` 支持 `objects[]`（`kind`/`shape`/绝对几何/填充描边/文字样式，一页 ≤30，id 撞车自动重编）；面板侧新增 `POST /api/slide/object`（`add/patch/delete/up/down/set`）。导出后是 pptx 里的原生可编辑形状 |
 
 ---
 
-## 8. 最小示例（Python）
+## 9. 最小示例（Python）
 
 ```python
 import httpx

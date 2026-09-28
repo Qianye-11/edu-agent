@@ -95,13 +95,16 @@ class Canvas:
                 float(o.get("size") or size), o.get("color") or fill, anchor, True)
 
     def box(self, slot: str, x: float, y: float, w: float, h: float, size: float,
-            *, kind: str = "text", align: str = "start") -> None:
+            *, kind: str = "text", align: str = "start", obj: dict | None = None) -> None:
         """记一个可编辑盒子（`slot` 为空或没开 annotate 就什么都不做）。
 
         **同一个槽只留一个盒子**（保留面积更大的那个）：`text()` 会自动给单行做个小盒子，
         而版式里往往随后又显式给一个"整行/整块"的大盒子（点击区更友好）—— 两个都留会让前端
         画出两块重叠的点击区（踩过：`title` 出现两次）。
         **覆盖要在这里套上**（拖动/改大小长在盒子上），这样前端画的框与服务端画的字永远一致。
+
+        `kind`：`text`（版式槽位）/ `obj-text` / `obj-shape`（R21 自由层）。
+        `obj`：自由层对象自己的信息（形状名等），前端据此画不同的框与右栏。
         """
         if self.boxes is None or not slot:
             return
@@ -121,6 +124,8 @@ class Canvas:
                  "x": round(float(x), 1), "y": round(float(y), 1),
                  "w": round(float(w), 1), "h": round(float(h), 1),
                  "size": round(float(size), 1)}
+        if obj:
+            entry["obj"] = {k: v for k, v in obj.items() if v not in (None, "")}
         z = int(o.get("z") or 0) if o else 0
         if z:
             entry["z"] = z                            # 层级只在老师调过时才给（老数据形状不变）
@@ -135,6 +140,14 @@ class Canvas:
     # -- 字号 / 颜色 / 字重
     def size(self, key: str) -> float:
         return float(self.type[key])
+
+    def size_of(self, value, default: float) -> float:
+        """给自由层用的字号：老师没给就用版式正文的档位（不写死数字）。"""
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            v = 0.0
+        return v if v >= 8 else float(default)
 
     def weight(self, key: str, default: int = 400) -> int:
         return int(self.weights.get(key, default))
@@ -169,7 +182,8 @@ def esc(s: object) -> str:
 
 
 def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int | None = None,
-         fill: str | None = None, anchor: str = "start", slot: str = "", zkey: str = "") -> str:
+         fill: str | None = None, anchor: str = "start", slot: str = "", zkey: str = "",
+         ov: dict | None = None) -> str:
     """一行文字（给的是**基线** y；不用 dominant-baseline，转 pptx 时口径一致）。
 
     `slot` 给了就顺手记一个可编辑盒子（高 = 一行；宽 = 这行文字的实际宽度），
@@ -183,7 +197,7 @@ def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int 
     x, y, size, fill, anchor, draw = cv.apply(slot, x, y, size, fill, anchor)
     if not draw:
         return ""
-    o = cv.ov(slot) if slot else {}
+    o = ov if ov is not None else (cv.ov(slot) if slot else {})
     weight = 700 if o.get("bold") else int(weight if weight is not None else 400)
     attrs = [
         f'x="{round(x, 2)}"', f'y="{round(y, 2)}"',
@@ -283,35 +297,42 @@ def wrap(s: object, max_w: float, size: float) -> list[str]:
 
 
 def paragraph(cv: Canvas, x: float, y: float, s: object, *, size: float, max_w: float, lh: float,
-              weight: int | None = None, fill: str | None = None, slot: str = "") -> tuple[str, float]:
+              weight: int | None = None, fill: str | None = None, slot: str = "",
+              ov: dict | None = None, align: str | None = None,
+              box_slot: str = "") -> tuple[str, float]:
     """多行文字；返回 (SVG 片段, 下一次可用的基线 y)。
 
     `slot` 给了就记**一个盒子盖住整块**（宽 = 版心宽，高 = 行数 × 行距）——
     点哪儿都能进编辑，比逐行小盒子好用（R10）。
     **覆盖（拖动/改宽/字号色/对齐）在每一行上生效**：行内对齐按块的宽度算，所以居中/右对齐不会跑偏。
+
+    `ov` / `align`（R21）：自由层对象的样式**长在对象自己身上**（不进 `slides[i].slots`），
+    所以允许直接把那套样式传进来，而不是只能从 `cv.ov(slot)` 取。
+    `box_slot`：盒子记到哪个槽名下（形状上叠字时：文字槽与形状槽要分开，否则会互相顶掉）。
     """
-    o = cv.ov(slot) if slot else {}
+    o = ov if ov is not None else (cv.ov(slot) if slot else {})
     if o.get("hidden"):
         return "", y
     size = float(o.get("size") or size)
     fill = o.get("color") or fill
     max_w = max(40.0, max_w + float(o.get("dw") or 0))
     dx, dy = float(o.get("dx") or 0), float(o.get("dy") or 0)
+    al = align if align in ("start", "middle", "end") else o.get("align")
     lines = wrap(s, max_w, size)
     step = size * lh
     out = []
     for i, ln in enumerate(lines):
         lx = x + dx
         anchor = "start"
-        if o.get("align") == "middle":
+        if al == "middle":
             lx, anchor = lx + max_w / 2, "middle"
-        elif o.get("align") == "end":
+        elif al == "end":
             lx, anchor = lx + max_w, "end"
         out.append(text(cv, lx, y + dy + i * step, ln, size=size, weight=weight, fill=fill,
-                        anchor=anchor, slot=(slot if i == 0 else ""), zkey=slot))
+                        anchor=anchor, slot=(slot if i == 0 else ""), zkey=slot, ov=o))
     svg = "".join(out)
-    if slot and lines:
-        cv.box(slot, x, y - size * 0.86, max_w, max(1, len(lines)) * step + size * 0.2, size)
+    if (slot or box_slot) and lines:
+        cv.box(box_slot or slot, x, y - size * 0.86, max_w, max(1, len(lines)) * step + size * 0.2, size)
     return svg, y + max(1, len(lines)) * step
 
 
@@ -628,16 +649,167 @@ def order_z(cv: Canvas, body: str) -> str:
     return _ZATTR_RE.sub("", "".join(pieces))
 
 
+# ---------------------------------------------------------------- 自由层（R21）
+#
+# 老师在页面上**自己插入**的文本框与形状。两条硬要求：
+#
+# 1. **导出必须还是原生可编辑形状**：形状发的是 ppt-master 认的规范预设组
+#    （`<g data-pptx-authoring="preset" data-pptx-object="shape" data-pptx-prst="rect"
+#      data-pptx-frame="x y w h" fill stroke>` + `<path>`），它的 `svg_to_pptx.py`
+#    照着这组属性直接产出 DrawingML 预设形状；我们**不发明第二种画法**。
+# 2. **几何不能自己编**：下面每个预设的路径都来自 `.deps/ppt-master` 的
+#    `preset_shape_svg.py render`（单位框 1000×1000 的实测输出，圆角半径 = min(w,h)/6），
+#    `tests/test_slide_objects.py` 里有一条**黄金测试**逐预设逐尺寸与那个脚本对拍 ——
+#    对不上就红，免得哪天悄悄漂开（"预览=导出"就是这么守住的）。
+#
+# 为什么不每次渲染都去调那个脚本：单次调用 ~0.42 秒，一页三个形状就要一秒多，而这是**每次编辑**
+# 都要走的路。脚本只在"对拍测试"里用。
+SHAPE_PRESETS = ("rect", "roundRect", "ellipse", "triangle", "parallelogram", "chevron",
+                 "rightArrow", "line")
+
+
+def _fmt(v: float) -> str:
+    s = f"{float(v):.2f}".rstrip("0").rstrip(".")
+    return s if s not in ("-0", "") else "0"
+
+
+def preset_path(preset: str, x: float, y: float, w: float, h: float) -> str:
+    """按规范公式算出预设形状的 `d`（与 `preset_shape_svg.py` 的输出一致，见上）。"""
+    x2, y2 = x + w, y + h
+    if preset == "rect":
+        return f"M {_fmt(x)} {_fmt(y)} L {_fmt(x2)} {_fmt(y)} L {_fmt(x2)} {_fmt(y2)} L {_fmt(x)} {_fmt(y2)} Z"
+    if preset == "triangle":
+        return f"M {_fmt(x)} {_fmt(y2)} L {_fmt(x + w / 2)} {_fmt(y)} L {_fmt(x2)} {_fmt(y2)} Z"
+    if preset == "parallelogram":
+        sk = h / 4                                  # 实测：斜边偏移按**高**算（不是宽）
+        return (f"M {_fmt(x)} {_fmt(y2)} L {_fmt(x + sk)} {_fmt(y)} L {_fmt(x2)} {_fmt(y)} "
+                f"L {_fmt(x2 - sk)} {_fmt(y2)} Z")
+    if preset == "chevron":
+        k = h / 2                                   # 实测：尖角伸出的距离 = 高的一半
+        return (f"M {_fmt(x)} {_fmt(y)} L {_fmt(x2 - k)} {_fmt(y)} L {_fmt(x2)} {_fmt(y + h / 2)} "
+                f"L {_fmt(x2 - k)} {_fmt(y2)} L {_fmt(x)} {_fmt(y2)} L {_fmt(x + k)} {_fmt(y + h / 2)} Z")
+    if preset == "rightArrow":
+        hx, sx = h / 4, x2 - h / 2                  # 实测：杆高 = h/2（上下各留 h/4），箭头宽 = h/2
+        return (f"M {_fmt(x)} {_fmt(y + hx)} L {_fmt(sx)} {_fmt(y + hx)} L {_fmt(sx)} {_fmt(y)} "
+                f"L {_fmt(x2)} {_fmt(y + h / 2)} L {_fmt(sx)} {_fmt(y2)} L {_fmt(sx)} {_fmt(y2 - hx)} "
+                f"L {_fmt(x)} {_fmt(y2 - hx)} Z")
+    if preset == "ellipse":
+        rx, ry, cx, cy = w / 2, h / 2, x + w / 2, y + h / 2
+        return (f"M {_fmt(x)} {_fmt(cy)} A {_fmt(rx)} {_fmt(ry)} 0 0 1 {_fmt(cx)} {_fmt(y)} "
+                f"A {_fmt(rx)} {_fmt(ry)} 0 0 1 {_fmt(x2)} {_fmt(cy)} "
+                f"A {_fmt(rx)} {_fmt(ry)} 0 0 1 {_fmt(cx)} {_fmt(y2)} "
+                f"A {_fmt(rx)} {_fmt(ry)} 0 0 1 {_fmt(x)} {_fmt(cy)} Z")
+    if preset == "roundRect":
+        r = min(w, h) / 6                          # 实测：单位框 166.67 = 1000/6；300×120 → 20 = 120/6
+        return (f"M {_fmt(x)} {_fmt(y + r)} A {_fmt(r)} {_fmt(r)} 0 0 1 {_fmt(x + r)} {_fmt(y)} "
+                f"L {_fmt(x2 - r)} {_fmt(y)} A {_fmt(r)} {_fmt(r)} 0 0 1 {_fmt(x2)} {_fmt(y + r)} "
+                f"L {_fmt(x2)} {_fmt(y2 - r)} A {_fmt(r)} {_fmt(r)} 0 0 1 {_fmt(x2 - r)} {_fmt(y2)} "
+                f"L {_fmt(x + r)} {_fmt(y2)} A {_fmt(r)} {_fmt(r)} 0 0 1 {_fmt(x)} {_fmt(y2 - r)} Z")
+    if preset == "line":
+        return f"M {_fmt(x)} {_fmt(y)} L {_fmt(x + w)} {_fmt(y + h)}"
+    return ""
+
+
+def preset_group(obj: dict) -> str:
+    """一个自由层形状 → 规范预设组（ptt-master 直接认）。颜色/描边都显式给，绝不靠默认值。
+
+    ⚠️ 两条是 ppt-master 的**硬要求**（它自己的质量检查会判 error，导出直接失败 —— 实测踩过）：
+    1. `<g>` 必须带一个**稳定的 `id`**（"Authored preset logical group requires a stable id"）；
+    2. 只要 `stroke` 不是 `none`，就必须给 `stroke-width`（"visible stroke requires stroke-width"）。
+    """
+    preset = str(obj.get("shape") or "rect")
+    if preset not in SHAPE_PRESETS:
+        preset = "rect"
+    x, y = float(obj.get("x") or 0), float(obj.get("y") or 0)
+    w, h = max(1.0, float(obj.get("w") or 1)), max(1.0, float(obj.get("h") or 1))
+    fill = str(obj.get("fill") or "")
+    stroke = str(obj.get("stroke") or "")
+    if preset == "line":
+        fill, stroke = "none", (stroke or str(obj.get("color") or "#1A1A1A"))
+    else:
+        fill = fill or "#DCE6F5"
+        stroke = stroke or "none"
+    kind = "connector" if preset == "line" else "shape"
+    sw = f' stroke-width="{_fmt(obj.get("stroke_w") or 1)}"' if stroke != "none" else ""
+    # ⚠️ 子元素**只能**是 `<path>`：实测把矩形写成 `<rect>` 会被判
+    # "Compact authored preset is atomic and may contain only direct SVG paths"（导出直接失败）。
+    return (f'<g id="{esc(obj.get("id") or "obj")}" data-pptx-authoring="preset" '
+            f'data-pptx-object="{kind}" data-pptx-prst="{esc(preset)}" '
+            f'data-pptx-frame="{_fmt(x)} {_fmt(y)} {_fmt(w)} {_fmt(h)}" '
+            f'fill="{esc(fill)}" stroke="{esc(stroke)}"{sw}>'
+            f'<path d="{preset_path(preset, x, y, w, h)}"/></g>')
+
+
+def draw_objects(cv: Canvas, objects: list[dict] | None) -> str:
+    """把自由层的对象画出来（形状 → 规范预设组；文本框 → 框内文字，可编辑）。
+
+    顺序 = 数组顺序（后画的在上面）；`上移一层/下移一层` 就是换数组位置 —— 不再引入第二套 z，
+    免得和版式槽位的 `z` 覆盖打架（那套是"版式内部谁压谁"）。
+    枚举时给可编辑盒子打 `data-slot="obj:<id>"`，前端就能用同一套选中/拖动/改大小。
+    """
+    out: list[str] = []
+    for i, o in enumerate(objects or []):
+        if not isinstance(o, dict):
+            continue
+        oid = str(o.get("id") or f"o{i + 1}")
+        slot = f"obj:{oid}"
+        x, y = float(o.get("x") or 0), float(o.get("y") or 0)
+        w, h = max(1.0, float(o.get("w") or 1)), max(1.0, float(o.get("h") or 1))
+        if o.get("kind") == "shape":
+            out.append(preset_group(o))
+            if cv.boxes is not None:
+                cv.box(slot, x, y, w, h, float(o.get("size") or 0), align="start",
+                       kind="obj-shape", obj={"shape": o.get("shape"), "name": o.get("name") or ""})
+            if str(o.get("text") or "").strip():
+                out.append(_object_text(cv, o, x, y, w, h, slot))
+            continue
+        # 文本框：先描一个软色底（"有框"的观感），再放字
+        if o.get("fill"):
+            out.append(rect(x, y, w, h, fill=str(o["fill"]), stroke=str(o.get("stroke") or "none"),
+                            sw=float(o.get("stroke_w") or 1), r=float(o.get("radius") or 0)))
+        if cv.boxes is not None:
+            cv.box(slot, x, y, w, h, float(o.get("size") or 0), align=str(o.get("align") or "start"),
+                   kind="obj-text", obj={"shape": "text"})
+        out.append(_object_text(cv, o, x, y, w, h, slot))
+    return "".join(out)
+
+
+def _object_text(cv: Canvas, o: dict, x: float, y: float, w: float, h: float, slot: str) -> str:
+    """自由层里的一段文字（文本框本体，或形状上叠的字）。**一样会换行、一样不截断。**
+
+    盒子的槽名：文本框用 `obj:<id>`；形状上叠的字用 `obj:<id>:text` —— 否则文字盒子会把
+    形状盒子顶掉（`Canvas.box` 同槽只留一个），那就点不到形状、也拖不动它了。
+    """
+    text = str(o.get("text") or "")
+    if not text.strip():
+        return ""
+    size = cv.size_of(o.get("size"), 24.0)
+    align = str(o.get("align") or "start")
+    pad = size * 0.5
+    box_slot = slot if o.get("kind") == "text" else (slot + ":text")
+    svg, _y = paragraph(
+        cv, x + pad, y + size * 0.95, text, size=size, max_w=max(24.0, w - pad * 2),
+        lh=float(o.get("lh") or 1.3), fill=str(o.get("color") or ""), align=align,
+        slot=slot if o.get("kind") != "shape" else "", box_slot=box_slot,
+        ov={"size": size, "bold": o.get("bold"), "italic": o.get("italic"),
+            "underline": o.get("underline"), "font": o.get("font")})
+    return svg
+
+
 def render_slide(t: dict, layout: str, slots: dict | None = None, *, index: int = 0, total: int = 1,
                  warnings: list[str] | None = None, boxes: list[dict] | None = None,
-                 overrides: dict | None = None) -> str:
-    """渲染一页，返回完整 SVG 文本（画布底色 + 版式 + 页脚；封面不画页码）。
+                 overrides: dict | None = None, objects: list[dict] | None = None) -> str:
+    """渲染一页，返回完整 SVG 文本（画布底色 + 版式 + 自由层 + 页脚；封面不画页码）。
 
     `boxes` 给了一个列表（`annotate`）时：给每个文字槽打 `data-slot` 并收集**可编辑盒子**
     （设计像素 1280×720）。**导出路径不传它** —— 导出用的 SVG 与以前逐字节一致（`docs/25` D8）。
 
     `overrides` 是老师改过的样子（`slides[i].slots`）：`{槽位: {dx,dy,dw,dh,size,color,align,lh,z,hidden}}`，
     在发射时套上 —— **预览与导出走同一条路**，所以"看到什么样，导出就是什么样"。
+
+    `objects`（R21）是老师**自己插入**的文本框与形状（自由层）：画在版式内容之后、页脚之前，
+    组内按数组顺序叠放（`上移一层/下移一层` = 换数组位置）。形状发的是 ppt-master 认的
+    **规范预设组**（`data-pptx-authoring="preset"` …），所以导出会变成原生可编辑形状。
     """
     if layout not in _RENDERERS:
         raise ValueError(f"没有这个版式：{layout}（可选：{', '.join(LAYOUTS)}）")
@@ -645,16 +817,23 @@ def render_slide(t: dict, layout: str, slots: dict | None = None, *, index: int 
     warn = warnings if warnings is not None else []
     sl = slots or {}
     body = order_z(cv, _RENDERERS[layout](cv, sl, index, total, warn))
+    free = draw_objects(cv, objects or [])
     tail = "" if layout == "cover" else footer(cv, index, total)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{cv.w}" height="{cv.h}" '
-            f'viewBox="0 0 {cv.w} {cv.h}">' + rect(0, 0, cv.w, cv.h, fill=cv.bg) + body + tail + "</svg>")
+            f'viewBox="0 0 {cv.w} {cv.h}">' + rect(0, 0, cv.w, cv.h, fill=cv.bg) + body + free +
+            tail + "</svg>")
 
 
 def render_deck(t: dict, slides: list[dict], warnings: list[str] | None = None) -> list[str]:
-    """渲染整册：`slides = [{"layout": "cover", "title": ...}, ...]`，一页一个 SVG。"""
+    """渲染整册：`slides = [{"layout": "cover", "title": ...}, ...]`，一页一个 SVG。
+
+    注意：这里**不传** `boxes`/`objects` 之外的注解，导出路径与预览共用同一份 SVG 生成函数
+    （`slide_deck.build_deck` 才是带注解的那条路）。
+    """
     warn = warnings if warnings is not None else []
     total = len(slides)
-    return [render_slide(t, s.get("layout") or "bullets", s, index=i, total=total, warnings=warn)
+    return [render_slide(t, s.get("layout") or "bullets", s, index=i, total=total, warnings=warn,
+                         objects=s.get("objects") or [])
             for i, s in enumerate(slides)]
 
 

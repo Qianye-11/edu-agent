@@ -90,6 +90,7 @@ function makeDom(opts) {
   const slots = [];
   const images = [];
   const finds = [];
+  const objects = [];
   /* R14：桩要像真服务端那样把 `patch`（拖动/改大小/层级/删除）应用到盒子上 ——
      真服务端在 ppt_svg.Canvas.box 里套覆盖，预览才会跟着动；桩不套就成了"假链路"（测不出回归）。 */
   const slotPatch = {};
@@ -195,6 +196,12 @@ function makeDom(opts) {
             const out = [{ slot: 'title', kind: 'text', align: 'start', x: 72, y: 60, w: 1136, h: 80, size: 40 }];
             rows.forEach((b, i) => out.push({ slot: 'block:' + i, kind: 'text', align: 'start',
               x: 96, y: 240 + i * 100, w: 1112, h: 60, size: 24 }));
+            /* R21：自由层对象也要出盒子（真服务端就是这么做的），否则面板上选不中/拖不动 */
+            ((s && s.objects) || []).forEach((o) => {
+              out.push({ slot: 'obj:' + o.id, kind: o.kind === 'text' ? 'obj-text' : 'obj-shape',
+                         align: 'start', x: o.x, y: o.y, w: o.w, h: o.h, size: o.size || 24,
+                         obj: { shape: o.shape || 'text' } });
+            });
             return out.length > 1 ? out : [{ slot: 'title', kind: 'text', align: 'start',
               x: 72, y: 60, w: 1136, h: 80, size: 40 }];
           };
@@ -281,6 +288,54 @@ function makeDom(opts) {
           try { b = JSON.parse(op.body); } catch (e) {}
           deletes.push(b);
           return new Response(JSON.stringify({ ok: true, moved_to: 'content/ppt_templates/_trash/学校模板-stub' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (p === '/api/slide/object') {
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          objects.push(b);
+          const list = (b.slides || DOC_STUB.slides).map((s, i) => {
+            if (i !== b.index) return s;
+            const objs = (s.objects || []).slice();
+            if ((b.action || 'add') === 'add') {
+              const id = 'o' + (objs.length + 1);
+              objs.push(b.kind === 'text'
+                ? { kind: 'text', id, x: 430, y: 315, w: 420, h: 90, text: '点这里改字', size: 28 }
+                : { kind: 'shape', id, shape: b.shape || 'rect', x: 480, y: 280, w: 320, h: 160,
+                    fill: '#EEF2F8', stroke: '#2F6BFF' });
+              return { ...s, objects: objs };
+            }
+            if (b.action === 'patch') {
+              return { ...s, objects: objs.map((o) => (o.id === b.id
+                ? Object.assign({}, o, b.patch || {}) : o)) };
+            }
+            if (b.action === 'delete') {
+              return { ...s, objects: objs.filter((o) => o.id !== b.id) };
+            }
+            if (b.action === 'up' || b.action === 'down') {
+              const at = objs.findIndex((o) => o.id === b.id);
+              const to = at + (b.action === 'up' ? 1 : -1);
+              if (at < 0 || to < 0 || to >= objs.length) {
+                return { ...s, __bad: b.action === 'up' ? '已经在最上面了' : '已经在最下面了' };
+              }
+              const copy = objs.slice();
+              const tmp = copy[at]; copy[at] = copy[to]; copy[to] = tmp;
+              return { ...s, objects: copy };
+            }
+            if (b.action === 'set') return { ...s, objects: b.objects || [] };
+            return s;
+          });
+          const bad = (list[b.index] || {}).__bad;
+          if (bad) {
+            return new Response(JSON.stringify({ ok: false, error: bad }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
+          const clean = list.map((s) => { const c = { ...s }; delete c.__bad; return c; });
+          return new Response(JSON.stringify({ ok: true, action: b.action || 'add', index: b.index,
+            id: b.id || 'o' + ((clean[b.index].objects || []).length), objects: clean[b.index].objects || [],
+            slides: clean, count: (clean[b.index].objects || []).length, session_id: 'stub',
+            detail: (b.action || 'add') === 'add' ? '加了一个' + (b.kind === 'text' ? '文本框' : '形状')
+                                                 : '对象已更新' }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
         if (p === '/api/slide/find') {
@@ -383,7 +438,7 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots, images, finds };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots, images, finds, objects };
 }
 
 async function openDocPanel(doc) {
@@ -452,7 +507,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
   {
-    const { w, doc, errors, saves, renderCalls, slots, exports, images, finds } = makeDom({ withDoc: true });
+    const { w, doc, errors, saves, renderCalls, slots, exports, images, finds, objects } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -643,10 +698,10 @@ async function openDocPanel(doc) {
         !doc.querySelector('#wzDocPane .dp-tt[data-soon]'),
         Array.from(doc.querySelectorAll('#wzDocPane .dp-tt')).map((b) => txt(b)).join('/'));
       doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click(); await sleep(300);
-      check('点「插入」能切过去（里面有联网取图；文本框/形状写明 R21 再加）',
+      check('点「插入」能切过去（里面有插入文本框/形状 + 联网取图）',
         doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').classList.contains('on') &&
-        /R21/.test(txt(doc.querySelector('#wzDocPane .dp-toolgroup[data-group="insert"]'))),
-        txt(doc.querySelector('#wzDocPane .dp-toolgroup[data-group="insert"]')).slice(0, 50));
+        !!doc.getElementById('dpInsText') && !!doc.getElementById('dpImgGet'),
+        txt(doc.querySelector('#wzDocPane .dp-toolgroup[data-group="insert"]')).slice(0, 60));
       doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);
       check('「设计」组里有网格/适应窗口/放大缩小',
         !!doc.getElementById('dpGrid2') && !!doc.getElementById('dpZoomFit2') &&
@@ -1268,6 +1323,125 @@ async function openDocPanel(doc) {
         for (let i = 0; i < 30 && !undoBtn().disabled; i++) { ctrlZ(); await sleep(220); }
         check('撤回到底后按钮变灰（栈空）', undoBtn().disabled, undoBtn().title || '');
         check('无运行时错误（R20 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+      }
+
+      /* R21：自由层 —— 插入文本框/形状 → 选中/拖动/改字/层级/删除 → 撤销 */
+      {
+        const key = (k, opt) => doc.dispatchEvent(new w.KeyboardEvent('keydown',
+          Object.assign({ key: k, bubbles: true, cancelable: true }, opt || {})));
+        const ctrlZ = () => key('z', { ctrlKey: true });
+        const mouse = (el, type, x, y, opt) => el.dispatchEvent(new w.MouseEvent(type,
+          Object.assign({ bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }, opt || {})));
+        const objBoxes = () => Array.from(doc.querySelectorAll(
+          '#wzDocPane .dp-canvas .dp-box[data-slot^="obj:"]'));
+        const lastObj = () => objects[objects.length - 1] || {};
+        const openInsert = async () => {
+          doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click();
+          await sleep(400);
+        };
+        await openInsert();
+        check('「插入」里有文本框 + 8 个预设形状',
+          !!doc.getElementById('dpInsText') &&
+          doc.querySelectorAll('#wzDocPane [data-shape]').length === 8,
+          doc.querySelectorAll('#wzDocPane [data-shape]').length + ' 个形状');
+
+        /* 插入文本框 */
+        let n0 = objects.length;
+        doc.getElementById('dpInsText').click();
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        await sleep(600);
+        check('点「文本框」发 add（kind=text）并选中新对象',
+          lastObj().action === 'add' && lastObj().kind === 'text' &&
+          docpSelCount() === 1 && /obj:/.test(txt(doc.getElementById('dpSelName'))),
+          JSON.stringify(lastObj()).slice(0, 70) + ' · 选中=' + txt(doc.getElementById('dpSelName')));
+        check('新对象在页面上有盒子（obj-text）',
+          objBoxes().some((b) => b.classList.contains('dp-obj-text') || !!b.dataset.slot),
+          objBoxes().map((b) => b.dataset.slot).join(','));
+
+        /* 插入矩形（形状按钮） */
+        n0 = objects.length;
+        doc.querySelector('#wzDocPane [data-shape="ellipse"]').click();
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        await sleep(600);
+        check('点形状按钮发 add（kind=shape + 预设名）',
+          lastObj().action === 'add' && lastObj().kind === 'shape' && lastObj().shape === 'ellipse',
+          JSON.stringify(lastObj()).slice(0, 70));
+        check('两个对象都在页面上', objBoxes().length === 2,
+          objBoxes().map((b) => b.dataset.slot).join(','));
+
+        /* 右栏：对象属性（位置/大小/字号/颜色/文字/层级/删除）*/
+        check('右栏切到"对象属性"（位置/大小/字号/填充/对齐/层级/删除都在）',
+          /属性 · /.test(txt(doc.getElementById('dpProps'))) &&
+          !!doc.getElementById('dpOx') && !!doc.getElementById('dpOw') &&
+          !!doc.getElementById('dpOsize') && !!doc.getElementById('dpOfill') &&
+          !!doc.getElementById('dpOup') && !!doc.getElementById('dpOdel') &&
+          !!doc.getElementById('dpOtext'),
+          txt(doc.getElementById('dpProps')).slice(0, 40));
+
+        /* 改位置（右栏输入）→ patch 绝对几何 */
+        n0 = objects.length;
+        const ox = doc.getElementById('dpOx');
+        ox.value = '123';
+        ox.dispatchEvent(new w.Event('change', { bubbles: true }));
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        check('改位置发 patch（绝对 x，不是增量）',
+          (lastObj().action === 'patch') && (lastObj().patch || {}).x === 123,
+          JSON.stringify(lastObj()).slice(0, 70));
+
+        /* 改文字（textarea，600ms 防抖）*/
+        n0 = objects.length;
+        const ta = doc.getElementById('dpOtext');
+        ta.value = '我写的字';
+        ta.dispatchEvent(new w.Event('input', { bubbles: true }));
+        for (let i = 0; i < 16 && objects.length <= n0; i++) await sleep(250);
+        check('改对象文字发 patch（防抖后一次）',
+          (lastObj().patch || {}).text === '我写的字', JSON.stringify(lastObj()).slice(0, 70));
+
+        /* 拖动对象：mousedown → mousemove → mouseup（几何走绝对值）*/
+        const target = objBoxes()[objBoxes().length - 1];
+        n0 = objects.length;
+        const rect = target.getBoundingClientRect();
+        mouse(target, 'mousedown', 0, 0);
+        mouse(doc.body, 'mousemove', 300, 400);
+        mouse(doc.body, 'mouseup', 300, 400);
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        check('拖动对象发 patch（x/y 是算出来的绝对值）',
+          lastObj().action === 'patch' && typeof (lastObj().patch || {}).x === 'number' &&
+          typeof (lastObj().patch || {}).y === 'number',
+          JSON.stringify(lastObj()).slice(0, 70));
+
+        /* 层级：上移一层 → action=up；再点一次要如实说"已经最上面了" */
+        n0 = objects.length;
+        doc.getElementById('dpOup').click();
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        check('「上移一层」发 action=up', lastObj().action === 'up', JSON.stringify(lastObj()).slice(0, 50));
+        n0 = objects.length;
+        doc.getElementById('dpOup').click();
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        await sleep(300);
+        check('已经在最上面时如实报错（不假装成功）',
+          /最上面/.test(toast()), toast());
+
+        /* 删除对象 */
+        n0 = objects.length;
+        doc.getElementById('dpOdel').click();
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        await sleep(600);
+        check('「删除这个对象」发 action=delete 且页面上少一个',
+          lastObj().action === 'delete' && objBoxes().length === 1,
+          objBoxes().length + ' 个对象');
+
+        /* 撤销：删掉的那个要回来；再一路撤回，中间每一步（拖/改字/层级/插入）都该能撤 */
+        ctrlZ(); await sleep(1000);
+        check('删掉的对象能一次 Ctrl+Z 撤回', objBoxes().length === 2,
+          objBoxes().map((b) => b.dataset.slot).join(','));
+        let guard = 0;
+        while (objBoxes().length > 0 && guard < 14) { ctrlZ(); await sleep(650); guard++; }
+        check('一路撤回能把对象全撤掉（插入/拖动/改字/层级每步都可撤）',
+          objBoxes().length === 0, '撤了 ' + guard + ' 次 · 还剩 ' +
+          (objBoxes().map((b) => b.dataset.slot).join(',') || '0 个'));
+        check('无运行时错误（R21 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+        doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
       }
 
       /* 回到第 1 页：下面的老用例（本页属性条那几条）默认在第 1 页上跑 */

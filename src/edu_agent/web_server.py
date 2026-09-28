@@ -1484,6 +1484,102 @@ def api_slide_image_attach(body: SlideImageReq):
             "detail": f"已把这张图挂到第 {idx + 1} 页（{got.get('bytes', 0) // 1024} KB，存在 data/uploads/）"}
 
 
+class SlideObjectReq(BaseModel):
+    """自由层对象（R21）：插入 / 改 / 删 / 上下移一个**老师自己造的**文本框或形状。
+
+    `action`：`add`（要 `kind`/`shape`）、`patch`（要 `id` + `patch`）、`delete`（要 `id`）、
+    `up`/`down`（换数组位置 = 上移/下移一层）、`set`（整份对象数组，撤销/重做走这条）。
+    几何是**绝对设计像素**（`x/y/w/h`），不是槽位那套增量；`theme_id` 只影响新对象的默认配色。
+    """
+
+    session_id: str = ""
+    index: int = 0
+    action: str = "add"
+    id: str = ""
+    kind: str = "shape"
+    shape: str = "rect"
+    patch: dict | None = None
+    objects: list[dict] | None = None
+    slides: list[dict] | None = None
+    title: str = ""
+    theme_id: str = ""
+
+
+@app.post("/api/slide/object")
+def api_slide_object(body: SlideObjectReq):
+    """**自由层**：插入 / 改 / 删 / 上下移一个文本框或形状（改完立刻整册存回会话）。
+
+    为什么单独一个接口而不是塞进 `/api/slide/slot`：槽位是**版式给的**（`apply_slot` 只认那套名字），
+    自由层对象是**老师自己造的**、几何是绝对值、还能增删 —— 混在一个接口里两边都会变糊。
+    """
+    slides = [dict(s) for s in (body.slides or []) if isinstance(s, dict)]
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not slides:
+        slides = [dict(s) for s in (_store.get_session_doc(sid).get("slides") or [])
+                  if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可编辑的幻灯片（先有教案内容）"}, status_code=400)
+    idx = int(body.index or 0)
+    if not (0 <= idx < len(slides)):
+        return JSONResponse({"ok": False, "error": f"页号越界：第 {idx + 1} 页（共 {len(slides)} 页）"},
+                            status_code=400)
+    page = slides[idx]
+    objs = slide_deck.clean_objects(page.get("objects"))
+    act = str(body.action or "add").lower()
+    detail, focus = "", ""
+    if act == "add":
+        oid = slide_deck.next_object_id(objs)
+        focus = oid
+        objs = objs + [slide_deck.new_object(body.kind, body.shape, canvas=(1280, 720),
+                                             theme=slide_deck.theme(body.theme_id), oid=oid)]
+        if len(objs) > slide_deck.MAX_OBJECTS:
+            return {"ok": False, "error": f"一页最多 {slide_deck.MAX_OBJECTS} 个对象（先删几个）"}
+        detail = "加了一个" + ("文本框" if body.kind == "text" else "形状")
+    elif act == "patch":
+        got = slide_deck.patch_object(objs, body.id, body.patch)
+        if not got.get("ok"):
+            return {"ok": False, "error": got.get("error") or "改不动这个对象"}
+        objs, focus = got["objects"], body.id
+    elif act == "delete":
+        keep = [o for o in objs if str(o.get("id")) != str(body.id)]
+        if len(keep) == len(objs):
+            return {"ok": False, "error": f"这一页没有对象 {body.id}"}
+        objs = keep
+        detail = "删掉了这个对象"
+    elif act in ("up", "down"):
+        ids = [str(o.get("id")) for o in objs]
+        if body.id not in ids:
+            return {"ok": False, "error": f"这一页没有对象 {body.id}"}
+        i = ids.index(body.id)
+        j = i + (1 if act == "up" else -1)
+        if not (0 <= j < len(objs)):
+            return {"ok": False, "error": "已经在最上面了" if act == "up" else "已经在最下面了"}
+        objs[i], objs[j] = objs[j], objs[i]
+        focus = body.id
+        detail = "上移一层" if act == "up" else "下移一层"
+    elif act == "set":
+        objs = slide_deck.clean_objects(body.objects)
+        detail = "对象已更新"
+    else:
+        return JSONResponse({"ok": False, "error": f"不认识的动作：{act}"}, status_code=400)
+
+    if objs:
+        page["objects"] = objs
+    else:
+        page.pop("objects", None)
+    slides[idx] = page
+    cleaned = slide_deck.clean_slides(slides)
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    if str(body.title or "").strip():
+        cur["title"] = str(body.title).strip()
+    _store.set_session_doc(sid, cur)
+    return {"ok": True, "action": act, "index": idx, "id": focus,
+            "objects": (cleaned[idx].get("objects") or []), "slides": cleaned,
+            "count": len(cleaned[idx].get("objects") or []), "session_id": sid, "detail": detail}
+
+
 def _plan_blocks(md: str) -> list[dict]:
     """从教案 Markdown 里抽出板块清单（纯文本处理，不落盘）。"""
     out: list[dict] = []

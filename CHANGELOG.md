@@ -83,6 +83,34 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 新增（R21 · 插入文本框与形状（自由层），2026-09-27）
+
+> 计划书 `docs/26` §5 R21〔接 ppt-master `preset_shape_svg.py` 的形状目录〕，记录见 `docs/26` §16。
+
+1. **数据模型 `slides[i].objects[]`**：`kind`（text/shape）、`shape`（8 个 DrawingML 预设）、
+   **绝对**设计像素几何（x/y/w/h，不是槽位那套 dx/dy 增量）、填充/描边/文字/字号/颜色/对齐/B·I·U。
+   新入口 `clean_objects`：只认认识的形状与键、数值夹范围、id 不撞车、一页 ≤ 30 个。
+2. **"预览=导出"靠规范预设组守住**：形状发 ppt-master 认的
+   `<g id data-pptx-authoring="preset" data-pptx-object data-pptx-prst data-pptx-frame fill stroke>` + `<path>`。
+   实测它的质量检查会判 error 的三条（导出会直接失败）：① `<g>` 必须带**稳定 id**；
+   ② `stroke` 非 none 时必须给 `stroke-width`；③ 子元素**只能是 `<path>`**（写 `<rect>` 直接被拒）。
+   几何公式从 `preset_shape_svg.py` 实测反推（`parallelogram` 斜边 = h/4、`chevron` 尖角 = h/2、
+   `rightArrow` 箭头宽 = h/2 —— 单位框里看不出来），并有**黄金测试**逐预设 × 3 尺寸与脚本对拍。
+3. **面板**：「插入」组加**文本框 + 8 个预设形状**；选中/拖动/改大小复用页内那套（服务端把对象也记成
+   `obj:<id>` 盒子；形状上叠的字用 `obj:<id>:text`，否则会顶掉形状盒子）；右栏「属性 · 文本框 o1」有
+   位置/大小/字号/文字色/填充（可"无填充"）/对齐/B·I·U/层级/删除；`Ctrl+Alt+T` 插文本框；
+   层级在对象之间换数组位置；全部进 R20 的撤销栈。
+4. **导出实测**（真机产物）：导出成功；自由层文字在；椭圆落成 `prstGeom ellipse`（真预设），
+   矩形落成**任意多边形**但几何逐点一致、可移动改色加字 —— 这条如实记在 `docs/26` §16.4（附原因）。
+5. **两个自己的坑**：① `def clean_slides(...)` 那行被编辑吃掉 → 函数体变死代码、整个函数消失，
+   **新单测当场逮住**（改大块代码后先跑相关单测）；② `wz_shot.py` 被 PowerShell
+   `Set-Content -Encoding UTF8` 加 BOM 写坏 → `git checkout --` 恢复后用 edit 工具重做
+   （再次验证：**源码只用 edit 工具改**）。
+
+配套：单测 542 → **559**（新 `tests/test_slide_objects.py` 17 例，含 8 预设 × 3 尺寸对拍与导出真机）、
+面板检查 264 → **279**（+15 条）、审计 `--gate` error 0、`ppt_smoke` 49/49、`jscheck` 通过、
+截图 `data/tmp/wzshots/wz_slides-sel-obj-tall.png`。
+
 ### 新增（R20 · 操作栈统一，2026-09-27）
 
 > 计划书 `docs/26` §5 R20（D10：上面所有操作都能 `Ctrl+Z` 撤回），记录见 `docs/26` §15。

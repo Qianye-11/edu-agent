@@ -486,7 +486,8 @@ def build_deck(theme_id: str, slides: list[dict] | None, title: str = "",
         layouts.append(layout)
         page_boxes: list[dict] | None = [] if annotate else None
         pages.append(ppt_svg.render_slide(t, layout, slots, index=i, total=total, warnings=warnings,
-                                          boxes=page_boxes, overrides=slide.get("slots") or None))
+                                          boxes=page_boxes, overrides=slide.get("slots") or None,
+                                          objects=slide.get("objects") or None))   # R21 自由层
         if page_boxes is not None:
             boxes_all.append(page_boxes)
         chars += sum(len(str(v)) for v in (slide.get("bullets") or []))
@@ -624,12 +625,201 @@ def _clean_overrides(raw) -> dict:
     return out
 
 
+# ---------------------------------------------------------------- 自由层对象（R21）
+
+#: 一页最多几个自由层对象（防手滑粘一堆；超出的丢掉并如实说）
+MAX_OBJECTS = 30
+#: 支持的形状（与 `ppt_svg.SHAPE_PRESETS` 一致；都是 ppt-master 认的 DrawingML 预设）
+OBJECT_SHAPES = ppt_svg.SHAPE_PRESETS
+#: 几何范围（设计像素 1280×720；允许拖到画布外一点，但不能跑到天边）
+OBJ_RANGE = {"x": (-2000.0, 3000.0), "y": (-2000.0, 3000.0), "w": (16.0, 2400.0), "h": (16.0, 2400.0)}
+OBJ_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,24}$")
+
+
+def _hex_color(v) -> str:
+    """认 `#RGB` / `#RRGGBB`（大小写都行），统一成 `#RRGGBB` 大写；认不出返回空串（不猜）。"""
+    s = str(v or "").strip()
+    m = re.fullmatch(r"#?([0-9a-fA-F]{6})", s)
+    if m:
+        return "#" + m.group(1).upper()
+    m = re.fullmatch(r"#?([0-9a-fA-F]{3})", s)
+    if m:
+        return "#" + "".join(ch * 2 for ch in m.group(1)).upper()
+    return ""
+
+
+def clean_objects(raw) -> list[dict]:
+    """收干净一页的自由层对象（R21）：只认认识的形状/键，数值夹范围，**不认识的直接丢**。
+
+    为什么要单独收一遍：这些是老师**自己造**的东西（不是版式给的槽位），一旦写进会话就会
+    长期存在 —— 渲染、导出、审计三处都吃它，所以入口必须严。
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for i, o in enumerate(raw or []):
+        if not isinstance(o, dict):
+            continue
+        if len(out) >= MAX_OBJECTS:
+            break
+        kind = str(o.get("kind") or "shape")
+        if kind not in ("shape", "text"):
+            continue
+        item: dict = {"kind": kind}
+        oid = str(o.get("id") or "").strip()
+        if not OBJ_ID_RE.match(oid) or oid in seen:
+            n = i + 1                       # 缺 id / id 非法 / id 撞车：都按位置重编一个
+            while f"o{n}" in seen:
+                n += 1
+            oid = f"o{n}"
+        seen.add(oid)
+        item["id"] = oid
+        if kind == "shape":
+            shape = str(o.get("shape") or "rect")
+            item["shape"] = shape if shape in OBJECT_SHAPES else "rect"
+        for k, (lo, hi) in OBJ_RANGE.items():
+            try:
+                v = float(o.get(k))
+            except (TypeError, ValueError):
+                v = 0.0
+            item[k] = round(max(lo, min(hi, v)), 1)
+        if item["w"] < OBJ_RANGE["w"][0]:
+            item["w"] = 120.0
+        if item["h"] < OBJ_RANGE["h"][0]:
+            item["h"] = 60.0
+        text = _text(o.get("text"))[:400]
+        if text:
+            item["text"] = text
+        try:
+            size = float(o.get("size"))
+        except (TypeError, ValueError):
+            size = 0.0
+        if size >= 8:
+            item["size"] = round(max(8.0, min(200.0, size)), 1)
+        for key in ("color", "fill", "stroke"):
+            c = _hex_color(o.get(key))
+            if c:
+                item[key] = c
+        if o.get("align") in SLOT_ALIGNS:
+            item["align"] = o["align"]
+        font = clean_font(o.get("font"))
+        if font:
+            item["font"] = font
+        for flag in ("bold", "italic", "underline"):
+            if o.get(flag):
+                item[flag] = True
+        try:
+            lh = float(o.get("lh"))
+        except (TypeError, ValueError):
+            lh = 0.0
+        if lh:
+            item["lh"] = round(max(0.8, min(3.0, lh)), 2)
+        try:
+            r = float(o.get("radius"))
+        except (TypeError, ValueError):
+            r = 0.0
+        if r:
+            item["radius"] = round(max(0.0, min(200.0, r)), 1)
+        out.append(item)
+    return out
+
+
+def new_object(kind: str = "shape", shape: str = "rect", *, canvas: tuple[float, float] = (1280, 720),
+               theme: dict | None = None, oid: str = "") -> dict:
+    """新插入一个对象（默认摆中间、给个能看的默认配色）—— 前端点一下就调这里。
+
+    默认外观守"瑞士风"硬规则（`docs/26` §11.2）：**直角、纯色、无渐变无阴影**；
+    颜色取自主题（`soft` 底 + `accent` 描边），不自己编颜色。
+    """
+    W, H = float(canvas[0] or 1280), float(canvas[1] or 720)
+    pal = ((theme or {}).get("palette") or {})
+    soft = _hex_color(pal.get("soft")) or "#EEF2F8"
+    accent = _hex_color(pal.get("accent")) or "#2F6BFF"
+    if kind == "text":
+        w, h = 420.0, 90.0
+        obj = {"kind": "text", "x": round((W - w) / 2, 1), "y": round((H - h) / 2, 1), "w": w, "h": h,
+               "text": "点这里改字", "size": 28.0, "color": _hex_color(pal.get("text")) or "#1A1A1A",
+               "align": "start"}
+        if oid:
+            obj["id"] = oid
+        return clean_objects([obj])[0]
+    w, h = 320.0, 160.0
+    obj = {"kind": "shape", "shape": shape if shape in OBJECT_SHAPES else "rect",
+           "x": round((W - w) / 2, 1), "y": round((H - h) / 2, 1), "w": w, "h": h,
+           "fill": soft, "stroke": accent, "stroke_w": 2.0}
+    if oid:
+        obj["id"] = oid
+    return clean_objects([obj])[0]
+
+
+def next_object_id(objects: list[dict] | None) -> str:
+    """给这一页的下一个新对象取个不撞车的 id（`o1`、`o2`…）。"""
+    used = {str(o.get("id") or "") for o in (objects or []) if isinstance(o, dict)}
+    n = 1
+    while f"o{n}" in used:
+        n += 1
+    return f"o{n}"
+
+
+def patch_object(objects: list[dict] | None, oid: str, patch: dict | None) -> dict:
+    """改一个自由层对象（几何/文字/样式），返回 `{ok, objects, obj}`。
+
+    **几何是绝对设计像素**（`x/y/w/h` 直接给），不是槽位那套 `dx/dy` 增量 ——
+    自由层对象本来就没有"版式原位"可言，增量语义只会让"拖回原地"变得说不清。
+    """
+    if not isinstance(patch, dict):
+        return {"ok": False, "error": "补丁不是个对象"}
+    items = [dict(o) for o in (objects or []) if isinstance(o, dict)]
+    hit = None
+    for o in items:
+        if str(o.get("id")) == str(oid):
+            hit = o
+            break
+    if hit is None:
+        return {"ok": False, "error": f"这一页没有对象 {oid}"}
+    for k in ("x", "y", "w", "h", "size", "lh", "radius", "stroke_w"):
+        if k in patch and patch[k] is not None:
+            try:
+                hit[k] = float(patch[k])
+            except (TypeError, ValueError):
+                return {"ok": False, "error": f"{k} 得是数字"}
+    if "text" in patch:
+        hit["text"] = str(patch["text"] or "")[:400]
+    for k in ("color", "fill", "stroke"):
+        if k in patch:
+            c = _hex_color(patch[k])
+            if c:
+                hit[k] = c
+            elif str(patch[k] or "") in ("", "none"):
+                hit.pop(k, None)
+    if "align" in patch and patch["align"] in SLOT_ALIGNS:
+        hit["align"] = patch["align"]
+    if "font" in patch:
+        f = clean_font(patch["font"])
+        if f:
+            hit["font"] = f
+        else:
+            hit.pop("font", None)
+    for flag in ("bold", "italic", "underline"):
+        if flag in patch:
+            if patch[flag]:
+                hit[flag] = True
+            else:
+                hit.pop(flag, None)
+    if "shape" in patch and str(patch["shape"]) in OBJECT_SHAPES:
+        hit["shape"] = str(patch["shape"])
+    cleaned = clean_objects(items)          # 夹范围、去非法值；顺便保证 id 不撞车
+    got = next((o for o in cleaned if str(o.get("id")) == str(oid)), None)
+    if got is None:
+        return {"ok": False, "error": "改完这个对象就不合法了（检查一下尺寸/颜色）"}
+    return {"ok": True, "objects": cleaned, "obj": got}
+
+
 def clean_slides(slides: list[dict] | None) -> list[dict]:
     """把面板传来的编辑结果**收干净**再存/再渲染（保守：不认识的就丢，绝不悄悄改字）。
 
     只保留认识的键：`layout/name/title/minutes/label/bullets/blocks/caption/closing/
-    subtitle/meta/index/left/right`；字符串去首尾空白；`layout` 只认登记过的 6 个；
-    空条目丢掉；单块文字上限 400 字（防手滑粘贴一整篇）。
+    subtitle/meta/index/left/right/objects/image/notes/slots`；字符串去首尾空白；
+    `layout` 只认登记过的 6 个；空条目丢掉；单块文字上限 400 字（防手滑粘贴一整篇）。
     """
     out: list[dict] = []
     for raw in slides or []:
@@ -668,6 +858,9 @@ def clean_slides(slides: list[dict] | None) -> list[dict]:
         pic = _clean_image(raw.get("image"))                # R18：这一页的配图（联网取回来的）
         if pic:
             s["image"] = pic
+        objs = clean_objects(raw.get("objects"))            # R21：老师自己插的文本框/形状
+        if objs:
+            s["objects"] = objs
         notes = _text(raw.get("notes"))[:2000]              # R16 预留：每一页的备注
         if notes:
             s["notes"] = notes

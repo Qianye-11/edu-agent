@@ -3742,6 +3742,9 @@ body.wz-dragging{cursor:grabbing}
           docpPropApply(bd, { align: k === 'e' ? 'middle' : (k === 'l' ? 'start' : 'end') });
           return;
         }
+        case 't':                                        /* Ctrl+Alt+T：插文本框（WPS 同款） */
+          if(!ev.altKey || typing) return;
+          stop(); docpObjInsert(bd, 'text', ''); return;
         case '=': case '+': if(typing) return; stop(); docpSizeStep(bd, 2); return;
         case '-': case '_': if(typing) return; stop(); docpSizeStep(bd, -2); return;
         case '0': case ')': if(typing) return; stop(); docpZoomSet(bd, 0); return;
@@ -5008,6 +5011,14 @@ body.wz-dragging{cursor:grabbing}
     WZ_DRAG = null;
     docpGuidesPaint([]);
     if(!st || !st.moved || !st.cur) return;
+    if(/^obj:/.test(st.slot)){                 /* R21：自由层对象的几何是**绝对值** */
+      docpObjCommit(st.bd, st.slot,
+                    { x: docpRound1(st.b.x + st.cur.dx), y: docpRound1(st.b.y + st.cur.dy),
+                      w: docpRound1(Math.max(16, st.b.w + st.cur.dw)),
+                      h: docpRound1(Math.max(16, st.b.h + st.cur.dh)) },
+                    { label: '挪动对象' });
+      return;
+    }
     var patch = /^fill:/.test(st.slot)
       ? { dx: st.cur.dx, dy: st.cur.dy, dw: st.cur.dw, dh: st.cur.dh }
       : { dx: st.cur.dx, dy: st.cur.dy, dw: st.cur.dw, dh: st.cur.dh };
@@ -5054,6 +5065,10 @@ body.wz-dragging{cursor:grabbing}
     }
     var s = docpSlideAt(DOCP_PAGE);
     if(!s) return;
+    if(/^obj:/.test(slot)){                                 /* R21：自由层对象（绝对几何） */
+      docpObjCommit(bd, slot, patch, before);
+      return;
+    }
     if(!s.slots) s.slots = {};
     var next = Object.assign({}, s.slots[slot] || {}, patch);
     Object.keys(next).forEach(function(k){                   /* 归零 = 不留这个键（回版式原位） */
@@ -5098,6 +5113,7 @@ body.wz-dragging{cursor:grabbing}
   /* 删一处：槽位层用 `hidden`（不画、字还在、索引不乱，能撤销）；填充层就是"清空这一格"。 */
   function docpDeleteOne(bd, slot){
     var before = docpOverrideOf(bd, slot);
+    if(/^obj:/.test(slot)){ docpObjDeleteOne(bd, slot); return; }   /* R21：自由层对象整只删掉 */
     if(/^fill:/.test(slot)){
       var si = parseInt(slot.slice(5), 10);
       DOCP_SL.fillOverrides[si] = '';
@@ -5116,6 +5132,12 @@ body.wz-dragging{cursor:grabbing}
   function docpLayer(bd, delta){
     var slots = docpSelList();
     if(!slots.length){ showToast('先点一下要调层级的文字', false); return; }
+    /* 自由层对象之间是"换数组位置"，与版式槽位的 z 覆盖不是一套；混选时各走各的 */
+    var free = slots.filter(function(s){ return /^obj:/.test(s); });
+    if(free.length){
+      free.forEach(function(s){ docpObjLayer(bd, s, delta); });
+      return;
+    }
     var done = 0, same = 0;
     docpTx(slots.length > 1 ? ('调 ' + slots.length + ' 处的层级') : '调层级', function(){
       slots.forEach(function(slot){
@@ -5167,6 +5189,20 @@ body.wz-dragging{cursor:grabbing}
     var bd = docpEl('wzDocBody');
     /* 多选时一起挪（R18/R20）：每一格按自己的现值加同一个增量，**整批算一步** */
     var list = docpSelList();
+    var freeSel = list.filter(function(s){ return /^obj:/.test(s); });
+    if(freeSel.length){                       /* R21：自由层对象按绝对几何挪 */
+      docpTx(freeSel.length > 1 ? ('微调 ' + freeSel.length + ' 个对象') : '微调对象', function(){
+        freeSel.forEach(function(slot){
+          var ob = docpObjectOf(slot);
+          if(!ob) return;
+          docpObjCommit(bd, slot,
+                        { x: docpRound1(docpNum(ob.x, 0) + (d.dx || 0)),
+                          y: docpRound1(docpNum(ob.y, 0) + (d.dy || 0)) },
+                        { label: '微调对象' }, true);
+        });
+      });
+      return;
+    }
     docpTx(list.length > 1 ? ('微调 ' + list.length + ' 处') : '微调', function(){
       list.forEach(function(slot){
         var cur = docpOverrideOf(bd, slot);
@@ -5221,6 +5257,7 @@ body.wz-dragging{cursor:grabbing}
     if(!step) return '';
     if(step.label) return step.label;
     if(step.type === 'pages') return '页面改动';
+    if(step.type === 'objs') return '改对象';
     if(step.type === 'geo') return /^fill:/.test(step.slot || '') ? '模板这一格的位置/样式' : ('「' + step.slot + '」的位置/样式');
     if(step.type === 'group') return (step.steps || []).length + ' 步操作';
     return '「' + (step.slot || '') + '」改字';
@@ -5489,6 +5526,30 @@ body.wz-dragging{cursor:grabbing}
       }
       return;
     }
+    if(step.type === 'objs'){
+      /* 自由层对象的几何/文字/样式（R21）：`before/after` 是对象快照，按 id 写回去 */
+      var page = docpSlideAt(step.index);
+      var list = (dir === 'undo' ? step.before : step.after) || [];
+      if(page && list.length){
+        var objs = page.objects || [];
+        list.forEach(function(snap){
+          var at = -1;
+          for(var k = 0; k < objs.length; k++){ if(String(objs[k].id) === String(snap.id)){ at = k; break; } }
+          if(at >= 0) objs[at] = JSON.parse(JSON.stringify(snap));
+        });
+        page.objects = objs;
+      }
+      DOCP_SL.sig = '';
+      if(!quiet){ docpRenderSlides(bd); }
+      var seq2 = ++DOCP_SL.seq;
+      spJson('/api/slide/object', 'POST', { session_id: CUR || '', index: step.index, action: 'set',
+                                            objects: (page || {}).objects || [],
+                                            slides: (DOCP && DOCP.slides) || [],
+                                            title: (DOCP && DOCP.title) || '' })
+        .then(function(d){ if(seq2 === DOCP_SL.seq && d && d.ok && d.slides) DOCP.slides = d.slides; })
+        .catch(function(){});
+      return;
+    }
     if(step.type === 'geo'){
       if(/^fill:/.test(step.slot)){
         var si = parseInt(step.slot.slice(5), 10);
@@ -5638,7 +5699,15 @@ body.wz-dragging{cursor:grabbing}
         '<button id="dpZoomOut" title="缩小（Ctrl+滚轮）">缩小 −</button></div>';
     }
     if(g === 'insert'){
+      var shapes = DOCP_SHAPES.map(function(p){
+        return '<button data-shape="' + p[0] + '" title="' + escHtml(p[2]) + '">' +
+          escHtml(p[1]) + '</button>';
+      }).join('');
       return '<div class="dp-toolgroup" data-group="insert">' +
+        '<span class="dp-cnt">插入：</span>' +
+        '<button id="dpInsText" title="插入文本框（Ctrl+Alt+T 也行）">文本框</button>' +
+        shapes +
+        '<span class="sp"></span>' +
         '<span class="dp-cnt">联网取图（同事的 agent 给图片 URL 也行）：</span>' +
         '<input id="dpImgUrl" class="dp-imgin" type="url" placeholder="https://… 图片地址" ' +
           'aria-label="图片地址">' +
@@ -5648,8 +5717,9 @@ body.wz-dragging{cursor:grabbing}
         '<button id="dpImgDel" title="把本页的图卸下来（文件还留在 data/uploads/）">卸下图</button>' +
         '<span class="sp"></span>' +
         '<span class="dp-cnt" id="dpImgState">' + escHtml(DOCP_SL.imgState || '（正在读联网状态…）') + '</span>' +
-        '<div class="dp-cnt" style="flex-basis:100%">文本框 / 形状在 R21 加进来（形状目录直接用 ' +
-        'ppt-master 的预设形状，保证"预览=导出"）；图片的**本地上传**也在 R22 补</div></div>';
+        '<div class="dp-cnt" style="flex-basis:100%">形状走 ppt-master 的**预设形状目录**' +
+        '（矩形/圆角/椭圆/三角/平行四边形/V 形/箭头/直线）—— 导出会变成 PPT 里原生可编辑的形状；' +
+        '默认外观守瑞士风硬规则：直角、纯色、无渐变无阴影。图片的**本地上传**在 R22 补</div></div>';
     }
     if(g === 'show'){
       return '<div class="dp-toolgroup" data-group="show">' +
@@ -5690,6 +5760,8 @@ body.wz-dragging{cursor:grabbing}
   }
   /* 右栏属性（R15）：位置/大小/字号（档或自定义）/字体/颜色/对齐/行距 + 偏离提示 + 一键回档 */
   function docpPropsHtml(){
+    var free = /^obj:/.test(DOCP_SL.sel || '') ? docpObjectOf(DOCP_SL.sel) : null;
+    if(free) return docpObjPropsHtml(free);          /* R21：自由层对象有自己的一套属性 */
     var box = docpSelBoxData();
     if(!box) return '';
     var ov = docpOverrideOf(docpEl('wzDocBody'), DOCP_SL.sel) || {};
@@ -6009,6 +6081,7 @@ body.wz-dragging{cursor:grabbing}
     var imgDel = bd.querySelector('#dpImgDel');
     if(imgDel) imgDel.addEventListener('click', function(){ docpImageDetach(bd); });
     if(!DOCP_SL.imgState) docpImageStatus(bd);
+    docpObjWire(bd);                                   /* R21：插入文本框 / 形状 */
     /* R17：放映入口（F5 / Shift+F5 与这里同一套函数） */
     var showAll = bd.querySelector('#dpShowAll');
     if(showAll) showAll.addEventListener('click', function(){ docpShowStart(false); });
@@ -6099,6 +6172,7 @@ body.wz-dragging{cursor:grabbing}
     docpPropsPaint(bd);
   }
   function docpPropsWire(bd){
+    if(docpObjPropsWire(bd)) return;              /* R21：选中自由层对象时走对象那一套 */
     var box = docpSelBoxData();
     if(!box) return;
     var bind = function(id, ev, fn){
@@ -6190,6 +6264,115 @@ body.wz-dragging{cursor:grabbing}
   function docpPropsBoxHtml(){
     return docpPropsHtml() || '<div class="dp-props dp-props-empty"><b>属性</b>' +
       '<div class="dp-cnt">点一下页面上的文字，这里就能改<b>位置 / 大小 / 字号 / 字体 / 颜色 / 对齐 / 行距</b>。</div></div>';
+  }
+  /* 自由层对象的右栏（R21）：位置/大小/字号/颜色/填充/对齐/字重/层级/删除 + 文字 */
+  function docpObjPropsHtml(o){
+    var isText = o.kind === 'text';
+    var name = isText ? '文本框' : ({rect: '矩形', roundRect: '圆角矩形', ellipse: '椭圆',
+      triangle: '三角形', parallelogram: '平行四边形', chevron: 'V 形', rightArrow: '右箭头',
+      line: '直线'}[o.shape] || '形状');
+    return '<div class="dp-props" id="dpProps"><b>属性 · ' + escHtml(name + ' ' + o.id) + '</b>' +
+      '<div class="dp-prow"><span>位置</span>' +
+        '<input id="dpOx" class="dp-pnum" type="number" step="1" value="' + Math.round(o.x) + '" title="X（设计像素）">' +
+        '<input id="dpOy" class="dp-pnum" type="number" step="1" value="' + Math.round(o.y) + '" title="Y">' +
+      '</div>' +
+      '<div class="dp-prow"><span>大小</span>' +
+        '<input id="dpOw" class="dp-pnum" type="number" step="1" value="' + Math.round(o.w) + '" title="宽">' +
+        '<input id="dpOh" class="dp-pnum" type="number" step="1" value="' + Math.round(o.h) + '" title="高">' +
+      '</div>' +
+      '<div class="dp-prow"><span>字号</span>' +
+        '<select id="dpOsize">' + docpSizeSteps().map(function(s){
+          return '<option value="' + s + '"' +
+            (Math.abs(s - docpNum(o.size, 24)) < 0.01 ? ' selected' : '') + '>' + s + 'px</option>';
+        }).join('') + '</select></div>' +
+      '<div class="dp-prow"><span>文字色</span>' +
+        '<input id="dpOcolor" type="color" value="' + escHtml(o.color || '#1A1A1A') + '">' +
+        '<span>填充</span>' +
+        '<input id="dpOfill" type="color" value="' + escHtml(o.fill || '#EEF2F8') + '">' +
+        '<button id="dpOfillNone" title="去掉填充（只留描边）">无填充</button>' +
+      '</div>' +
+      '<div class="dp-prow"><span>对齐</span>' +
+        '<button data-oalign="start"' + (o.align !== 'middle' && o.align !== 'end' ? ' class="dark"' : '') + '>左</button>' +
+        '<button data-oalign="middle"' + (o.align === 'middle' ? ' class="dark"' : '') + '>中</button>' +
+        '<button data-oalign="end"' + (o.align === 'end' ? ' class="dark"' : '') + '>右</button>' +
+      '</div>' +
+      '<div class="dp-prow"><span>样式</span>' +
+        '<button id="dpObold"' + (o.bold ? ' class="dark"' : '') + '>B</button>' +
+        '<button id="dpOitalic"' + (o.italic ? ' class="dark"' : '') + '><i>I</i></button>' +
+        '<button id="dpOunder"' + (o.underline ? ' class="dark"' : '') + '><u>U</u></button>' +
+      '</div>' +
+      '<div class="dp-prow"><span>层级</span>' +
+        '<button id="dpOup" title="上移一层（在对象之间）">上移一层</button>' +
+        '<button id="dpOdown">下移一层</button>' +
+      '</div>' +
+      '<div class="dp-prow"><span>文字</span>' +
+        '<textarea id="dpOtext" rows="2" placeholder="' + (isText ? '点这里写字' : '形状上也能叠一行字') + '">' +
+        escHtml(o.text || '') + '</textarea></div>' +
+      '<div class="dp-prow"><button id="dpOdel" class="dark">删除这个对象</button>' +
+        '<span class="dp-cnt">Delete 也行</span></div>' +
+      '<div class="dp-cnt">形状用的是 ppt-master 的预设形状：导出后在 WPS 里是<b>原生可编辑形状</b>，不是图片。</div>' +
+      '</div>';
+  }
+  function docpObjPropsWire(bd){
+    if(!/^obj:/.test(DOCP_SL.sel || '')) return false;
+    var o = docpObjectOf(DOCP_SL.sel);
+    if(!o) return false;
+    var bindNum = function(id, key){
+      var el = bd.querySelector('#' + id);
+      if(!el) return;
+      el.addEventListener('change', function(){
+        var p = {}; p[key] = docpNum(el.value, 0);
+        docpObjCommit(bd, DOCP_SL.sel, p, { label: '改对象位置/大小' });
+      });
+    };
+    bindNum('dpOx', 'x'); bindNum('dpOy', 'y'); bindNum('dpOw', 'w'); bindNum('dpOh', 'h');
+    var sz = bd.querySelector('#dpOsize');
+    if(sz) sz.addEventListener('change', function(){
+      docpObjCommit(bd, DOCP_SL.sel, { size: docpNum(sz.value, 24) }, { label: '改对象字号' });
+    });
+    var col = bd.querySelector('#dpOcolor');
+    if(col) col.addEventListener('change', function(){
+      docpObjCommit(bd, DOCP_SL.sel, { color: col.value }, { label: '改对象文字色' });
+    });
+    var fil = bd.querySelector('#dpOfill');
+    if(fil) fil.addEventListener('change', function(){
+      docpObjCommit(bd, DOCP_SL.sel, { fill: fil.value }, { label: '改对象填充' });
+    });
+    var none = bd.querySelector('#dpOfillNone');
+    if(none) none.addEventListener('click', function(){
+      docpObjCommit(bd, DOCP_SL.sel, { fill: '' }, { label: '去掉填充' });
+    });
+    Array.prototype.forEach.call(bd.querySelectorAll('[data-oalign]'), function(b){
+      b.addEventListener('click', function(){
+        docpObjCommit(bd, DOCP_SL.sel, { align: b.dataset.oalign }, { label: '改对象对齐' });
+      });
+    });
+    [['dpObold', 'bold'], ['dpOitalic', 'italic'], ['dpOunder', 'underline']].forEach(function(pair){
+      var b = bd.querySelector('#' + pair[0]);
+      if(!b) return;
+      b.addEventListener('click', function(){
+        var patch = {}; patch[pair[1]] = !o[pair[1]];
+        docpObjCommit(bd, DOCP_SL.sel, patch, { label: '改对象样式' });
+      });
+    });
+    var up = bd.querySelector('#dpOup');
+    if(up) up.addEventListener('click', function(){ docpObjLayer(bd, DOCP_SL.sel, 1); });
+    var dn = bd.querySelector('#dpOdown');
+    if(dn) dn.addEventListener('click', function(){ docpObjLayer(bd, DOCP_SL.sel, -1); });
+    var del = bd.querySelector('#dpOdel');
+    if(del) del.addEventListener('click', function(){ docpObjDeleteOne(bd, DOCP_SL.sel); });
+    var tx = bd.querySelector('#dpOtext');
+    if(tx){
+      var timer = null;
+      tx.addEventListener('input', function(){
+        if(timer) clearTimeout(timer);                 /* 别每敲一个字就打一次接口 */
+        timer = setTimeout(function(){
+          docpObjCommit(bd, DOCP_SL.sel, { text: tx.value }, { label: '改对象文字' }, true);
+        }, 600);
+      });
+      tx.addEventListener('keydown', function(ev){ ev.stopPropagation(); });
+    }
+    return true;
   }
   /* 缩放：滑杆 / 适应窗口 / 放大缩小按钮 / Ctrl+滚轮（见 docpWheel） */
   function docpZoomWire(bd){
@@ -6437,9 +6620,123 @@ body.wz-dragging{cursor:grabbing}
       showToast('本页的图卸下来了（文件还在 data/uploads/，要删自己删）');
     }).catch(function(){ showToast('卸图失败（网络？）', false); });
   }
+  /* ==== 自由层：插入文本框与形状（R21）=============================================
+     对象存在 `slides[i].objects[]`，几何是**绝对设计像素**（x/y/w/h，不是槽位那套增量）；
+     形状的服务端渲染发的是 ppt-master 认的规范预设组，所以导出会变成原生可编辑形状。
+     选中/拖动/改大小复用页内那套（服务端把每个对象也记成一个 `obj:<id>` 盒子）。 */
+  var DOCP_SHAPES = [
+    ['rect', '□', '矩形（直角，瑞士风默认）'],
+    ['roundRect', '▢', '圆角矩形'],
+    ['ellipse', '◯', '椭圆 / 圆'],
+    ['triangle', '△', '三角形'],
+    ['parallelogram', '▱', '平行四边形（流程步骤常用）'],
+    ['chevron', '❯', 'V 形 / 箭头标（流程）'],
+    ['rightArrow', '→', '右箭头'],
+    ['line', '╱', '直线'],
+  ];
+  /* 取这一页的自由层对象（槽名 `obj:<id>`；形状上叠字的文字槽 `obj:<id>:text` 也算同一个对象） */
+  function docpObjectOf(slot){
+    var oid = String(slot || '').replace(/^obj:/, '').replace(/:text$/, '');
+    var page = docpSlideAt(DOCP_PAGE) || {};
+    var objs = page.objects || [];
+    for(var i = 0; i < objs.length; i++){ if(String(objs[i].id) === oid) return objs[i]; }
+    return null;
+  }
+  function docpObjInsert(bd, kind, shape){
+    var payload = { session_id: CUR || '', index: DOCP_PAGE, action: 'add', kind: kind || 'shape',
+                    shape: shape || 'rect', theme_id: docpThemeGet(),
+                    slides: (DOCP && DOCP.slides) || [], title: (DOCP && DOCP.title) || '' };
+    var step = docpPushPagesUndo(kind === 'text' ? '插入文本框' : '插入形状');
+    spJson('/api/slide/object', 'POST', payload).then(function(d){
+      if(!d || !d.ok){
+        docpUndoPop();
+        showToast('插入失败：' + ((d && d.error) || '未知错误'), false);
+        return;
+      }
+      DOCP.slides = d.slides || DOCP.slides;
+      docpPagesUndoClose(step);
+      DOCP_SL.sig = '';
+      DOCP_SL.sel = 'obj:' + (d.id || '');
+      DOCP_SL.multi = [];
+      docpAfterEdit(true);
+      showToast((d.detail || '插入好了') + '（拖动摆位置，右栏改样式，Delete 删掉）');
+    }).catch(function(){ docpUndoPop(); showToast('插入失败（网络？）', false); });
+  }
+  /* 改一个自由层对象：几何/文字/样式都走这一条（服务端 clamp + 洗） */
+  function docpObjCommit(bd, slot, patch, before, quiet){
+    var oid = String(slot || '').replace(/^obj:/, '').replace(/:text$/, '');
+    if(!oid){ return; }
+    var page = docpSlideAt(DOCP_PAGE) || {};
+    var objs = page.objects || [];
+    var i = -1;
+    for(var k = 0; k < objs.length; k++){ if(String(objs[k].id) === oid){ i = k; break; } }
+    if(i < 0) return;
+    var prev = JSON.parse(JSON.stringify(objs[i]));
+    Object.keys(patch || {}).forEach(function(key){            /* 本地先改，画面立刻跟手 */
+      if(patch[key] === null || patch[key] === '') delete objs[i][key];
+      else objs[i][key] = patch[key];
+    });
+    if(!quiet){
+      docpUndoPush({ type: 'objs', label: (before && before.label) || '改对象', index: DOCP_PAGE,
+                     before: [prev], after: [JSON.parse(JSON.stringify(objs[i]))] });
+    }else{
+      docpUndoPush({ type: 'objs', index: DOCP_PAGE, label: '改对象',
+                     before: [prev], after: [JSON.parse(JSON.stringify(objs[i]))] });
+    }
+    DOCP_SL.sig = '';
+    docpRenderSlides(bd);
+    var seq = ++DOCP_SL.seq;
+    spJson('/api/slide/object', 'POST', { session_id: CUR || '', index: DOCP_PAGE, action: 'patch',
+                                          id: oid, patch: patch, slides: (DOCP && DOCP.slides) || [],
+                                          title: (DOCP && DOCP.title) || '' })
+      .then(function(d){
+        if(seq !== DOCP_SL.seq) return;
+        if(d && d.ok && d.slides) DOCP.slides = d.slides;
+      }).catch(function(){ showToast('这一步没存上（网络？）', false); });
+  }
+  function docpObjDeleteOne(bd, slot){
+    var oid = String(slot || '').replace(/^obj:/, '').replace(/:text$/, '');
+    var page = docpSlideAt(DOCP_PAGE) || {};
+    var idx = (page.objects || []).findIndex(function(o){ return String(o.id) === oid; });
+    if(idx < 0) return;
+    var removed = JSON.parse(JSON.stringify(page.objects[idx]));
+    docpObjServer(bd, { action: 'delete', id: oid }, '删掉对象', [removed], []);
+  }
+  function docpObjLayer(bd, slot, dir){
+    var oid = String(slot || '').replace(/^obj:/, '').replace(/:text$/, '');
+    docpObjServer(bd, { action: dir > 0 ? 'up' : 'down', id: oid },
+                  dir > 0 ? '对象上移一层' : '对象下移一层', null, null);
+  }
+  /* 走一趟服务端（增删层序都用它）：先拍快照，回包后整册替换 */
+  function docpObjServer(bd, opts, label, before, after){
+    var payload = Object.assign({ session_id: CUR || '', index: DOCP_PAGE,
+                                  slides: (DOCP && DOCP.slides) || [],
+                                  title: (DOCP && DOCP.title) || '' }, opts);
+    var step = docpPushPagesUndo(label);
+    spJson('/api/slide/object', 'POST', payload).then(function(d){
+      if(!d || !d.ok){
+        docpUndoPop();
+        showToast((d && d.error) || '没成功', false);
+        return;
+      }
+      DOCP.slides = d.slides || DOCP.slides;
+      docpPagesUndoClose(step);
+      DOCP_SL.sig = '';
+      if(opts.action === 'delete') DOCP_SL.sel = '';
+      docpAfterEdit(true);
+      if(d.detail) showToast(d.detail);
+    }).catch(function(){ docpUndoPop(); showToast('没成功（网络？）', false); });
+  }
+  function docpObjWire(bd){
+    var t = bd.querySelector('#dpInsText');
+    if(t) t.addEventListener('click', function(){ docpObjInsert(bd, 'text', ''); });
+    Array.prototype.forEach.call(bd.querySelectorAll('[data-shape]'), function(b){
+      b.addEventListener('click', function(){ docpObjInsert(bd, 'shape', b.dataset.shape); });
+    });
+  }
   /* ==== 剪贴板 / 查找替换 / 快捷键（R18）=============================================
-     剪贴板里的"对象" = **这一格的文字 + 样式覆盖**（我们是"版式给的槽位"模型：槽位不能凭空新增，
-     那是 R21 自由层的事）。所以复制粘贴的正解是"把这一处的内容与样子搬到另一处"，
+     剪贴板里的"对象" = **这一格的文字 + 样式覆盖**（版式给的槽位模型 + R21 的自由层对象，
+     两者用 `slot` / `obj:<id>` 区分）。所以复制粘贴的正解是"把这一处的内容与样子搬到另一处"，
      以及"整页复制"（`Ctrl+D`）。 */
   function docpCopy(bd, cut){
     var slots = docpSelList();
@@ -6610,6 +6907,7 @@ body.wz-dragging{cursor:grabbing}
     ['Ctrl+B / Ctrl+I / Ctrl+U', '加粗 / 斜体 / 下划线'],
     ['Ctrl+E / Ctrl+L / Ctrl+R', '居中 / 左对齐 / 右对齐'],
     ['Ctrl+= / Ctrl+-', '字号加一档 / 减一档'], ['Ctrl+0', '缩放适应窗口'],
+    ['Ctrl+Alt+T', '插入文本框'],
     ['Ctrl+F / Ctrl+H', '查找 / 替换（跨页）'],
     ['F5 / Shift+F5', '从头放映 / 从本页放映'], ['Shift+F9', '参考线（网格）'],
     ['Ctrl+/', '这张快捷键表'],

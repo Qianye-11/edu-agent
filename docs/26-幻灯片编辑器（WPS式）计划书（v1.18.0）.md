@@ -769,3 +769,83 @@ R13 剩余项与 R15 一起做（右栏与快捷键分组时顺路）。→ **�
 
 > 这条经验值得记住：**闸门的监视范围要等于"被测代码能碰到的范围"**。
 > 范围放大到"整个工作区"，就会把别的进程的活动算到自己头上 —— 既慢又假失败。
+
+---
+
+## 16. R21 · 插入文本框与形状（自由层，已完成）
+
+### 16.1 数据模型：`slides[i].objects[]`
+
+```jsonc
+{ "kind": "shape" | "text", "id": "o1",
+  "x": 480, "y": 280, "w": 320, "h": 160,      // **绝对**设计像素（不是槽位那套 dx/dy 增量）
+  "shape": "rect|roundRect|ellipse|triangle|parallelogram|chevron|rightArrow|line",
+  "fill": "#EEF2F8", "stroke": "#2F6BFF", "stroke_w": 2,
+  "text": "框里的字", "size": 24, "color": "#1A1A1A", "align": "start", "bold": true, "lh": 1.3 }
+```
+
+为什么不复用 `slots` 那套覆盖：槽位是**版式给的**（`apply_slot` 只认那套名字、语义是"相对版式的偏移"），
+自由层对象是**老师自己造的**、几何是绝对值、还能增删 —— 混在一起两边都会变糊。
+`clean_objects` 是唯一入口：只认认识的形状/键、数值夹范围（`OBJ_RANGE`）、id 不撞车、一页 ≤ 30 个。
+
+### 16.2 "预览=导出"是怎么守住的（这一轮最花时间的地方）
+
+形状发的是 ppt-master 认的**规范预设组**：
+
+```
+<g id="o1" data-pptx-authoring="preset" data-pptx-object="shape" data-pptx-prst="rect"
+   data-pptx-frame="100 200 300 120" fill="#DCE6F5" stroke="#2F6BFF" stroke-width="2">
+  <path d="M 100 200 L 400 200 L 400 320 L 100 320 Z"/></g>
+```
+
+**它的质量检查会判 error 的三条**（都实测踩过，导出会直接失败）：
+
+1. `<g>` 必须有**稳定 id**（"Authored preset logical group requires a stable id"）；
+2. `stroke` 不是 `none` 时必须给 `stroke-width`；
+3. 子元素**只能是 `<path>`** —— 把矩形写成 `<rect>` 会被判
+   "Compact authored preset is atomic and may contain only direct SVG paths"（试过，失败）。
+
+**几何不自己编**：8 个预设的路径公式都从 `preset_shape_svg.py render` 的实测输出反推
+（单位框 1000×1000 + 非方形框 (10,20,640,90) 各对一次），并且
+`tests/test_slide_objects.py::GoldenPresetTest` **逐预设 × 3 个尺寸与那个脚本对拍** ——
+对不上就红。实测反推出来的两个"反直觉"数值，值得记下来：
+
+* `parallelogram` 的斜边偏移 = **h/4**（不是 w/4 —— 单位框里两者相等，很容易看错）；
+* `chevron` 的尖角伸出 = **h/2**；`rightArrow` 的箭头宽 = **h/2**（杆高 = h/2）。
+
+### 16.3 面板上能做什么
+
+* 「插入」组：**文本框** + 8 个预设形状（矩形/圆角/椭圆/三角/平行四边形/V 形/箭头/直线）；
+* 选中/拖动/改大小复用页内那套（服务端把每个对象也记成 `obj:<id>` 盒子）——
+  形状上叠的字单独一个盒子 `obj:<id>:text`，否则文字盒子会把形状盒子顶掉（就点不到形状了）；
+* 右栏「属性 · 文本框 o1」：位置/大小/字号/文字色/填充（可"无填充"）/对齐/B·I·U/层级（上移下移）/删除；
+* `Ctrl+Alt+T` 插文本框；`Delete` 删；层级在**对象之间**换位置（数组顺序 = 叠放顺序，后画的在上面）；
+* 全部进 R20 的撤销栈（插入/拖动/改字/层级/删除各算一步）。
+
+### 16.4 导出实测（真机产物，不是推测）
+
+`export_deck_pptx` 在有自由层的稿子上：**导出成功**，pptx 里
+
+* 自由层的文字在（python-pptx 读回来能看到"自由层的字"）；
+* 形状是**原生可编辑**的：椭圆落成 `prstGeom prst="ellipse"`（真正的预设形状）；
+  矩形落成 **任意多边形（custom geometry）**、几何与预览**逐点一致**、能移动/改大小/改颜色/加字。
+  为什么不统一成预设矩形：规范组必须是 path-only（见 16.2 第 3 条），
+  而 ppt-master 把轴对齐矩形路径按自由多边形处理 —— 这条**如实记在这里**，
+  如果以后确实需要"预设矩形"（比如要一键换形状），再单独跟上游对齐。
+
+### 16.5 这一轮踩到的两个自己的坑（都写进注释了）
+
+1. **`def clean_slides(...)` 那一行被我的编辑吃掉了** —— 函数体挂到了上一个函数后面变成死代码，
+   `clean_slides` 整个消失。是新单测（`sd.clean_slides` 找不到）当场逮住的：
+   **改大块代码后先跑一遍相关单测**，别等全量；
+2. **`wz_shot.py` 被 PowerShell 的 `Set-Content -Encoding UTF8` 写坏了**（加 BOM → 语法错误）。
+   又一次验证 `docs/26` §10 的结论：**源码只用 edit 工具改，shell 保持只读**；
+   这次用 `git checkout --` 恢复后重做。
+
+验收：单测 **542 → 559**（新 `tests/test_slide_objects.py` 17 例：收口/范围/id/上限、规范组与盒子、
+形状叠字两盒子、叠放顺序、无对象时逐字节不变、**8 预设 × 3 尺寸与 ppt-master 对拍**、
+接口 add/patch/delete/up/down/set、导出真机带自由层）；面板检查 **264 → 279**（+15 条：
+插入文本框/形状、对象盒子、右栏对象属性齐、改位置（绝对 x）、改文字（防抖一次）、拖动、
+层级与"已经最上面"的如实报错、删除、一次 Ctrl+Z 撤回删除、一路撤回清空）；
+审计 `--gate` error 0；`ppt_smoke` 49/49；`jscheck` 通过；截图
+`data/tmp/wzshots/wz_slides-sel-obj-tall.png`。
