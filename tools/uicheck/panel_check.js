@@ -510,6 +510,10 @@ async function openDocPanel(doc) {
     const ed = doc.querySelector('#wzDocPane .dp-word[contenteditable="true"]');
     check('文档页签可直接编辑', !!ed);
     check('编辑工具栏显示', doc.getElementById('wzDocFmt').style.display === 'flex');
+    check('文档页签保留「导入」与那句说明（改正文的地方才需要）',
+      doc.getElementById('wzDocImport').style.display !== 'none' &&
+      /下载在顶栏/.test(txt(doc.querySelector('#wzDocPane .dp-note'))),
+      txt(doc.querySelector('#wzDocPane .dp-note')).slice(0, 24));
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(900);
     check('幻灯片页签有 16:9 预览台（.dp-canvas）', !!doc.querySelector('#wzDocPane .dp-canvas'));
     check('旧的深蓝预览台已退役', !doc.querySelector('#wzDocPane .dp-stage'));
@@ -523,15 +527,24 @@ async function openDocPanel(doc) {
     const cv = doc.querySelector('#wzDocPane .dp-canvas');
     check('内部固定 1280×720、只用均匀缩放',
       !!cv && /scale\(0\.375\)/.test(cv.style.transform || ''), cv ? cv.style.transform : '(no canvas)');
+    /* R26：主题/模板下拉搬进了「设计」组 —— 用之前先切到那一组 */
+    doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);
     const sel = doc.getElementById('dpTheme');
     check('主题下拉有 3 套（来自 /api/slide/themes）', !!sel && sel.options.length === 3,
       sel ? Array.from(sel.options).map((o) => o.textContent).join('/') : '(no select)');
+    check('主题/模板控件都在「设计」组里（不再占页头那一行）',
+      !!doc.getElementById('dpTpl') && !!doc.getElementById('dpTplImport') &&
+      !!doc.getElementById('dpTplFill') && !!doc.getElementById('dpTplDel') &&
+      !!doc.getElementById('dpAlign') && !doc.querySelector('#wzDocPane .dp-slhead'),
+      '设计组');
     sel.value = 'hand-drawn';
     sel.dispatchEvent(new w.Event('change', { bubbles: true }));
     await sleep(700);
     check('换主题会重新要一份 SVG', doc.querySelector('#wzDocPane .dp-canvas svg') !== null &&
       /手绘墨/.test(txt(doc.querySelector('.dp-slstat'))), txt(doc.querySelector('.dp-slstat')));
-    check('文档页签的说明小字还在（改成一句实话）', /下载在顶栏/.test(txt(doc.querySelector('.dp-note'))), txt(doc.querySelector('.dp-note')));
+    doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
+    check('幻灯片页签上不再有"下载在顶栏"那句说明（它只在改正文的页签里）',
+      !doc.querySelector('#wzDocPane .dp-note'), '已撤');
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
@@ -564,8 +577,10 @@ async function openDocPanel(doc) {
     check('选框有 8 个手柄（WPS 那样）',
       doc.querySelectorAll('#wzDocPane #dpSel .dp-h').length === 8,
       doc.querySelectorAll('#wzDocPane #dpSel .dp-h').length + ' 个');
-    check('操作条显示选中的是哪一格', txt(doc.getElementById('dpSelName')) === slotName,
-      txt(doc.getElementById('dpSelName')));
+    check('操作条显示选中的是哪一格（说人话：标题 / 要点 1 …，原始槽位名留在 data-slot）',
+      doc.getElementById('dpSelName').dataset.slot === slotName &&
+      /标题|要点|副标题|结尾/.test(txt(doc.getElementById('dpSelName'))),
+      txt(doc.getElementById('dpSelName')) + ' · data-slot=' + doc.getElementById('dpSelName').dataset.slot);
     target.dispatchEvent(new w.MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     await sleep(200);
     check('双击进入编辑态（同位置出现输入框）',
@@ -803,7 +818,9 @@ async function openDocPanel(doc) {
           .every((id) => !!doc.getElementById(id)),
         ['dpPx', 'dpPy', 'dpPw', 'dpPh', 'dpPsize', 'dpPfont', 'dpPcolor', 'dpPlh']
           .filter((id) => !doc.getElementById(id)).join(',') || 'all');
-      check('右栏写着改的是哪一格', /block:0/.test(txt(props())), txt(props()).slice(0, 40));
+      check('属性块写着改的是哪一格（人话在面上，原始槽位名在 data-slot）',
+        /要点 1/.test(txt(props())) && props().dataset.slot === 'block:0',
+        txt(props()).slice(0, 40) + ' · data-slot=' + props().dataset.slot);
       check('字体下拉来自服务端清单（含「跟随主题」）',
         Array.from(doc.getElementById('dpPfont').options).map((o) => o.value).join(',') ===
         ',微软雅黑,黑体,宋体,楷体',
@@ -905,9 +922,11 @@ async function openDocPanel(doc) {
       /* R13：缩放（R25：缩放条搬进「设计」组，翻页条只留翻页/页数/适应窗口/加一页） */
       const wrap = () => doc.querySelector('#wzDocPane .dp-slidewrap');
       check('缩放条默认是"适应窗口"（0.375）', wrap().dataset.scale === '0.3750', wrap().dataset.scale);
-      check('状态栏说了页码与缩放',
-        /第 \d+ \/ \d+ 页/.test(txt(doc.getElementById('wzStatusBar'))) &&
-        /38%/.test(txt(doc.getElementById('wzStatusBar'))),
+      check('状态栏只留提示与保存状态（页码/缩放在翻页条与设计组，R26 去重）',
+        /单击选中/.test(txt(doc.getElementById('wzStatusBar'))) &&
+        /已自动保存/.test(txt(doc.getElementById('wzStatusBar'))) &&
+        !/第 \d+ \/ \d+ 页/.test(txt(doc.getElementById('wzStatusBar'))) &&
+        !/%/.test(txt(doc.getElementById('wzStatusBar'))),
         txt(doc.getElementById('wzStatusBar')));
       check('翻页条只留 翻页/页数/适应窗口/加一页（R25 去重）',
         !!doc.getElementById('dpPgBar') && !!doc.getElementById('dpZoomFit') &&
@@ -1396,7 +1415,7 @@ async function openDocPanel(doc) {
         await sleep(600);
         check('点「文本框」发 add（kind=text）并选中新对象',
           lastObj().action === 'add' && lastObj().kind === 'text' &&
-          docpSelCount() === 1 && /obj:/.test(txt(doc.getElementById('dpSelName'))),
+          docpSelCount() === 1 && /^obj:/.test(doc.getElementById('dpSelName').dataset.slot || ''),
           JSON.stringify(lastObj()).slice(0, 70) + ' · 选中=' + txt(doc.getElementById('dpSelName')));
         check('新对象在页面上有盒子（obj-text）',
           objBoxes().some((b) => b.classList.contains('dp-obj-text') || !!b.dataset.slot),
@@ -1415,7 +1434,7 @@ async function openDocPanel(doc) {
 
         /* 右栏：对象属性（位置/大小/字号/颜色/文字/层级/删除）*/
         check('右栏切到"对象属性"（位置/大小/字号/填充/对齐/层级/删除都在）',
-          /属性 · /.test(txt(doc.getElementById('dpProps'))) &&
+          /椭圆 o\d/.test(txt(doc.getElementById('dpProps'))) &&
           !!doc.getElementById('dpOx') && !!doc.getElementById('dpOw') &&
           !!doc.getElementById('dpOsize') && !!doc.getElementById('dpOfill') &&
           !!doc.getElementById('dpOup') && !!doc.getElementById('dpOdel') &&
@@ -1528,7 +1547,8 @@ async function openDocPanel(doc) {
 
         /* 右栏：图片属性（图源 + 铺法 + 位置大小 + 层级 + 删除） */
         check('右栏是"图片属性"（图源 / 铺法 / 位置大小 / 删除都在）',
-          /属性 · 图片 /.test(txt(doc.getElementById('dpProps'))) &&
+          /图片 o\d/.test(txt(doc.getElementById('dpProps'))) &&
+          /photo\.jpg/.test(txt(doc.getElementById('dpProps'))) &&
           !!doc.querySelector('#dpProps [data-ofit="cover"]') &&
           !!doc.querySelector('#dpProps [data-ofit="contain"]') &&
           !!doc.getElementById('dpOw') && !!doc.getElementById('dpOdel'),
@@ -1677,6 +1697,7 @@ async function openDocPanel(doc) {
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
+    doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);   /* R26：模板控件在设计组 */
     const tpl = doc.getElementById('dpTpl');
     check('模板下拉存在且列出导入的模板', !!tpl && tpl.options.length === 2,
       tpl ? Array.from(tpl.options).map((o) => o.textContent).join('/') : '(none)');
@@ -1910,8 +1931,9 @@ async function openDocPanel(doc) {
     check('面板里不再有独立的「PPT 优化」模块', !doc.querySelector('.ppt-box'));
     check('也不再有它的入口按钮', !doc.getElementById('pptPick') && !doc.getElementById('pptRun'));
     const head = doc.querySelectorAll('#wzDocPane .dp-slhead');
-    check('主题与模板合成一行（只剩一行头部控件）', head.length === 1, head.length + ' 行');
-    check('这一行里有主题、模板与两个按钮',
+    check('页头那一行控件取消了（R26：主题/模板搬进「设计」组）', head.length === 0, head.length + ' 行');
+    doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);
+    check('「设计」组里有主题、模板与按钮',
       !!doc.getElementById('dpTheme') && !!doc.getElementById('dpTpl') &&
       !!doc.getElementById('dpTplImport') && !!doc.getElementById('dpTplFill'));
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
@@ -1924,6 +1946,7 @@ async function openDocPanel(doc) {
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
+    doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);   /* R26：模板控件在设计组 */
     const tpl2 = doc.getElementById('dpTpl');
     tpl2.value = '学校模板';
     tpl2.dispatchEvent(new w.Event('change', { bubbles: true }));

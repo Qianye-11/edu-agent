@@ -3252,16 +3252,14 @@ body.wz-dragging{cursor:grabbing}
     }
     if(docpShowOn()){ /* 放映中：状态栏只说放映（见上） */ }
     var railSel = (WZ_RAIL.sel || []).length;
+    /* R26：状态栏不再重复"翻页条 + 设计组 + 属性条"已经说过的东西（页码 / 缩放 / 主题）——
+       只留"放映中"、"多选了几页"这类**只在状态栏说**的信息 + 一句提示 + 保存状态。 */
     el.innerHTML = (docpShowOn()
         ? '<b>放映中 · 第 ' + (DOCP_SL.show.page + 1) + ' / ' + Math.max(1, (DOCP_SL.pages || []).length) +
           ' 页</b><span>方向键 / 空格翻页</span><span>Esc 退出</span>'
-        : '<b>第 ' + (DOCP_PAGE + 1) + ' / ' + Math.max(1, sl.length) + ' 页</b>' +
-          '<span>共 ' + sl.length + ' 页</span>' +
-          (railSel > 1 ? ('<span><b>已选 ' + railSel + ' 页</b>（可拖动排序 · Delete 批量删）</span>') : '') +
-          '<span>' + Math.round((DOCP_SL.zoom || DOCP_SL.fit || 0.375) * 100) + '%' +
-            (DOCP_SL.zoom ? '（手动）' : '（适应窗口）') + '</span>' +
-          '<span>' + escHtml(docpThemeName(docpThemeGet()) || '学术蓝') + '</span>' +
-          '<span>' + (DOCP_SL.fail ? '纯文本预览' : '单击选中 · 双击改字 · F5 放映') + '</span>') +
+        : (railSel > 1 ? ('<b>已选 ' + railSel + ' 页</b><span>可拖动排序 · Delete 批量删</span>') : '') +
+          '<span>' + (DOCP_SL.fail ? '纯文本预览（渲染失败时的兜底）'
+                                   : '单击选中 · 双击改字 · 拖动摆位置') + '</span>') +
       '<span class="sp"></span>' + saved;
   }
   /* 保存状态：改动时标"正在写入"，服务端确认后回"已保存"（顶栏那行字与状态栏同步） */
@@ -3334,8 +3332,11 @@ body.wz-dragging{cursor:grabbing}
           '<button class="pill-btn dp-mini" data-mdv="src" title="看/改纯文本源码">源码</button>' +
           '<button class="pill-btn dp-mini" data-mdv="view" title="看渲染后的效果">预览</button>' +
         '</span>' +
-        '<button class="pill-btn dp-mini" id="wzDocImport" title="导入一份 .docx 或 .pptx：可看、可改">导入</button>' +
-        '<span class="dp-note" style="margin-left:10px">这里改的就是导出用的那份；下载在顶栏「下载▾」</span>' +
+        '<button class="pill-btn dp-mini" id="wzDocImport" title="导入一份 .docx 或 .pptx：可看、可改"' +
+          (DOCP_TAB === 'slides' ? ' style="display:none"' : '') + '>导入</button>' +
+        /* 「导入」和那句"下载在顶栏"只属于改正文的页签；幻灯片页签上它们是多余的（R26 撤掉） */
+        (DOCP_TAB === 'slides' ? '' :
+          '<span class="dp-note" style="margin-left:10px">这里改的就是导出用的那份；下载在顶栏「下载▾」</span>') +
       '</div>' +
       '<div class="dp-fmt" id="wzDocFmt" style="display:none;padding-left:0;padding-right:0">' +
         '<button data-fmt="bold" title="加粗"><b>B</b></button>' +
@@ -4772,7 +4773,7 @@ body.wz-dragging{cursor:grabbing}
     var st = bd.querySelector('.dp-slstat');
     if(st) st.innerHTML = docpSlideStat(sl);      /* 兜底状态也要如实显示（别让人以为还是 SVG） */
     var wb = bd.querySelector('#dpWarnBox');
-    if(wb) wb.innerHTML = docpWarnHtml();         /* 渲染回来的提示（如"建议拆页"）要进 DOM */
+    if(wb) wb.innerHTML = docpWarnHtml();         /* （R26：提示不再显示，这个盒子留作兼容） */
     docpBoxesPaint(bd);                           /* R11：给这一页铺"可编辑盒子"叠加层 */
     docpFitSlide(bd);
     docpGridPaint(bd);                            /* R13：参考线（叠在盒子下面，z-index 管） */
@@ -5678,26 +5679,26 @@ body.wz-dragging{cursor:grabbing}
   }
   /* 幻灯片页签的左栏：页缩略图（真图）+ 页操作 */
   function docpRailMaybe(){ if(WZ_TAB === 'slides') wzRailThumbs(); }
-  function docpSlidesHtml(sl){
+  /* 主题下拉 / 模板下拉（R26：从页头搬进「设计」组 —— 页头只留一句话，控件归到它该在的组里） */
+  function docpThemeSelectHtml(){
+    if(!DOCP_SL.themes.length) return '';
     var opts = DOCP_SL.themes.map(function(t){
       return '<option value="' + escHtml(t.id) + '"' + (t.id === docpThemeGet() ? ' selected' : '') + '>' +
         escHtml(t.name) + '</option>';
     }).join('');
-    var warn = (DOCP_SL.warn || []).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
+    return '<select id="dpTheme" title="内置主题">' + opts + '</select>';
+  }
+  function docpTplSelectHtml(){
     var tplOpts = '<option value="">（只借内置主题）</option>' + (DOCP_SL.tplList || []).map(function(t){
       return '<option value="' + escHtml(t.id) + '"' + (t.id === docpTplGet() ? ' selected' : '') + '>' +
         escHtml(t.name) + '（' + (t.pages || 0) + ' 页）</option>';
     }).join('');
-    return '<div class="dp-slhead">' + (opts ? ('<select id="dpTheme" title="内置主题">' + opts + '</select>') : '') +
-      '<select id="dpTpl" title="演示模板（导入的 .pptx）">' + tplOpts + '</select>' +
-      '<button class="dp-mini" id="dpTplImport" title="导入 .pptx 当演示模板">模板+</button>' +
-      '<button class="dp-mini" id="dpTplDel"' + (docpTplGet() ? '' : ' disabled') +
-        ' title="删掉选中的这份模板（原稿移进回收站，能找回）">删</button>' +
-      '<button class="dp-mini" id="dpTplFill"' + (docpTplGet() ? '' : ' disabled') + '>填充</button>' +
-      '<button class="dp-mini" id="dpAlign"' + (docpTplGet() ? '' : ' disabled') + ' title="标一次：哪个框是标题/正文/装饰（同结构页自动跟随）">对齐</button>' +
-      '<span class="dp-slstat">' + docpSlideStat(sl) + '</span></div>' +
-      '<input type="file" id="dpTplFile" accept=".pptx,.pptm,.potx" style="display:none">' +
-      (DOCP_SL.alignHtml || '') + '</div>' +
+    return '<select id="dpTpl" title="演示模板（导入的 .pptx）">' + tplOpts + '</select>';
+  }
+  function docpSlidesHtml(sl){
+    var warn = (DOCP_SL.warn || []).map(function(w){ return '<div class="dp-warn">· ' + escHtml(w) + '</div>'; }).join('');
+    return '<input type="file" id="dpTplFile" accept=".pptx,.pptm,.potx" style="display:none">' +
+      (DOCP_SL.alignHtml || '') +
       docpToolTabsHtml() +
       docpToolGroupHtml() +
       docpPropsRowHtml() +                     /* R25：属性条跟在按钮下面（原右栏属性卡） */
@@ -5705,10 +5706,10 @@ body.wz-dragging{cursor:grabbing}
       (DOCP_SL.keyOpen ? docpKeysHtml() : '') +
       (warn ? '<div class="dp-cnt" style="color:#8A5A00;padding:0 34px 6px">' + warn + '</div>' : '') +
       (DOCP_SL.fillPreview
-        ? '<div class="dp-slhead"><span class="dp-warn" style="margin:0">当前预览 = 按模板《' +
-          escHtml(docpTplName(docpTplGet())) + '》填出来的样子 —— <b>每一处文字（含页码/设计标签）都能点着改</b></span>' +
+        ? '<div class="dp-pagebar"><span class="dp-warn" style="margin:0">正在看模板《' +
+          escHtml(docpTplName(docpTplGet())) + '》填出来的样子</span>' +
           '<span id="dpFillPending" style="font-size:11.5px;color:var(--ink-500)"></span>' +
-          '<span style="flex:1"></span>' +
+          '<span class="sp"></span>' +
           '<button id="dpFillApply"' + (docpFillPendingCount() ? '' : ' disabled') + '>应用修改' +
           (docpFillPendingCount() ? ('（' + docpFillPendingCount() + '）') : '') + '</button>' +
           '<button id="dpPreviewBack">切回我们的版式</button></div>'
@@ -5739,12 +5740,11 @@ body.wz-dragging{cursor:grabbing}
     var page = docpPagePropsHtml();
     var sel = (DOCP_SL.browse ? '' :
       '<div class="dp-prow"><span>选中</span><b id="dpSelName">未选中</b>' +
-      '<button id="dpSnap" title="拖动时对齐到边距/中线/其它文字（按住 Alt 临时关掉）">吸附：开</button>' +
-      '<button id="dpUp" disabled title="把选中的文字盖到上面一层">上移一层</button>' +
-      '<button id="dpDown" disabled title="把选中的文字压到下面一层">下移一层</button>' +
+      '<button id="dpSnap" title="拖动时对齐到边距 / 中线 / 其它文字（按住 Alt 临时关掉）">吸附：开</button>' +
+      '<button id="dpUp" disabled title="盖到上面一层">上移一层</button>' +
+      '<button id="dpDown" disabled title="压到下面一层">下移一层</button>' +
       '<button id="dpReset" disabled title="回到版式原来的位置与大小">回原位</button>' +
-      '<button id="dpDel" disabled title="删掉这一处（Delete；Ctrl+Z 能撤回）">删除</button>' +
-      '<span class="dp-cnt">单击选中 · 双击改字 · 拖动摆位置 · 拖手柄改大小 · 方向键微调</span></div>' +
+      '<button id="dpDel" disabled title="删掉这一处（Delete；Ctrl+Z 能撤回）">删除</button></div>' +
       /* 选中后的详细属性：**整条宽**（R25：它原来是一张 196px 的窄卡，塞在条里会折成十几行） */
       '<div id="dpPropsSlot" class="dp-propsslot"></div>'
     );
@@ -5761,17 +5761,27 @@ body.wz-dragging{cursor:grabbing}
       return '<button class="dp-tt' + (DOCP_SL.group === g[0] ? ' on' : '') + '" data-tool="' + g[0] + '"' +
         ' title="' + (g[0] === 'design' ? '主题 / 模板 / 网格 / 缩放'
           : (g[0] === 'show' ? '从头放映（F5）/ 从本页放映（Shift+F5）'
-            : (g[0] === 'insert' ? '联网取图（同事的 agent 给 URL 也行）' : '选中后改字与样式'))) + '">' +
+            : (g[0] === 'insert' ? '插文本框 / 形状 / 图片，或从网址取图' : '选中后改字与样式'))) + '">' +
         escHtml(g[1]) + '</button>';
     }).join('') + '<span class="sp"></span>' +
-      '<span class="dp-cnt">' + (DOCP_SL.fillPreview ? '模板填充页：改了先记着，点【应用修改】才重填'
-        : '预览 = 导出（同一份 SVG）') + '</span></div>';
+      (DOCP_SL.fillPreview
+        ? '<span class="dp-cnt">模板填充页：改了先记着，点【应用修改】才重填</span>'
+        : '') + '</div>';
   }
   function docpToolGroupHtml(){
     var g = DOCP_SL.group;
     if(g === 'design'){
       return '<div class="dp-toolgroup" data-group="design">' +
-        '<span class="dp-cnt">主题与模板在上面选；这里是视图辅助</span>' +
+        '<span class="dp-cnt">主题</span>' + docpThemeSelectHtml() +
+        '<span class="dp-cnt">模板</span>' + docpTplSelectHtml() +
+        '<button id="dpTplImport" title="导入一份 .pptx 当演示模板（原稿只读）">模板+</button>' +
+        '<button id="dpTplDel"' + (docpTplGet() ? '' : ' disabled') +
+          ' title="删掉选中的这份模板（原稿移进回收站，能找回）">删</button>' +
+        '<button id="dpTplFill"' + (docpTplGet() ? '' : ' disabled') + ' title="按模板填一遍">填充</button>' +
+        '<button id="dpAlign"' + (docpTplGet() ? '' : ' disabled') +
+          ' title="标一次：哪个框是标题/正文/装饰（同结构页自动跟随）">对齐</button>' +
+        '<span class="sp"></span>' +
+        '<span class="dp-cnt">视图</span>' +
         '<button id="dpGrid2" title="安全边距 / 栏 / 中线（Shift+F9）">网格</button>' +
         '<button id="dpZoomIn" title="放大（Ctrl+滚轮）">放大 +</button>' +
         '<button id="dpZoomOut" title="缩小（Ctrl+滚轮）">缩小 −</button>' +
@@ -5786,33 +5796,27 @@ body.wz-dragging{cursor:grabbing}
           escHtml(p[1]) + '</button>';
       }).join('');
       return '<div class="dp-toolgroup" data-group="insert">' +
-        '<span class="dp-cnt">插入：</span>' +
-        '<button id="dpInsText" title="插入文本框（Ctrl+Alt+T 也行）">文本框</button>' +
+        '<span class="dp-cnt">文本框</span>' +
+        '<button id="dpInsText" title="插入文本框（Ctrl+Alt+T 也行）">＋ 文本框</button>' +
         shapes +
-        '<button id="dpInsImg" title="上传本地图片（也能直接把图片拖到画布上）">图片…</button>' +
+        '<button id="dpInsImg" title="上传本地图片（也能直接把图片拖到画布上）">＋ 图片</button>' +
         '<input id="dpImgFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" ' +
           'style="display:none">' +
         '<span class="sp"></span>' +
-        '<span class="dp-cnt">联网取图（同事的 agent 给图片 URL 也行）：</span>' +
-        '<input id="dpImgUrl" class="dp-imgin" type="url" placeholder="https://… 图片地址" ' +
+        '<span class="dp-cnt">联网取图</span>' +
+        '<input id="dpImgUrl" class="dp-imgin" type="url" placeholder="图片网址 https://…" ' +
           'aria-label="图片地址">' +
         '<input id="dpImgCredit" class="dp-imgcr" type="text" placeholder="出处（可留空）" ' +
           'aria-label="图片来源">' +
-        '<button id="dpImgGet">取图并挂到本页</button>' +
-        '<button id="dpImgDel" title="把本页的图卸下来（文件还留在 data/uploads/）">卸下图</button>' +
-        '<span class="sp"></span>' +
-        '<span class="dp-cnt" id="dpImgState">' + escHtml(DOCP_SL.imgState || '（正在读联网状态…）') + '</span>' +
-        '<div class="dp-cnt" style="flex-basis:100%">形状走 ppt-master 的**预设形状目录**' +
-        '（矩形/圆角/椭圆/三角/平行四边形/V 形/箭头/直线）—— 导出会变成 PPT 里原生可编辑的形状；' +
-        '默认外观守瑞士风硬规则：直角、纯色、无渐变无阴影。大图会先缩一版（原图留着），' +
-        '**不碰 content/plans**</div></div>';
+        '<button id="dpImgGet">取回来挂到本页</button>' +
+        '<button id="dpImgDel" title="把本页的图卸下来（文件还在 uploads 目录里）">卸下</button>' +
+        '<span class="dp-cnt" id="dpImgState">' + escHtml(DOCP_SL.imgState || '') + '</span></div>';
     }
     if(g === 'show'){
       return '<div class="dp-toolgroup" data-group="show">' +
         '<button id="dpShowAll" title="全屏从头放映（F5）">▶ 从头放映</button>' +
         '<button id="dpShowHere" title="全屏从这一页放映（Shift+F5）">▶ 从本页放映</button>' +
-        '<span class="dp-cnt">放映中：方向键 / 空格翻页 · Home/End 首末页 · Esc 退出 ' +
-        '（全屏被系统拦下也能放，只是不铺满屏幕）</span></div>';
+        '<span class="dp-cnt">放映中：方向键 / 空格翻页 · Esc 退出</span></div>';
     }
     /* 开始：选中后能改的样式 + 全局的撤销/重做（R25：原来它们单独占一条 `.dp-pagebar`） */
     return '<div class="dp-toolgroup" data-group="home">' +
@@ -5866,7 +5870,8 @@ body.wz-dragging{cursor:grabbing}
       }).join('') + (ov.font && DOCP_SL.fonts.indexOf(ov.font) < 0
         ? '<option value="' + escHtml(ov.font) + '" selected>' + escHtml(ov.font) + '（不在清单里）</option>' : '');
     var off = docpOffSteps(sizeCur, ov);
-    return '<div class="dp-props" id="dpProps"><b>属性 · ' + escHtml(docpSelLabel()) + '</b>' +
+    return '<div class="dp-props" id="dpProps" data-slot="' + escHtml(DOCP_SL.sel || '') + '"><b>' +
+      escHtml(docpSlotLabel(DOCP_SL.sel)) + '</b>' +
       '<div class="dp-prow"><span>位置</span>' +
         '<input id="dpPx" class="dp-pnum" type="number" step="1" value="' + Math.round(box.x) + '" title="X（设计像素）">' +
         '<input id="dpPy" class="dp-pnum" type="number" step="1" value="' + Math.round(box.y) + '" title="Y">' +
@@ -5948,7 +5953,8 @@ body.wz-dragging{cursor:grabbing}
         (parseInt(s.minutes, 10) || 0) + '" title="这一页的时长（分钟）" aria-label="本页时长（分钟）">' +
       '<span>分钟</span>' +
       '<button id="dpAddBlock" title="在本页最后加一块要点（加完点它直接改字）">＋ 加一块</button>' +
-      '<span style="flex:1"></span></div>';
+      '<span class="sp"></span>' +
+      '<span class="dp-slstat">' + docpSlideStat((DOCP && DOCP.slides) || []) + '</span></div>';
   }
   /* 备注（R16）：这一页的讲稿 —— 导出后 WPS 的"备注"栏里能看到。
      为什么用 textarea 而不是富文本：备注就是给自己看的白字，越简单越不会串页。 */
@@ -6335,6 +6341,31 @@ body.wz-dragging{cursor:grabbing}
     showToast(scope === 'page' ? ('本页复原了 ' + n + ' 处改动') : ('整册复原了 ' + n + ' 处改动'));
   }
   /* 右栏随选中切换：只换那一块 DOM，不重画整页（重画会丢滚动位置与焦点） */
+  /* 槽位名 → 老师看得懂的名字（R26：属性条与"选中"行不再显示 block:0 这种内部编号） */
+  function docpSlotLabel(slot){
+    var s = String(slot || '');
+    if(!s) return '未选中';
+    if(/^obj:/.test(s)){
+      var o = docpObjectOf(s);
+      var nm = o ? ({text: '文本框', image: '图片', shape: '形状'}[o.kind] || '对象') : '对象';
+      return nm + ' ' + s.replace(/^obj:/, '').replace(/:text$/, '');
+    }
+    if(/^fill:/.test(s)) return '模板第 ' + s.slice(5) + ' 号框';
+    var m = /^block:(\d+)(:label)?$/.exec(s);
+    if(m) return '要点 ' + (parseInt(m[1], 10) + 1) + (m[2] ? ' 小标签' : '');
+    var side = /^(left|right):(heading|bullet:(\d+))$/.exec(s);
+    if(side) return (side[1] === 'left' ? '左栏' : '右栏') +
+      (side[2] === 'heading' ? '小标题' : ('第 ' + (parseInt(side[3], 10) + 1) + ' 条'));
+    return ({title: '标题', subtitle: '副标题', label: '环节标签', closing: '结尾语',
+             caption: '图注', meta: '落款信息', index: '章节号', cover_title: '封面标题',
+             notes: '备注'}[s] || s);
+  }
+  function docpSelDesc(){
+    var lst = docpSelList();
+    if(!lst.length) return '未选中';
+    if(lst.length > 1) return '已选 ' + lst.length + ' 处（含「' + docpSlotLabel(DOCP_SL.sel) + '」）';
+    return docpSlotLabel(DOCP_SL.sel);            /* 只说人话；原始槽位名在 #dpSelName 的 data-slot 上 */
+  }
   function docpPropsPaint(bd){
     /* R25：属性块现在长在**属性条**里（`#dpPropsSlot`），不再往舞台右边塞一张卡 */
     var slot = bd.querySelector('#dpPropsSlot');
@@ -6342,9 +6373,8 @@ body.wz-dragging{cursor:grabbing}
     slot.innerHTML = docpPropsBoxHtml();
     var name = bd.querySelector('#dpSelName');
     if(name){
-      var lst = docpSelList();
-      name.textContent = !DOCP_SL.sel && !lst.length ? '未选中'
-        : (lst.length > 1 ? ('已选 ' + lst.length + ' 处（含 ' + DOCP_SL.sel + '）') : (DOCP_SL.sel || '未选中'));
+      name.textContent = docpSelDesc();
+      name.dataset.slot = DOCP_SL.sel || '';      /* 原始槽位名留在 data-* 上：界面说人话，测试仍能精确断言 */
     }
     docpPropsWire(bd);
   }
@@ -6359,9 +6389,8 @@ body.wz-dragging{cursor:grabbing}
     var name = isImg ? '图片' : (isText ? '文本框' : ({rect: '矩形', roundRect: '圆角矩形', ellipse: '椭圆',
       triangle: '三角形', parallelogram: '平行四边形', chevron: 'V 形', rightArrow: '右箭头',
       line: '直线'}[o.shape] || '形状'));
-    return '<div class="dp-props" id="dpProps"><b>属性 · ' + escHtml(name + ' ' + o.id) + '</b>' +
-      (isImg ? ('<div class="dp-cnt">图源：' + escHtml(String(o.src || '').split('/').pop()) +
-        '（存在 data/uploads/）</div>' +
+    return '<div class="dp-props" id="dpProps"><b>' + escHtml(name + ' ' + o.id) + '</b>' +
+      (isImg ? ('<div class="dp-cnt">' + escHtml(String(o.src || '').split('/').pop()) + '</div>' +
         '<div class="dp-prow"><span>铺法</span>' +
           '<button data-ofit="cover"' + (o.fit !== 'contain' ? ' class="dark"' : '') +
             ' title="铺满框、多的裁掉（不变形）">铺满</button>' +
@@ -6405,9 +6434,8 @@ body.wz-dragging{cursor:grabbing}
         '<textarea id="dpOtext" rows="2" placeholder="' + (isText ? '点这里写字'
           : (isImg ? '图上也能叠一行说明' : '形状上也能叠一行字')) + '">' +
         escHtml(o.text || '') + '</textarea></div>' +
-      '<div class="dp-prow"><button id="dpOdel" class="dark">删除这个对象</button>' +
-        '<span class="dp-cnt">Delete 也行</span></div>' +
-      '<div class="dp-cnt">形状用的是 ppt-master 的预设形状：导出后在 WPS 里是<b>原生可编辑形状</b>，不是图片。</div>' +
+      '<div class="dp-prow"><button id="dpOdel" class="dark">删除这个对象</button></div>' +
+      '<div class="dp-cnt">形状导出后在 WPS 里是可继续编辑的形状。</div>' +
       '</div>';
   }
   function docpObjPropsWire(bd){
@@ -7161,7 +7189,11 @@ body.wz-dragging{cursor:grabbing}
     docpThemesEnsure(function(){
       DOCP_SL.themeId = docpThemeGet();
       docpTplEnsure(function(){
-        if(!bd.querySelector('#dpTpl') || !bd.querySelector('#dpTheme')) docpRenderSlides(bd);
+        /* 主题/模板下拉 R26 起住在「设计」组里 —— 只在那一组才存在，不能拿它们当"外壳在不在"的判据：
+           拿它们判会**永远为假** → docpRenderSlides 自己调自己 → 栈溢出（踩过：jsdom 报
+           RangeError: Maximum call stack size exceeded，真浏览器只是卡一下）。
+           改用每组成员都在的锚点：#dpPropsRow（属性条）。 */
+        if(!bd.querySelector('#dpPropsRow')) docpRenderSlides(bd);
         docpPagesEnsure(bd, sl, function(){ docpPaintStage(bd); });
       });
     });
