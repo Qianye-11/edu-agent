@@ -1011,6 +1011,10 @@ async function openDocPanel(doc) {
           kbox ? txt(kbox).slice(0, 40) : '(没打开)');
         const rows = kbox ? kbox.querySelectorAll('tr').length : 0;
         check('快捷键表逐条列全（≥15 条）', rows >= 15, rows + ' 条');
+        check('快捷键表把"鼠标上才发现的"也写上（Alt 拖 / Shift 拖角 / 左栏拖动 / 右键）',
+          /Alt\+拖动/.test(txt(kbox)) && /Shift\+拖角手柄/.test(txt(kbox)) &&
+          /左栏：拖动/.test(txt(kbox)) && /左栏：右键/.test(txt(kbox)),
+          txt(kbox).slice(0, 50));
         doc.getElementById('dpKeyClose').click(); await sleep(400);
         check('能收起快捷键表', !doc.getElementById('dpKeyBox'));
 
@@ -1560,7 +1564,20 @@ async function openDocPanel(doc) {
         doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
       }
 
-      /* 回到第 1 页：下面的老用例（本页属性条那几条）默认在第 1 页上跑 */
+      /* R24 收口：空态与"表里都有什么"的一次性核对 */
+      {
+        doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
+        doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await sleep(250);
+        const props = txt(doc.getElementById('dpProps') || doc.querySelector('#wzDocPane .dp-props'));
+        check('没选中时右栏给的是"能做什么"（不是一片空白）',
+          /点一下页面上的文字/.test(props) && /插入/.test(props), props.slice(0, 46));
+        check('没选中时对象操作条是灰的（不会点了没反应）',
+          ['dpUp', 'dpDown', 'dpReset', 'dpDel'].every((id) => {
+            const b = doc.getElementById(id);
+            return !b || b.disabled;
+          }), '未选中');
+      }
       doc.querySelector('#wzLeft .wz-thumb[data-thumb="0"]').click(); await sleep(600);
       check('（收尾）回到第 1 页', /第 1 \//.test(txt(doc.querySelector('#wzDocPane #dpPgBar span'))),
         txt(doc.querySelector('#wzDocPane #dpPgBar span')));

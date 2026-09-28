@@ -5673,8 +5673,13 @@ body.wz-dragging{cursor:grabbing}
           '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-zoombox" id="dpZoomBox">' +
             '<div class="dp-canvas" id="dpCanvas"></div></div></div>' +
           (DOCP_SL.sel ? docpPropsHtml() : '<div class="dp-props dp-props-empty">' +
-            '<b>属性</b><div class="dp-cnt">点一下页面上的文字，这里就能改<b>位置 / 大小 / 字号 / ' +
-            '字体 / 颜色 / 对齐 / 行距</b>。</div></div>') +
+            '<b>属性</b><div class="dp-cnt">点一下页面上的文字、形状或图片，这里就能改' +
+            '<b>位置 / 大小 / 字号 / 字体 / 颜色 / 对齐 / 行距</b>；' +
+            '要加东西就切到上面的「插入」（文本框 / 形状 / 图片 / 联网取图）。</div>' +
+            (DOCP_SL.pages && DOCP_SL.pages.length ? '' :
+              '<div class="dp-cnt" style="color:#8A5A00">这一页还没渲染出来 —— ' +
+              '先让教案正文生成幻灯片（「文档」页签里改正文，或点顶栏「下载▾」看导出用的那版）。</div>') +
+            '</div>') +
           '</div>') +
       (DOCP_SL.browse ? '' :
         '<div class="dp-pagebar dp-objs">' +
@@ -6297,7 +6302,8 @@ body.wz-dragging{cursor:grabbing}
   }
   function docpPropsBoxHtml(){
     return docpPropsHtml() || '<div class="dp-props dp-props-empty"><b>属性</b>' +
-      '<div class="dp-cnt">点一下页面上的文字，这里就能改<b>位置 / 大小 / 字号 / 字体 / 颜色 / 对齐 / 行距</b>。</div></div>';
+      '<div class="dp-cnt">点一下页面上的文字、形状或图片，这里就能改<b>位置 / 大小 / 字号 / 字体 / ' +
+      '颜色 / 对齐 / 行距</b>；要加东西就切到上面的「插入」（文本框 / 形状 / 图片 / 联网取图）。</div></div>';
   }
   /* 自由层对象的右栏（R21）：位置/大小/字号/颜色/填充/对齐/字重/层级/删除 + 文字 */
   function docpObjPropsHtml(o){
@@ -7012,20 +7018,28 @@ body.wz-dragging{cursor:grabbing}
       '<button id="dpFindClose">关闭（Esc）</button>' +
       '<div class="dp-findhits" id="dpFindHits"></div></div>';
   }
-  /* 快捷键总表（Ctrl+/ 或「开始」组里的按钮）：**表里写的每一条都真的绑了**（面板检查逐条验） */
+  /* 快捷键总表（Ctrl+/ 或「开始」组里的按钮）：**表里写的每一条都真的绑了**（面板检查逐条验）。
+     R24 收口时补上了"鼠标上才能发现"的那几条（Alt 拖、Shift 角上拖、左栏拖动排序…）——
+     这类最容易被藏起来，老师不知道就等于没有。 */
   var DOCP_KEYS = [
-    ['Ctrl+S', '保存到会话'], ['Ctrl+Z / Ctrl+Y', '撤销 / 重做'],
+    ['Ctrl+S', '保存到会话'], ['Ctrl+Z / Ctrl+Y', '撤销 / 重做（一次操作一步）'],
     ['Ctrl+A', '选中本页全部文字'], ['Ctrl+点', '加选/减选一处'],
     ['Ctrl+C / Ctrl+X / Ctrl+V', '复制 / 剪切 / 粘贴（没选中时=整页）'],
     ['Ctrl+D', '复制这一页'], ['Delete', '删掉选中的（可多选）'],
-    ['方向键 / Shift+方向键', '微调 1px / 10px'], ['Esc', '取消选中'],
+    ['方向键 / Shift+方向键', '微调 1px / 10px'], ['Esc', '取消选中 / 关查找条'],
+    ['双击文字', '就地改字'], ['Alt+拖动', '临时不吸附（自由摆放）'],
+    ['Shift+拖角手柄', '等比缩放'],
     ['Ctrl+B / Ctrl+I / Ctrl+U', '加粗 / 斜体 / 下划线'],
     ['Ctrl+E / Ctrl+L / Ctrl+R', '居中 / 左对齐 / 右对齐'],
     ['Ctrl+= / Ctrl+-', '字号加一档 / 减一档'], ['Ctrl+0', '缩放适应窗口'],
-    ['Ctrl+Alt+T', '插入文本框'],
-    ['拖图片到画布', '插入图片（上传）'],
+    ['Ctrl+滚轮', '在预览上缩放（15%~200%）'],
+    ['Ctrl+Alt+T', '插入文本框'], ['拖图片到画布', '插入图片（上传）'],
     ['Ctrl+F / Ctrl+H', '查找 / 替换（跨页）'],
-    ['F5 / Shift+F5', '从头放映 / 从本页放映'], ['Shift+F9', '参考线（网格）'],
+    ['F5 / Shift+F5', '从头放映 / 从本页放映'],
+    ['放映中：方向键 / 空格 / Home / End / Esc', '翻页 / 下一页 / 首页 / 末页 / 退出'],
+    ['Shift+F9', '参考线（网格）'],
+    ['左栏：Ctrl+点 / Shift+点', '多选页 / 选一段'], ['左栏：拖动', '排序（多选整组搬）'],
+    ['左栏：右键', '复制 / 上移 / 下移 / 删除 / 从这页放映'],
     ['Ctrl+/', '这张快捷键表'],
   ];
   function docpKeysHtml(bd){
