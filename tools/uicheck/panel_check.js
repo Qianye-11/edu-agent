@@ -136,6 +136,22 @@ function makeDom(opts) {
       if (window.Element && !window.Element.prototype.scrollIntoView) {
         window.Element.prototype.scrollIntoView = () => {};
       }
+      /* R19：jsdom 没有排版，`getBoundingClientRect` 恒为 0 —— 左栏拖动排序要靠它算"插到哪一条缝"。
+         这里给缩略图造一份**确定性几何**（每张 96 高、间距 100、从 y=200 起），
+         否则拖动用例只能测到"拖到列表末尾"这一条路径。 */
+      if (window.Element && window.Element.prototype.getBoundingClientRect) {
+        window.Element.prototype.getBoundingClientRect = function () {
+          const el = this;
+          if (el.classList && el.classList.contains('wz-thumb')) {
+            const i = parseInt(el.dataset.thumb || '0', 10);
+            const top = 200 + i * 100;
+            return { top, bottom: top + 96, left: 0, right: 180, width: 180, height: 96,
+                     x: 0, y: top, toJSON() { return this; } };
+          }
+          return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0,
+                   toJSON() { return this; } };
+        };
+      }
 
       const realFetch = fetch;
       window.fetch = async function (u, op) {
@@ -996,6 +1012,132 @@ async function openDocPanel(doc) {
         doc.getElementById('dpFindClose').click(); await sleep(300);
         check('能关掉查找条', doc.getElementById('dpFindBar').style.display === 'none');
         check('无运行时错误（R18 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+      }
+
+      /* R19：左栏缩略图 —— Ctrl+点多选 / 拖动排序 / 批量操作 / 右键菜单 */
+      {
+        const thumbs = () => Array.from(doc.querySelectorAll('#wzLeft .wz-thumb[data-thumb]'));
+        const key = (k, opt) => doc.dispatchEvent(new w.KeyboardEvent('keydown',
+          Object.assign({ key: k, bubbles: true, cancelable: true }, opt || {})));
+        const ctrlZ = () => key('z', { ctrlKey: true });
+        const names = () => thumbs().map((t) => txt(t.querySelector('.n')).replace(/^\d+\s*\/\s*\d+\s*/, '').trim());
+        const mouse = (el, type, y, opt) => el.dispatchEvent(new w.MouseEvent(type,
+          Object.assign({ bubbles: true, cancelable: true, clientX: 20, clientY: y, button: 0 }, opt || {})));
+        const startThumbs = thumbs().length;
+        check('左栏缩略图都在（R19 的拖动与多选都要靠它们）', startThumbs >= 5, startThumbs + ' 张');
+
+        /* 多选：Ctrl+点 两页 → 工具条出现、状态栏说清、细框两个 */
+        mouse(thumbs()[0], 'click', 0);
+        await sleep(300);
+        check('单击一页只选一页（不出现批量工具条）',
+          !doc.querySelector('#wzLeft [data-rail-batch]'), '有工具条=多选了');
+        mouse(thumbs()[2], 'click', 0, { ctrlKey: true });
+        await sleep(350);
+        mouse(thumbs()[3], 'click', 0, { ctrlKey: true });
+        await sleep(400);
+        check('Ctrl+点 多选（选中样式 + 批量工具条 + 状态栏报数）',
+          doc.querySelectorAll('#wzLeft .wz-thumb.wz-sel').length === 3 &&
+          !!doc.querySelector('#wzLeft [data-rail-batch="del"]') &&
+          /已选 3 页/.test(txt(doc.getElementById('wzStatusBar'))),
+          doc.querySelectorAll('#wzLeft .wz-thumb.wz-sel').length + ' 选中 · ' +
+          txt(doc.getElementById('wzStatusBar')));
+
+        /* Shift+点 选一段 */
+        mouse(thumbs()[0], 'click', 0);
+        await sleep(250);
+        mouse(thumbs()[3], 'click', 0, { shiftKey: true });
+        await sleep(350);
+        check('Shift+点 选中一段（1–4 页）',
+          doc.querySelectorAll('#wzLeft .wz-thumb.wz-sel').length === 4,
+          doc.querySelectorAll('#wzLeft .wz-thumb.wz-sel').length + ' 页');
+
+        /* 批量复制 → 页数 +4；再撤销回来 */
+        const nBefore = thumbs().length;
+        doc.querySelector('#wzLeft [data-rail-batch="dup"]').click();
+        await sleep(900);
+        check('「复制选中」批量复制（页数 +4 且提示报数）',
+          thumbs().length === nBefore + 4 && /复制了 4 页/.test(toast()),
+          nBefore + ' → ' + thumbs().length + ' · ' + toast());
+        ctrlZ(); await sleep(900);
+        check('批量复制能整批撤回（Ctrl+Z）', thumbs().length === nBefore,
+          thumbs().length + ' 页');
+
+        /* 批量删除 → 页数 -2；再撤销回来（内容不能丢） */
+        mouse(thumbs()[1], 'click', 0);
+        await sleep(250);
+        mouse(thumbs()[2], 'click', 0, { ctrlKey: true });
+        await sleep(350);
+        doc.querySelector('#wzLeft [data-rail-batch="del"]').click();
+        await sleep(900);
+        check('「删除选中」批量删除（页数 -2 + 提示能撤回）',
+          thumbs().length === nBefore - 2 && /删掉了 2 页/.test(toast()),
+          thumbs().length + ' 页 · ' + toast());
+        const namesAfterDel = names();
+        ctrlZ(); await sleep(900);
+        check('批量删除能整批撤回，页名原样回来',
+          thumbs().length === nBefore && names().join('|').length >= namesAfterDel.join('|').length - 2,
+          thumbs().length + ' 页 · ' + names().slice(0, 3).join('/'));
+
+        /* 拖动排序：把第 1 页拖到第 5 张下面 → 顺序变成 2,3,4,5,1 */
+        const order0 = names();
+        const first = thumbs()[0];
+        mouse(first, 'mousedown', 200 + 10);
+        mouse(doc.body, 'mousemove', 200 + 4 * 100 + 60);       /* 落在第 5 张的下半 → 插到它后面 */
+        await sleep(150);
+        check('拖动中画出插入指示线（.wz-dropline）',
+          doc.querySelectorAll('#wzLeft .wz-dropline').length === 1,
+          doc.querySelectorAll('#wzLeft .wz-dropline').length + ' 条');
+        mouse(doc.body, 'mouseup', 200 + 4 * 100 + 60);
+        await sleep(900);
+        const order1 = names();
+        check('拖动后顺序真的变了（第 1 页挪到最后）',
+          order1.length === order0.length && order1[order1.length - 1] === order0[0] &&
+          order1[0] === order0[1],
+          order0.slice(0, 3).join('/') + ' → ' + order1.slice(0, 3).join('/'));
+        ctrlZ(); await sleep(900);
+        check('排序也能撤回（回到原顺序）', names().join('|') === order0.join('|'),
+          names().slice(0, 3).join('/'));
+
+        /* 右键菜单 */
+        thumbs()[1].dispatchEvent(new w.MouseEvent('contextmenu',
+          { bubbles: true, cancelable: true, clientX: 30, clientY: 300 }));
+        await sleep(400);
+        const menu = doc.getElementById('wzRailMenu');
+        check('右键出菜单（复制/上移/下移/删除/从这页放映）',
+          !!menu && ['dup', 'up', 'dn', 'del', 'show'].every((k) => !!menu.querySelector('[data-ctx="' + k + '"]')),
+          menu ? Array.from(menu.querySelectorAll('[data-ctx]')).map((b) => b.dataset.ctx).join(',') : '(没菜单)');
+        const orderBeforeMenu = names();
+        menu.querySelector('[data-ctx="up"]').click();
+        await sleep(800);
+        check('菜单里「上移」生效且菜单收起',
+          !doc.getElementById('wzRailMenu') &&
+          names()[0] === orderBeforeMenu[1] && names()[1] === orderBeforeMenu[0],
+          names().slice(0, 2).join('/'));
+        ctrlZ(); await sleep(800);
+
+        /* Delete 删页（没有选中对象时，Delete 删的是"选中的页"） */
+        const nDel = thumbs().length;
+        mouse(thumbs()[0], 'click', 0); await sleep(300);
+        key('Delete'); await sleep(800);
+        check('没选对象时 Delete 删选中的页（并能撤回）',
+          thumbs().length === nDel - 1 && /删掉了 1 页/.test(toast()),
+          nDel + ' → ' + thumbs().length + ' · ' + toast());
+        ctrlZ(); await sleep(800);
+        check('删页撤回后页数回来', thumbs().length === nDel, thumbs().length + ' 页');
+
+        /* 不能把页删光 */
+        const nAll = thumbs().length;
+        mouse(thumbs()[0], 'click', 0); await sleep(200);
+        for (let i = 1; i < nAll; i++) { mouse(thumbs()[i], 'click', 0, { ctrlKey: true }); await sleep(60); }
+        await sleep(300);
+        doc.querySelector('#wzLeft [data-rail-batch="del"]').click();
+        await sleep(700);
+        check('不许把页删光（至少留一页，并说明）',
+          thumbs().length === nAll && /至少留一页|不能把页删光/.test(toast()), toast());
+        doc.querySelector('#wzLeft [data-rail-batch="clear"]').click();
+        await sleep(300);
+        check('「取消选择」清空多选', !doc.querySelectorAll('#wzLeft .wz-thumb.wz-sel').length);
+        check('无运行时错误（R19 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
       }
 
       /* 回到第 1 页：下面的老用例（本页属性条那几条）默认在第 1 页上跑 */

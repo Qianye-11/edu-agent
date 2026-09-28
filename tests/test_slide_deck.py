@@ -3,7 +3,8 @@
 
 对应 `docs/22` D13 / `docs/23` M1：
 - 渲染只有一份实现（服务端），面板与导出共用 → 这里锁住"输出什么"；
-- **不落盘**是红线：每个用例跑完都比对工作区快照（`data/tmp`、`content/plans`）；
+- **不落盘**是红线：见 `_NoDiskWrites` / `_RenderWritesNothing`（后者给一个空数据目录，
+  渲染后必须还是空的 —— 光比对"整棵树快照"会被别的进程写文件带偏，假失败查过好几次）；
 - 接口三态：正常 / skill 关（`enabled:false`）/ 主题坏掉（400）。
 """
 
@@ -42,31 +43,68 @@ except Exception:  # noqa: BLE001 没装 ppt-master 也不该让整个测试文�
     PPT_MASTER_READY = False
 
 
-def _snapshot(*dirs: Path) -> dict[str, float]:
+def _snapshot(*dirs: Path, skip: tuple[str, ...] = ()) -> dict[str, float]:
     out: dict[str, float] = {}
     for d in dirs:
         if not d.exists():
             continue
         for p in d.rglob("*"):
-            if p.is_file():
+            if p.is_file() and not any(s in p.parts for s in skip):
                 out[str(p)] = p.stat().st_mtime
     return out
 
 
 class _NoDiskWrites(unittest.TestCase):
-    """红线：渲染是纯内存的（预览不落盘）。"""
+    """红线：渲染是纯内存的（预览不落盘）。
+
+    ⚠️ 这条断言原来写成"整棵 `data/tmp` 的快照必须一模一样"，结果**并行跑闸门时经常假失败**：
+    在跑的 Web 服务（写 `data/tmp/ppt_jobs`）、截图工具（写 `data/tmp/wzshots`）、另一个测试进程
+    都会往同一棵树里加文件，和"渲染落不落盘"毫无关系（踩过好几次，浪费在查假失败上的时间最多）。
+    现在拆成两件事：
+      ① 这里只比对**快照时已存在的文件有没有被改/删**（谁新加了文件不算——那不是本用例的锅）；
+      ② 真正"渲染自己不写盘"的直接证据放在 `_RenderWritesNothing`：给一个**空的数据目录**，
+         渲染完它必须还是空的。
+    """
 
     WATCH = (_PROJ / "data" / "tmp", _PROJ / "content" / "plans")
+    #: `ppt_jobs/` 是导出/导入任务**该写**的地方（`docs/22` §6.3），渲染用例不碰它；
+    #: 不跳过的话，每次跑闸门都要 stat 上万个任务文件（实测 15,577 个 / 793 MB → 整套单测慢十几分钟）。
+    #: 关心导出写盘行为的用例（`ExportTest`）自己把它设成 `()` 再逐条看。
+    SKIP = ("ppt_jobs",)
 
     def setUp(self):
-        self.before = _snapshot(*self.WATCH)
+        self.before = _snapshot(*self.WATCH, skip=self.SKIP)
 
     def tearDown(self):
-        after = _snapshot(*self.WATCH)
-        self.assertEqual(self.before, after, "渲染不该往 data/tmp 或 content/plans 写任何东西")
+        after = _snapshot(*self.WATCH, skip=self.SKIP)
+        changed = {k: (self.before.get(k), after.get(k)) for k in self.before
+                   if after.get(k) != self.before.get(k)}
+        self.assertEqual(changed, {}, "渲染不该改/删 data/tmp 或 content/plans 里已有的文件")
 
 
-class ThemeTest(_NoDiskWrites):
+class _RenderWritesNothing(_NoDiskWrites):
+    """纯渲染用例：再给一个**空的数据目录**，渲染后必须一个文件都没多（这才是直接证据）。"""
+
+    def setUp(self):
+        super().setUp()
+        self.data = Path(tempfile.mkdtemp(prefix="edu_nodisk_"))
+        self._old_data = os.environ.get("EDU_DATA_DIR")
+        os.environ["EDU_DATA_DIR"] = str(self.data)
+        self.addCleanup(self._restore_data)
+
+    def _restore_data(self):
+        if self._old_data is None:
+            os.environ.pop("EDU_DATA_DIR", None)
+        else:
+            os.environ["EDU_DATA_DIR"] = self._old_data
+
+    def tearDown(self):
+        leftovers = sorted(str(p.relative_to(self.data)) for p in self.data.rglob("*") if p.is_file())
+        self.assertEqual(leftovers, [], "渲染往数据目录写了东西（预览必须不落盘）")
+        super().tearDown()
+
+
+class ThemeTest(_RenderWritesNothing):
     def test_three_themes_with_metadata(self):
         items = slide_deck.themes()
         self.assertEqual([t["id"] for t in items], ["hand-drawn", "illustration", "tech-editorial"])
@@ -86,7 +124,7 @@ class ThemeTest(_NoDiskWrites):
             slide_deck.theme("nope")
 
 
-class BuildDeckTest(_NoDiskWrites):
+class BuildDeckTest(_RenderWritesNothing):
     def test_pages_and_layouts(self):
         out = slide_deck.build_deck("tech-editorial", DECK, title="3.3 幂函数")
         self.assertEqual(out["stats"]["pages"], 4)
