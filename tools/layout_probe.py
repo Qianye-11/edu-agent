@@ -90,6 +90,14 @@ PROBE_JS = """
              Math.round(100 * vis / 720) + '%%）· 占内容区 ' +
              (body.offsetHeight ? Math.round(100 * vis / body.offsetHeight) + '%%' : '-') +
              ' · 其余 ' + chrome + 'px 是那 ' + (blocks.length - 1) + ' 条/张');
+      var prow = document.getElementById('dpPropsRow');
+      if(prow){
+        L.push('属性条 h=' + prow.offsetHeight + ' w=' + prow.offsetWidth + ' 子项：');
+        Array.prototype.forEach.call(prow.children, function(el){
+          L.push('   ' + el.offsetWidth + 'x' + el.offsetHeight + '  ' +
+                 String(el.className || el.id).slice(0, 34));
+        });
+      }
       L.push('paneChrome(头/格式条)=' + (host.offsetHeight - body.offsetHeight) + 'px');
     }
     var r = document.getElementById('wzLeft');

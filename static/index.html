@@ -544,11 +544,19 @@ svg{display:block}
     body.dp-open #view-chat #chatMsgBox,
     body.dp-open #view-chat .home,
     body.dp-open #view-design{padding-right:0}
-/* 下载：一个按钮 + 悬停菜单（hover 即弹出；点击也能开，兼容触屏） */
+/* 下载：一个按钮 + 下拉菜单（点击开、Esc/点别处收；也能悬停开，兼容触屏） */
     .dp-dl{position:relative;display:inline-flex}
-.dp-menu{display:none;position:absolute;right:0;top:calc(100% + 5px);min-width:216px;z-index:70;
+/* 下拉菜单**挂在 body 上**（见 wzDownMenuMount）：它原先长在 `.row-card` 里，而
+   `.row-card{overflow:hidden}`（第 201 行，卡片圆角要用的）会把菜单**裁到只剩几像素** ——
+   这是几何裁剪，跟 z-index 毫无关系（堆到 99999 也没用，实测过：底边 592 被切到 223）。
+   挂到 body + position:fixed 一次绕开三道裁剪：.row-card / .scroll / body{overflow:hidden}。
+   z-index 取 50：**盖得住卡片**（卡片没有层叠上下文），但**压不住全局导航与弹窗** ——
+   侧边面板 55 / 全局导航 60 / 遮罩 80 / 右键菜单 90·95 / 提示 200 / 放映 9999。 */
+.dp-menu{display:none;position:absolute;right:0;top:calc(100% + 5px);min-width:216px;z-index:50;
       background:var(--bg);border:.5px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-md);padding:4px}
-.dp-dl:hover .dp-menu,.dp-dl.open .dp-menu{display:block}
+.dp-menu.dp-menu-portal{position:fixed;right:auto;top:auto}
+.dp-menu.dp-menu-portal.open{display:block}
+.dp-dl:hover .dp-menu:not(.dp-menu-portal),.dp-dl.open .dp-menu:not(.dp-menu-portal){display:block}
 .dp-menu button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;
       border:none;background:none;text-align:left;padding:7px 10px;border-radius:7px;cursor:pointer;
       font-family:var(--font);font-size:12.5px;color:var(--ink-800)}
@@ -648,6 +656,20 @@ body.theme-dark .avt{color:#fff}
 /* R15：画布 + 右栏属性 */
 .dp-stageflex{display:flex;align-items:flex-start;gap:8px}
 .dp-stageflex .dp-slidewrap{flex:1;min-width:0}
+/* R25：属性条 —— 从右栏搬到了工具按钮下面，横着排（一行放不下就折行）。
+   注意选择器要写成 `.dp-props.dp-propsrow`（两个类）：`.dp-props` 那条有 `width:196px;
+   flex:0 0 196px`（右栏卡的尺寸），单类选择器压不住它 —— 条就只剩 196px 宽、内容全竖着堆（踩过）。 */
+.dp-props.dp-propsrow{width:auto;flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;
+  gap:6px 16px;border:.5px solid var(--line);border-radius:8px;padding:5px 10px;background:#fff;
+  font-size:12px;margin:0 0 8px}
+.dp-propsrow .dp-prow{flex:0 0 auto;gap:5px}
+.dp-propsrow .dp-prow>span:first-child{width:auto;color:var(--ink-500);font-size:11.5px;margin-right:2px}
+/* 选中后的详细属性也横着排（原来它是右栏那张窄卡）；**占整条宽**，字段一行流下来 */
+.dp-propsrow .dp-propsslot{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px}
+.dp-propsrow .dp-props{width:auto;flex:0 0 auto;flex-direction:row;flex-wrap:wrap;gap:4px 14px;
+  border:0;padding:0;background:none}
+.dp-propsrow .dp-props>b{flex:0 0 auto;align-self:center}
+.dp-propsrow .dp-cnt{margin-left:6px}
 .dp-props{width:196px;flex:0 0 196px;border:.5px solid var(--line);border-radius:8px;padding:8px;background:#fff;font-size:12px;display:flex;flex-direction:column;gap:5px}
 .dp-props>b{font-size:12px;color:var(--ink-900)}
 .dp-props-empty{color:var(--ink-500)}
@@ -3836,15 +3858,26 @@ body.wz-dragging{cursor:grabbing}
       wzSaveState('saved');
       showToast('已保存到会话（换浏览器也还在）');
     });
-    /* 出口只有一处：「下载▾」菜单（Word / PPT 新版式 / PPT 旧版式 / HTML / 导出位置…） */
+    /* 出口只有一处：「下载▾」菜单（Word / PPT 新版式 / PPT 旧版式 / PDF / PNG / JPEG / HTML / 导出位置…）
+       菜单实体挂在 body 上（见下面 wzDownMenuMount 的说明），开合都要**同时**管 wrapper 与菜单。 */
     var dbox = document.getElementById('wzDown'), dbtn = document.getElementById('wzDownBtn');
+    var dmenu = document.getElementById('wzDownMenu');
     if(dbtn) dbtn.addEventListener('click', function(e){
       e.stopPropagation();
-      if(dbox) dbox.classList.toggle('open');
+      var open = !(dmenu && dmenu.classList.contains('open'));
+      wzDownClose();
+      if(open) wzDownOpen();
+    });
+    if(dbtn) dbtn.addEventListener('mouseenter', function(){ wzDownOpen(); });
+    if(dbox) dbox.addEventListener('mouseleave', function(){
+      setTimeout(function(){
+        if(!dmenu || dmenu.matches(':hover')) return;
+        wzDownClose();
+      }, 220);
     });
     Array.prototype.forEach.call(document.querySelectorAll('#wzDownMenu [data-dl]'), function(b){
       b.addEventListener('click', function(){
-        if(dbox) dbox.classList.remove('open');
+        wzDownClose();
         var k = b.dataset.dl;
         if(k === 'outdir'){
           openDirPicker(function(dir){ dzOutDirSet(dir); showToast('导出位置：' + dir); },
@@ -3860,8 +3893,19 @@ body.wz-dragging{cursor:grabbing}
     });
     document.addEventListener('click', function(e){                 /* 点别处收菜单 */
       if(!dbox) return;
-      if(e.target && e.target.closest && e.target.closest('#wzDown')) return;
-      dbox.classList.remove('open');
+      if(e.target && e.target.closest && (e.target.closest('#wzDown') ||
+         e.target.closest('#wzDownMenu'))) return;                  /* 菜单已挂在 body 上，得单独认 */
+      wzDownClose();
+    });
+    document.addEventListener('keydown', function(e){               /* Esc 收菜单 */
+      if(e.key === 'Escape') wzDownClose();
+    });
+    /* 菜单挂在 body 上、又是 fixed：滚动/改窗口大小时跟着按钮走（滚动容器是三道的第二道） */
+    window.addEventListener('scroll', function(){
+      if(dmenu && dmenu.classList.contains('open')) wzDownPlace();
+    }, true);
+    window.addEventListener('resize', function(){
+      if(dmenu && dmenu.classList.contains('open')) wzDownPlace();
     });
     syncOutDirInput();
 
@@ -5656,9 +5700,10 @@ body.wz-dragging{cursor:grabbing}
       (DOCP_SL.alignHtml || '') + '</div>' +
       docpToolTabsHtml() +
       docpToolGroupHtml() +
+      docpPropsRowHtml() +                     /* R25：属性条跟在按钮下面（原右栏属性卡） */
       docpFindBarHtml() +
       (DOCP_SL.keyOpen ? docpKeysHtml() : '') +
-      '<div id="dpWarnBox">' + warn + '</div>' +
+      (warn ? '<div class="dp-cnt" style="color:#8A5A00;padding:0 34px 6px">' + warn + '</div>' : '') +
       (DOCP_SL.fillPreview
         ? '<div class="dp-slhead"><span class="dp-warn" style="margin:0">当前预览 = 按模板《' +
           escHtml(docpTplName(docpTplGet())) + '》填出来的样子 —— <b>每一处文字（含页码/设计标签）都能点着改</b></span>' +
@@ -5672,41 +5717,40 @@ body.wz-dragging{cursor:grabbing}
         : '<div class="dp-stageflex">' +
           '<div class="dp-slidewrap" id="dpSlideWrap"><div class="dp-zoombox" id="dpZoomBox">' +
             '<div class="dp-canvas" id="dpCanvas"></div></div></div>' +
-          (DOCP_SL.sel ? docpPropsHtml() : '<div class="dp-props dp-props-empty">' +
-            '<b>属性</b><div class="dp-cnt">点一下页面上的文字、形状或图片，这里就能改' +
-            '<b>位置 / 大小 / 字号 / 字体 / 颜色 / 对齐 / 行距</b>；' +
-            '要加东西就切到上面的「插入」（文本框 / 形状 / 图片 / 联网取图）。</div>' +
-            (DOCP_SL.pages && DOCP_SL.pages.length ? '' :
-              '<div class="dp-cnt" style="color:#8A5A00">这一页还没渲染出来 —— ' +
-              '先让教案正文生成幻灯片（「文档」页签里改正文，或点顶栏「下载▾」看导出用的那版）。</div>') +
-            '</div>') +
           '</div>') +
       (DOCP_SL.browse ? '' :
-        '<div class="dp-pagebar dp-objs">' +
-        '<span>选中：<b id="dpSelName">未选中</b></span>' +
-        '<button id="dpSnap" title="拖动时对齐到边距/中线/其它文字（按住 Alt 临时关掉）">吸附：开</button>' +
-        '<button id="dpUp" disabled title="把选中的文字盖到上面一层">上移一层</button>' +
-        '<button id="dpDown" disabled title="把选中的文字压到下面一层">下移一层</button>' +
-        '<button id="dpReset" disabled title="回到版式原来的位置与大小">回原位</button>' +
-        '<button id="dpDel" disabled title="删掉这一处文字（Delete；Ctrl+Z 能撤回）">删除</button>' +
-        '<span style="flex:1"></span>' +
-        '<span class="dp-cnt">单击选中 · 双击改字 · 拖动摆位置 · 拖手柄改大小 · 方向键微调（Shift 10px）</span></div>') +
-      '<div class="dp-pagebar" id="dpPgBar"><button data-pg="prev">上一页</button>' +
-      '<button data-pg="next">下一页</button>' +
-      '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页</span>' +
-      '<span class="sp"></span>' +
-      '<button id="dpZoomFit" title="缩放到刚好铺满（Ctrl+0）">适应窗口</button>' +
-      '<input id="dpZoom" class="dp-zoom" type="range" min="15" max="200" step="5" value="100" ' +
-        'title="缩放（Ctrl+滚轮也行）" aria-label="缩放百分比">' +
-      '<span id="dpZoomVal">100%</span>' +
-      '<button id="dpGrid" title="参考线：安全边距 / 栏 / 中线（Shift+F9）">网格</button>' +
-      '<button id="dpBrowse" title="一屏看全册（点哪页跳哪页）">浏览</button></div>' +
-      docpPagePropsHtml() +
-      (DOCP_SL.browse ? '' : docpNotesHtml()) +
-      '<div class="dp-pagebar"><button id="dpAddPage">+ 加一页</button>' +
-      '<button id="dpUndo">撤销</button><button id="dpRedo">重做</button>' +
-      '<span>改完自动存回会话；下载 ▾ 里的「新版式」就是这份</span></div>';
+        /* R25：翻页条只留"翻页 + 页数 + 适应窗口 + 加一页"——
+           缩放/网格/浏览在设计组（原先两处各一套，重复），对象操作搬进属性条 */
+        '<div class="dp-pagebar" id="dpPgBar"><button data-pg="prev">上一页</button>' +
+        '<button data-pg="next">下一页</button>' +
+        '<span>第 ' + (DOCP_PAGE + 1) + ' / ' + sl.length + ' 页</span>' +
+        '<span class="sp"></span>' +
+        '<button id="dpZoomFit" title="缩放到刚好铺满（Ctrl+0）">适应窗口</button>' +
+        '<button id="dpAddPage" title="在当前页后面插一页空白页">＋ 加一页</button></div>' +
+        docpNotesHtml());
   }
+  /* R25：**属性条** —— 原来右栏那张属性卡搬到工具按钮下面（一行放不下就折行）。
+     两条：
+       · 「本页」行：版式 / 时长 / ＋加一块（原 `.dp-pagebar.dp-props` 那张 206px 的卡）
+       · 「选中」行：选中谁 + 吸附 + 层级 + 回原位 + 删除（原 `.dp-pagebar.dp-objs` 那条）
+     为什么合并：它们都是"改当前这一页/这一处"的东西，贴在按钮下最顺手；
+     原来一个在右栏、一个在底部条，老师得在三处找。 */
+  function docpPropsRowHtml(){
+    var page = docpPagePropsHtml();
+    var sel = (DOCP_SL.browse ? '' :
+      '<div class="dp-prow"><span>选中</span><b id="dpSelName">未选中</b>' +
+      '<button id="dpSnap" title="拖动时对齐到边距/中线/其它文字（按住 Alt 临时关掉）">吸附：开</button>' +
+      '<button id="dpUp" disabled title="把选中的文字盖到上面一层">上移一层</button>' +
+      '<button id="dpDown" disabled title="把选中的文字压到下面一层">下移一层</button>' +
+      '<button id="dpReset" disabled title="回到版式原来的位置与大小">回原位</button>' +
+      '<button id="dpDel" disabled title="删掉这一处（Delete；Ctrl+Z 能撤回）">删除</button>' +
+      '<span class="dp-cnt">单击选中 · 双击改字 · 拖动摆位置 · 拖手柄改大小 · 方向键微调</span></div>' +
+      /* 选中后的详细属性：**整条宽**（R25：它原来是一张 196px 的窄卡，塞在条里会折成十几行） */
+      '<div id="dpPropsSlot" class="dp-propsslot"></div>'
+    );
+    return '<div class="dp-props dp-propsrow" id="dpPropsRow">' + page + sel + '</div>';
+  }
+  /* R25：属性条里那两块（本页行 / 选中行）+ 选中后的详细属性（`#dpPropsSlot` 由 docpPropsPaint 填） */
   /* 工具分组（R15）：照 WPS 的菜单栏分组 —— 开始 / 插入 / 设计 / 放映。
      没做的组**摆明写着第几轮做**（灰掉不骗人），别放一排点了没反应的按钮。 */
   var DOCP_GROUPS = [['home', '开始'], ['insert', '插入'], ['design', '设计'], ['show', '放映']];
@@ -5729,9 +5773,12 @@ body.wz-dragging{cursor:grabbing}
       return '<div class="dp-toolgroup" data-group="design">' +
         '<span class="dp-cnt">主题与模板在上面选；这里是视图辅助</span>' +
         '<button id="dpGrid2" title="安全边距 / 栏 / 中线（Shift+F9）">网格</button>' +
-        '<button id="dpZoomFit2" title="Ctrl+0">适应窗口</button>' +
         '<button id="dpZoomIn" title="放大（Ctrl+滚轮）">放大 +</button>' +
-        '<button id="dpZoomOut" title="缩小（Ctrl+滚轮）">缩小 −</button></div>';
+        '<button id="dpZoomOut" title="缩小（Ctrl+滚轮）">缩小 −</button>' +
+        '<input id="dpZoom" class="dp-zoom" type="range" min="15" max="200" step="5" value="100" ' +
+          'title="缩放（Ctrl+滚轮也行）" aria-label="缩放百分比">' +
+        '<span id="dpZoomVal">100%</span>' +
+        '<button id="dpBrowse" title="一屏看全册（点哪页跳哪页）">浏览</button></div>';
     }
     if(g === 'insert'){
       var shapes = DOCP_SHAPES.map(function(p){
@@ -5767,7 +5814,7 @@ body.wz-dragging{cursor:grabbing}
         '<span class="dp-cnt">放映中：方向键 / 空格翻页 · Home/End 首末页 · Esc 退出 ' +
         '（全屏被系统拦下也能放，只是不铺满屏幕）</span></div>';
     }
-    /* 开始：选中后能改的样式（位置/大小在右栏，层级/删除在下面那条） */
+    /* 开始：选中后能改的样式 + 全局的撤销/重做（R25：原来它们单独占一条 `.dp-pagebar`） */
     return '<div class="dp-toolgroup" data-group="home">' +
       '<span class="dp-cnt">选中一处文字后：</span>' +
       '<button id="dpBold" title="加粗（Ctrl+B）">B</button>' +
@@ -5778,11 +5825,12 @@ body.wz-dragging{cursor:grabbing}
       '<button id="dpAlignR" title="右对齐（Ctrl+R）">右</button>' +
       '<button id="dpSizeDown" title="字号 −（Ctrl+-）">A−</button>' +
       '<button id="dpSizeUp" title="字号 +（Ctrl+=）">A+</button>' +
+      '<span class="sp"></span>' +
+      '<button id="dpUndo" title="撤销上一步（Ctrl+Z）">撤销</button>' +
+      '<button id="dpRedo" title="重做（Ctrl+Y）">重做</button>' +
       '<button id="dpFindBtn" title="跨页查找（Ctrl+F）">查找</button>' +
       '<button id="dpFindRepBtn" title="跨页替换（Ctrl+H）">替换</button>' +
-      '<button id="dpKeysBtn" title="快捷键表（Ctrl+/）">⌨ 快捷键</button>' +
-      '<span class="sp"></span>' +
-      '<span class="dp-cnt">改样式只影响选中的那一格；偏离设计阶梯只提示、不阻断</span></div>';
+      '<button id="dpKeysBtn" title="快捷键表（Ctrl+/）">⌨ 快捷键</button></div>';
   }
   /* 浏览视图（R13）：一屏看全册，点哪页跳哪页 */
   function docpWallHtml(sl){
@@ -5894,15 +5942,13 @@ body.wz-dragging{cursor:grabbing}
     var opts = DOCP_LAYOUTS.map(function(lo){
       return '<option value="' + lo[0] + '"' + (lo[0] === cur ? ' selected' : '') + '>' + lo[1] + '</option>';
     }).join('');
-    return '<div class="dp-pagebar dp-props">' +
-      '<span>本页属性</span>' +
+    return '<div class="dp-prow"><span>本页</span>' +
       '<select id="dpLayout" title="换版式">' + opts + '</select>' +
       '<input id="dpMinutes" class="dp-min" type="number" min="0" value="' +
         (parseInt(s.minutes, 10) || 0) + '" title="这一页的时长（分钟）" aria-label="本页时长（分钟）">' +
       '<span>分钟</span>' +
       '<button id="dpAddBlock" title="在本页最后加一块要点（加完点它直接改字）">＋ 加一块</button>' +
-      '<span style="flex:1"></span>' +
-      '<span class="dp-cnt">每块建议 ≤ ' + CHARS_PER_BLOCK + ' 字（超出只提示，不截断）</span></div>';
+      '<span style="flex:1"></span></div>';
   }
   /* 备注（R16）：这一页的讲稿 —— 导出后 WPS 的"备注"栏里能看到。
      为什么用 textarea 而不是富文本：备注就是给自己看的白字，越简单越不会串页。 */
@@ -6290,20 +6336,21 @@ body.wz-dragging{cursor:grabbing}
   }
   /* 右栏随选中切换：只换那一块 DOM，不重画整页（重画会丢滚动位置与焦点） */
   function docpPropsPaint(bd){
-    var host = bd.querySelector('.dp-stageflex');
-    if(!host) return;
-    var old = host.querySelector('.dp-props');
-    var tmp = document.createElement('div');
-    tmp.innerHTML = docpPropsBoxHtml();
-    var next = tmp.firstChild;
-    if(!next) return;
-    if(old) host.replaceChild(next, old); else host.appendChild(next);
+    /* R25：属性块现在长在**属性条**里（`#dpPropsSlot`），不再往舞台右边塞一张卡 */
+    var slot = bd.querySelector('#dpPropsSlot');
+    if(!slot) return;
+    slot.innerHTML = docpPropsBoxHtml();
+    var name = bd.querySelector('#dpSelName');
+    if(name){
+      var lst = docpSelList();
+      name.textContent = !DOCP_SL.sel && !lst.length ? '未选中'
+        : (lst.length > 1 ? ('已选 ' + lst.length + ' 处（含 ' + DOCP_SL.sel + '）') : (DOCP_SL.sel || '未选中'));
+    }
     docpPropsWire(bd);
   }
   function docpPropsBoxHtml(){
-    return docpPropsHtml() || '<div class="dp-props dp-props-empty"><b>属性</b>' +
-      '<div class="dp-cnt">点一下页面上的文字、形状或图片，这里就能改<b>位置 / 大小 / 字号 / 字体 / ' +
-      '颜色 / 对齐 / 行距</b>；要加东西就切到上面的「插入」（文本框 / 形状 / 图片 / 联网取图）。</div></div>';
+    return docpPropsHtml() || '<span class="dp-cnt">点一下页面上的文字、形状或图片，' +
+      '这里就能改<b>位置 / 大小 / 字号 / 字体 / 颜色 / 对齐</b>；要加东西切到上面的「插入」。</span>';
   }
   /* 自由层对象的右栏（R21）：位置/大小/字号/颜色/填充/对齐/字重/层级/删除 + 文字 */
   function docpObjPropsHtml(o){
@@ -6441,8 +6488,6 @@ body.wz-dragging{cursor:grabbing}
     }
     var fit = bd.querySelector('#dpZoomFit');
     if(fit) fit.addEventListener('click', function(){ docpZoomSet(bd, 0); });
-    var fit2 = bd.querySelector('#dpZoomFit2');
-    if(fit2) fit2.addEventListener('click', function(){ docpZoomSet(bd, 0); });
     var zin = bd.querySelector('#dpZoomIn');
     if(zin) zin.addEventListener('click', function(){
       docpZoomSet(bd, (DOCP_SL.zoom || DOCP_SL.fit) + 0.1);
@@ -6451,8 +6496,6 @@ body.wz-dragging{cursor:grabbing}
     if(zout) zout.addEventListener('click', function(){
       docpZoomSet(bd, Math.max(0.15, (DOCP_SL.zoom || DOCP_SL.fit) - 0.1));
     });
-    var grid = bd.querySelector('#dpGrid');
-    if(grid) grid.addEventListener('click', function(){ docpGridToggle(bd); });
     var grid2 = bd.querySelector('#dpGrid2');
     if(grid2) grid2.addEventListener('click', function(){ docpGridToggle(bd); });
     var br = bd.querySelector('#dpBrowse');
@@ -6462,7 +6505,7 @@ body.wz-dragging{cursor:grabbing}
   function docpGridToggle(bd){
     DOCP_SL.grid = !DOCP_SL.grid;
     docpGridPaint(bd);
-    var g = bd.querySelector('#dpGrid');
+    var g = bd.querySelector('#dpGrid2');          /* R25：网格按钮只在「设计」组里了 */
     if(g) g.classList.toggle('dark', DOCP_SL.grid);
     showToast(DOCP_SL.grid ? '参考线已开（安全边距 / 栏 / 中线）' : '参考线已关');
   }
@@ -6589,6 +6632,45 @@ body.wz-dragging{cursor:grabbing}
     if(ev.key === 'End'){ ev.preventDefault(); docpShowJump('last'); return; }
     if(ev.key === 'F5'){ ev.preventDefault(); docpShowStart(!!ev.shiftKey); return; }
     /* 放映中吞掉其它键（含 Delete 与方向微调）—— 不 return 也不做事，等于忽略 */
+  }
+  /* ==== 「下载▾」下拉菜单：**挂到 body** 上 =========================================
+     为什么必须挂出去：菜单原来长在 `.row-card`（工具栏卡片）里，那张卡为了圆角写了
+     `overflow:hidden` → 菜单底边 592 被裁到卡片底边 223，只剩一条缝。这是**几何裁剪**，
+     加 z-index 永远没用（实测：70 已经高于所有卡片）。挂到 body + fixed 一次绕开三道：
+     `.row-card`（卡片圆角）/ `.scroll`（一轴非 visible → 另一轴也变 auto）/ `body{overflow:hidden}`。
+     z-index 取 50：**盖得住卡片**，但低于侧边面板 55、全局导航 60、遮罩 80、右键菜单 90/95、提示 200。 */
+  function wzDownMenuMount(){
+    var m = document.getElementById('wzDownMenu');
+    if(!m || m.parentNode === document.body) return;
+    document.body.appendChild(m);
+    m.classList.add('dp-menu-portal');
+  }
+  function wzDownPlace(){
+    var m = document.getElementById('wzDownMenu'), b = document.getElementById('wzDownBtn');
+    if(!m || !b) return;
+    var r = b.getBoundingClientRect();
+    var mw = m.offsetWidth || 216, mh = m.offsetHeight || 300;
+    var left = Math.max(8, Math.min(window.innerWidth - mw - 8, Math.round(r.right - mw)));
+    var below = window.innerHeight - r.bottom - 12;
+    /* 下面放不下、上面放得下 → 翻到按钮上方（免得菜单被视口底边切掉） */
+    var top = (below < mh && r.top - mh - 8 > 8) ? Math.round(r.top - mh - 6) : Math.round(r.bottom + 6);
+    m.style.left = left + 'px';
+    m.style.top = Math.max(8, top) + 'px';
+  }
+  function wzDownOpen(){
+    wzDownMenuMount();
+    var m = document.getElementById('wzDownMenu'), box = document.getElementById('wzDown');
+    if(!m) return;
+    if(box) box.classList.add('open');
+    m.classList.add('open');
+    m.style.display = 'block';            /* 先显示才能量到尺寸，再定位 */
+    wzDownPlace();
+  }
+  function wzDownClose(){
+    var m = document.getElementById('wzDownMenu'), box = document.getElementById('wzDown');
+    if(box) box.classList.remove('open');
+    if(m) m.classList.remove('open');
+    if(m) m.style.display = '';
   }
   /* ==== 联网取图（R18 前置 · 与同事的 agent 相连那条路）=================================
      为什么先做这一件：同事的教案 agent 找到/生成好的配图，传过来就是**一个 URL**；

@@ -734,9 +734,11 @@ async function openDocPanel(doc) {
         !!doc.getElementById('dpInsText') && !!doc.getElementById('dpImgGet'),
         txt(doc.querySelector('#wzDocPane .dp-toolgroup[data-group="insert"]')).slice(0, 60));
       doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);
-      check('「设计」组里有网格/适应窗口/放大缩小',
-        !!doc.getElementById('dpGrid2') && !!doc.getElementById('dpZoomFit2') &&
-        !!doc.getElementById('dpZoomIn') && !!doc.getElementById('dpZoomOut'));
+      check('「设计」组里有网格/缩放/放大缩小/浏览（R25：缩放类只在这一处）',
+        !!doc.getElementById('dpGrid2') && !!doc.getElementById('dpZoomIn') &&
+        !!doc.getElementById('dpZoomOut') && !!doc.getElementById('dpZoom') &&
+        !!doc.getElementById('dpBrowse') && !doc.getElementById('dpZoomFit2'),
+        'R25 去重后设计组');
       doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(400);
 
       /* R18 前置：联网取图（同事的 agent 给 URL 那条路） */
@@ -900,13 +902,20 @@ async function openDocPanel(doc) {
         'exports ' + nExp + '→' + exports.length + ' · steps0=' + JSON.stringify(expSteps[0] || null));
       doc.querySelector('#wzDownMenu [data-dl="pptx"]').blur?.();
 
-      /* R13：缩放 */
+      /* R13：缩放（R25：缩放条搬进「设计」组，翻页条只留翻页/页数/适应窗口/加一页） */
       const wrap = () => doc.querySelector('#wzDocPane .dp-slidewrap');
       check('缩放条默认是"适应窗口"（0.375）', wrap().dataset.scale === '0.3750', wrap().dataset.scale);
       check('状态栏说了页码与缩放',
         /第 \d+ \/ \d+ 页/.test(txt(doc.getElementById('wzStatusBar'))) &&
         /38%/.test(txt(doc.getElementById('wzStatusBar'))),
         txt(doc.getElementById('wzStatusBar')));
+      check('翻页条只留 翻页/页数/适应窗口/加一页（R25 去重）',
+        !!doc.getElementById('dpPgBar') && !!doc.getElementById('dpZoomFit') &&
+        !!doc.getElementById('dpAddPage') &&
+        !doc.querySelector('#dpPgBar #dpZoom') && !doc.querySelector('#dpPgBar #dpGrid') &&
+        !doc.querySelector('#dpPgBar #dpBrowse'),
+        txt(doc.getElementById('dpPgBar')).slice(0, 60));
+      doc.querySelector('#wzDocPane .dp-tt[data-tool="design"]').click(); await sleep(400);
       const zs = doc.getElementById('dpZoom');
       zs.value = '150'; zs.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(300);
       check('拖缩放条 → 画布 scale 变了并显示百分比',
@@ -929,11 +938,11 @@ async function openDocPanel(doc) {
       check('Shift+F9 出参考线（安全边距框 + 12 栏 + 中线）',
         !!doc.querySelector('#wzDocPane #dpCanvas .dp-grid .dp-gridbox') && gridCols === 12,
         gridCols + ' 栏');
-      doc.getElementById('dpGrid').click(); await sleep(200);
+      doc.getElementById('dpGrid2').click(); await sleep(200);
       check('再点「网格」关掉（不残留在页面上）',
         !doc.querySelector('#wzDocPane #dpCanvas .dp-grid'));
 
-      /* R13：浏览视图 */
+      /* R13：浏览视图（R25：入口在设计组） */
       doc.getElementById('dpBrowse').click(); await sleep(600);
       const cards = doc.querySelectorAll('#wzDocPane .dp-wall .dp-wallcard');
       check('浏览视图是一屏缩略图墙', cards.length === 5 && !doc.querySelector('#wzDocPane #dpCanvas'),
@@ -1564,19 +1573,27 @@ async function openDocPanel(doc) {
         doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
       }
 
-      /* R24 收口：空态与"表里都有什么"的一次性核对 */
+      /* R24 收口 + R25：空态与结构（属性条跟在按钮下、不再有右栏卡与对象条） */
       {
         doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
         doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await sleep(250);
-        const props = txt(doc.getElementById('dpProps') || doc.querySelector('#wzDocPane .dp-props'));
-        check('没选中时右栏给的是"能做什么"（不是一片空白）',
-          /点一下页面上的文字/.test(props) && /插入/.test(props), props.slice(0, 46));
-        check('没选中时对象操作条是灰的（不会点了没反应）',
+        const row = doc.getElementById('dpPropsRow');
+        check('属性条就在工具按钮下面（本页行 + 选中行都在同一块里）',
+          !!row && /本页/.test(txt(row)) && /选中/.test(txt(row)) &&
+          row.previousElementSibling && /dp-toolgroup/.test(row.previousElementSibling.className || ''),
+          txt(row).slice(0, 46));
+        check('R25 去重：不再有右栏属性卡 / 对象条 / 本页属性卡 / 底部条',
+          !doc.querySelector('#wzDocPane .dp-stageflex .dp-props') &&
+          !doc.querySelector('#wzDocPane .dp-objs') &&
+          !doc.querySelector('#wzDocPane .dp-pagebar.dp-props'),
+          '四条多余的都撤了');
+        check('没选中时"选中"行如实写"未选中"，操作按钮是灰的',
+          /未选中/.test(txt(doc.getElementById('dpSelName'))) &&
           ['dpUp', 'dpDown', 'dpReset', 'dpDel'].every((id) => {
             const b = doc.getElementById(id);
-            return !b || b.disabled;
-          }), '未选中');
+            return b && b.disabled;
+          }), txt(doc.getElementById('dpSelName')));
       }
       doc.querySelector('#wzLeft .wz-thumb[data-thumb="0"]').click(); await sleep(600);
       check('（收尾）回到第 1 页', /第 1 \//.test(txt(doc.querySelector('#wzDocPane #dpPgBar span'))),
@@ -1642,9 +1659,14 @@ async function openDocPanel(doc) {
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1200);
-    check('服务端的"建议拆页"提示显示出来了',
-      /建议拆页/.test(txt(doc.querySelector('#wzDocPane .dp-warn'))), txt(doc.querySelector('#wzDocPane .dp-warn')));
-    check('提示是提示、内容没被截断', /其余请另起一页|只排了前 5 个/.test(txt(doc.querySelector('#wzDocPane .dp-warn'))));
+    check('每页"被精简/建议拆页"的提示**不再显示在前端**（R25 按老师要求撤掉）',
+      !/建议拆页/.test(txt(doc.querySelector('#wzDocPane'))) &&
+      !doc.querySelector('#wzDocPane #dpWarnBox'),
+      '面板里已无这类提示');
+    check('提示撤掉了，内容一个字没少（提示≠截断）',
+      /模块 6 个|内容/.test(txt(doc.querySelector('#wzDocPane'))) ||
+      doc.querySelectorAll('#wzDocPane .dp-box').length > 0,
+      doc.querySelectorAll('#wzDocPane .dp-box').length + ' 个可编辑盒子');
     check('无运行时错误', errors.length === 0, errors.slice(0, 2).join(' | '));
     w.close();
   }
