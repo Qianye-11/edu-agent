@@ -118,32 +118,97 @@ ppt-master 的版式 SVG 本来就是**槽位化**的，样例（`presentation_c
 拿的是"母版/版式继承"，代价是页内编辑退化成**槽位填充**（能改字、挪位置，不能自由加块）——
 与 §2.1 那条路是两种取舍，让老师按页签选。
 
+### 2.4 「不固化」怎么实现：风格=参数、版式=数据、特殊页=逃生口（2026-09-28 老师明确要求）
+
+老师的要求是：**通识 agent 收到一句话要求后，能按"直选内置模板"那条路去调控预览里的 PPT，而不是我们预先烘死几个固定主题**。
+
+先说清两边的事实（这决定了做法）：
+
+| | ppt-master 的做法 | 我们现在的做法 |
+|---|---|---|
+| 风格 | `references/visual-styles/*.md` 是**散文纪律**（"宣纸底 + 墨黑字 + 单一朱红印色 + 大片留白"），**故意不写 HEX** —— 由模型**即席按纪律发挥** | **3 套 tokens JSON**（数值），面板下拉选 |
+| 版式 | `templates/layouts/**` 86 个**槽位化 SVG** | `ppt_svg.py` 里 **6 个硬编码 Python 函数**（`LAYOUTS` + `_RENDERERS`） |
+| 可调性 | 模型每次生成都能变 | 只能在我们给的 3×6 里挑 |
+
+⇒ 要做到"agent 可调控、不固化"，必须把三样东西变成**数据**，并且在**不破交付底线**的前提下开放参数：
+
+1. **风格 = 参数集**（不是一张张烘死的主题）
+   `tokens` 其实**已经是数据驱动的**（`canvas / palette / type / ranges / weights / fonts / geometry / density`）。
+   所以把 18 套 visual style 翻成"**纪律 + 参数默认值**"（`style_rules`：禁项/留白倾向/装饰倾向/配对图像 + 一组可覆盖的默认数值），
+   agent 每次请求可以给 `overrides`（改主色、改密度、改留白），**渲染代码不用改**。
+2. **版式 = 数据**（不是 Python 函数）
+   现状：`LAYOUTS = ("cover","section","bullets","two-col","media","end")` 是写死的六个函数。
+   目标：版式定义落成 `content/ppt_templates/layouts/<id>.json`（**槽位表 + 装饰图元 + 排版规则**），
+   渲染器只认这份数据 → 86 个版式与 agent 自定义版式都是"加一条数据"，`LAYOUTS` 白名单改成"读注册表 + 审计校验"。
+3. **特殊页 = 逃生口**（真·不固化，但只放开一小块）
+   允许 agent 对**个别页**给"这一页用我给的 SVG / 我给的自由层对象"：
+   * 自由层 `objects[]` **已经支持**（形状/文本框/图片，绝对坐标）；
+   * 整页 SVG 覆盖是**新增**（`slides[i].svg_override`）：预览直接用它、导出把它交给 `svg_to_pptx`。
+   好处：90% 的页仍是可编辑的槽位页，10% 的"设计页"可以完全自由。
+
+**同时必须锁死的东西**（"不固化"≠"不设底线"，这些破了交付就废）：
+画布 1280×720 · 安全边距 · 字号必须落在阶梯（偏离只 warn 不拦）· 白名单元素（rect/line/path/circle/text/polyline，禁渐变/阴影/外链图）·
+预设形状的规范组格式 · **预览 = 导出**（同一份 SVG）· 审计 error 0 · `content/plans/` 一个字不写 · `.deps` 只读。
+
+**这样"调控"就成立**：agent 拿到要求 → 读我们的**规格目录**（视觉风格 18 + 模式 5 + 品牌 21 + 版式族 7/86 + 硬规则）→
+挑风格/模式/版式并给覆盖参数 → 调预览接口 → 老师立刻看到；不满意就再调一次（**每次都是一次请求，不是重新编译**）。
+
 ---
 
 ## 3. 两种使用方式（老师要的"两个都要"，落成两条产品路径）
 
-### 3.1 方式一：直接选用内置模板（在我们的面板里选，不给老师添步骤）
+### 3.1 方式一：直接选用内置模板 —— **由 agent 调控，不是一张烘死的清单**
 
-**交互**：`设计` 组里给两个下拉（现有"主题 / 模板"两个控件升级为四个）——
+**老师的要求（2026-09-28 明确）**：通识 agent 收到要求后，能按"直选内置模板"这条**去调控**预览里的 PPT，**而不是固化成固定的东西**。
 
-| 控件 | 取值 | 来源 |
+所以这一条的产品形态是**三层**（同一套能力，谁是发起者不同）：
+
+| 层 | 谁发起 | 粒度 | 用途 |
+|---|---|---|---|
+| **L1 面板直选** | 老师 | 视觉风格（18）· 沟通模式（5）· 品牌（21）· 版式（7 族 86 个）各一个下拉 | 老师自己想换风格/版式 |
+| **L2 agent 指定** | 通识 agent | 一次请求带 `design`：`{visual_style, mode, brand, layout_family, per_page:[{layout}], overrides:{...}}` | **Agent 按老师那句话去调**（如"要水墨风、8 页、带数据页"） |
+| **L3 agent 自定义** | 通识 agent | 逐页指定版式 + **自由层 `objects[]`** +（新增）**整页 SVG 覆盖** `slides[i].svg_override` | 常规版式做不出来的那一页 |
+
+**它能"调控"什么**（都是参数，渲染代码不用改）：
+
+| 可调 | 取值来自 | 落地形式 |
 |---|---|---|
-| **视觉风格** | 18 套（水墨 / 瑞士极简 / 杂志 / 财经数据 / 毛玻璃 / 孟菲斯 / 蓝图 / 黑板 / 纸雕 / 像素 / 复古海报 / Zine …） | `references/visual-styles/*.md` |
-| **沟通模式** | 5 种（金字塔 / 叙事 / 教学 / 展示 / 简报） | `references/modes/*.md` |
-| **品牌**（可选） | 21 家色板 | `templates/brands/*/templates/design_spec.md` |
-| **版式族 / 版式** | 7 族 86 个版式里挑常用的进白名单 | `templates/layouts/*/templates/*.svg` |
+| 视觉风格 | `references/visual-styles/*.md` **18 套**（散文纪律） | 我们给每套配一份"纪律 + 默认数值"（`style_rules` + tokens 默认值），**agent 可覆盖** |
+| 沟通模式 | `references/modes/*.md` **5 种** | 影响内容策略与页序建议（喂给 agent 的规则，不硬绑版式） |
+| 品牌 | `templates/brands/*/design_spec.md` **21 家**（带色值） | 色板参数（primary/secondary/accent/text/bg） |
+| 版式 | `templates/layouts/**` **7 族 86 个**槽位化 SVG | 编译成"版式数据"（槽位表 + 装饰图元）供逐页选择 |
+| 数值覆盖 | agent 的 `overrides` | `palette.accent` / `type.*` / `density.blocks_max` / `canvas.margin` / 几何禁项…（**越界会被夹 + 记 warn**） |
+| 配图 | 风格里写的"配对图像渲染" | 接 `image-renderings` 21 / `image-palettes` 15 / `image-type-templates` 12 与我们的联网取图 / AI 生图 |
 
-**难点与解法（重要）**：`visual-styles` 是**散文规则、明确不含 HEX**（原文："HEX values come from confirmation `e`; this style only governs … discipline — it names no colors"）。
-所以"直接选用"必须由**我们给每种风格配一套数值**（否则就是空壳）：
+**为什么不能只做"18 个写死的主题"**：`visual-styles` 明确**不含 HEX**（原文："HEX values come from confirmation `e`; this style only governs … discipline — it names no colors"）。
+所以正确做法是**把纪律变成参数 + 给一套默认值**：agent 可以在纪律范围内调（换主色、调密度、选版式），
+但**改不出破底线的结果**（越界夹回 + 审计 warn，见 §2.4 的"锁死清单"）。
 
-1. **数值化**：为每套视觉风格写一份 tokens（`content/ppt_templates/_builtin/<style>.json`）——
-   色板按风格的纪律定（例：`ink-wash` 宣纸底 + 墨黑字 + **单一朱红印色**；`swiss-minimal` 灰阶 + 单一高饱和锚点 + 直角禁渐变），
-   字号/边距/几何沿用我们已验收的阶梯，`source` 字段记 `ppt-master references/visual-styles/<名>.md @<commit>`；
-2. **纪律落地**：把风格的"几何/装饰纪律"变成**版式装饰层**与**审计检查**（例：ink-wash 禁重复卡片网格、要大片留白；
-   memphis 允许高饱和撞色几何块但禁阴影；swiss-minimal 直角纯色、禁渐变/阴影/圆角）；
-3. **配图对接**：风格里写了"配对图像渲染"（如 ink-wash ↔ `ink-notes`/`watercolor`），接到我们的配图三件套
-   （`image-renderings` 21 / `image-palettes` 15 / `image-type-templates` 12）与"联网取图 / AI 生图"。
-4. **样张先行**：每种风格先出 3 页样张（封面 / 要点 / 图文）给老师挑，挑中的进正式主题库（照 `docs/22` 第 1 步的老规矩：**口味由老师定，数值由工程定**）。
+**样张先行**（这一步不变）：每套风格先出 3 页样张（封面 / 要点 / 图文）给老师看；
+但样张只是**默认值**的可视化，不是天花板 —— agent 之后仍可逐次覆盖。
+
+**给 agent 的接口（R27 一起做）**：
+
+```jsonc
+// ① 读规格目录（风格纪律 + 品牌色板 + 版式清单 + 硬规则）
+GET /api/slide/design/catalog
+// → { visual_styles:[{id:"ink-wash", rules:{...}, defaults:{palette,type,density}} …],
+//     modes:[…5], brands:[{id:"huawei", palette:{…}} …],
+//     layout_families:[{id:"presentation_core", layouts:[{id:"title_content", slots:[…]}]} …],
+//     locked:{canvas:"1280x720", safe_margin:72, type_steps:[…], elements:[…]} }
+
+// ② 用这份规格出一版预览（立刻看到，不落盘）
+POST /api/slide/design/preview
+{ "session_id":"…", "design":{ "visual_style":"ink-wash", "mode":"instructional",
+    "overrides":{ "palette":{"accent":"#9E2B25"}, "density":{"blocks_max":4} },
+    "per_page":[{"layout":"section_header"},{"layout":"title_content"},{"layout":"ink_quote"}] } }
+// → { ok, pages:[SVG…], resolved:{…最终数值…}, warnings:[…], checks:[…] }
+
+// ③ 满意了再出 pptx（同一份 SVG → 原生可编辑）
+POST /api/slide/deck  { "session_id":"…", "design":{…}, "confirm":true }
+```
+
+> 与 `docs/24` 的关系：`design` 是**新增的可选字段**，不给就还是今天的行为（6 版式 + 主题）——**向后兼容**。
 
 ### 3.2 方式二：导入自己的 .pptx 当模板（对齐它的 `/create-template`）
 
@@ -189,7 +254,7 @@ ppt-master 的版式 SVG 本来就是**槽位化**的，样例（`presentation_c
 
 | 期 | 做什么 | 验收 |
 |---|---|---|
-| **R27 · 方式一（直选内置模板）** | 视觉风格编译器 + 版式编译器：先上 **3 套视觉风格**（`ink-wash` 水墨 / `swiss-minimal` 瑞士极简 / `editorial` 杂志）× **6 个版式**（`title_content` / `two_content` / `comparison` / `section_header` / `content_caption` / `hero_statement`）；`设计` 组里加"视觉风格"下拉 | 「3 风格 × 6 版式 × 3 主题」**样张对比页**给老师挑；`slide_audit --gate` error 0；导出 pptx 过 `docs/22` §6.2 四条硬验收；面板可选且**页内编辑照旧** |
+| **R27 · 方式一（agent 可调控的内置模板通道）** | 拆三步：**R27a** 设计规格注册表 + `GET /api/slide/design/catalog`（18 视觉风格"纪律+默认数值"、5 模式、21 品牌色板、7 族 86 版式、锁死清单）；**R27b** 版式数据化（把 `ppt_svg.py` 里 6 个硬编码版式改成数据定义 + 通用渲染器，白名单改读注册表）；**R27c** 规格驱动渲染接口 `POST /api/slide/design/preview` 与 `POST /api/slide/deck` 的 `design` 字段（含 `overrides` 与 `per_page`） | 「3 风格 × 6 版式」样张对比页；**同一个 agent 请求换风格/版式/主色能立刻出不同预览**（不是改代码）；`slide_audit --gate` error 0；导出过 `docs/22` §6.2 四条硬验收；面板里页内编辑照旧；不传 `design` 时行为与今天完全一致（向后兼容） |
 | **R28 · 方式二（导入自己的 pptx）** | 接 `pptx_template_import` / `register_template` / `template_validation`，把导入的 .pptx 抽成我们模板库里的登记项（母版/配色/字体/版式几何），生成时可复用 | 导入一份真实学校/答辩模板 → 填 → 预览（`pptx_to_svg`）→ 导出，**未改页面逐字节保留**、内容零丢失校验通过；原稿只读 |
 | **R29 · 剩下 15 套视觉风格** | 按 R27 的流程批量数值化（memphis / dark-tech / blueprint / chalkboard / paper-cut / pixel-art / vintage-poster / zine …）+ 5 种沟通模式接进"内容策略" | 每套 3 页样张；tokens 单测（字号在区间/字体本机已装/禁项扫描）全绿 |
 | **R30 · 其余版式族** | `report_core` / `editorial_bleed` / `story_vertical` / `presentation_core_43` 等族的常用版式继续编译（共 86 个，按需） | 同上（每个版式过闸门） |
@@ -204,8 +269,10 @@ ppt-master 的版式 SVG 本来就是**槽位化**的，样例（`presentation_c
 
 ## 7. 给同事 agent 的接口（与 `docs/24` §7 对齐）
 
-* 新版式/新主题一旦登记，agent **不用改代码**：`GET /api/slide/fill/plan` 与 `GET /api/slide/render` 的响应里会多出可选 `layout` 与 `themes`；
-* agent 想用某个品牌风格：`theme_id` 给我们的新 id（例：`brand-google`）；
-* agent 想"整页自由排"：仍走 `objects[]`（`docs/24` §6）；
-* **待补**（`docs/24` §7.4）：`GET /api/slide/spec`（规格包）与 `POST /api/slide/audit`（自查）——
-  这两个接口让 agent 不必"盲写"，R27 一起做掉。
+* **新增（R27）**：`GET /api/slide/design/catalog`（规格目录）· `POST /api/slide/design/preview`（按规格出预览）·
+  `POST /api/slide/deck` 的 `design` 字段（按规格出 pptx）· 可选 `slides[i].svg_override`（整页 SVG 逃生口）；
+* 新版式/新风格/新品牌一旦进注册表，agent **不用改代码**就能用（目录接口里会列出来）；
+* agent 想"整页自由排"：先用常规版式，再用 `objects[]`（`docs/24` §6）；还不行就 `svg_override`；
+* **待补**（`docs/24` §7.4）：`GET /api/slide/spec`（把"规格目录"与"内容规格"合成一个入口）与
+  `POST /api/slide/audit`（自查：交稿前后量一把，回 error/warn + 怎么修）——R27 一起做掉；
+* ⚠️ **R26 起"每页被精简 / 建议拆页"的提示不再显示在老师界面上** ⇒ agent 必须读响应里的 `warnings[]` / `checks[]`。
