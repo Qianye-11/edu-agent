@@ -113,13 +113,19 @@ POST /api/slide/deck（带 design）
 
 | 验收 | 命令 | 结果 |
 |---|---|---|
-| 全量闸门（九摊） | `tools\full_gate.py` | **9/9**（语法 / 审计 error 0 / PPT 体检 49/49 / 面板 305-0 / 单测 **625 例 OK**（跳过 2）/ 注册表与来源一致 / 导出验收 **35/35**（含 WPS 真机）/ 交付体检 passed / 任务目录 error 0） |
+| 全量闸门（九摊，**独占机器跑**） | `tools\full_gate.py` | **9/9 全过**：内联语法 1 段 / 6656 行 · 版式审计 **error 0 · warn 0** · PPT 体检 **49/49** · 面板检查 **305 通过 / 0 失败** · 单元测试 **625 例 OK（跳过 2）** · 设计规格注册表与来源一致（5 份） · 导出验收 **35/35（含 WPS 真机）** · 产物交付体检 passed / passed-with-advisories · 任务目录校验 **error 0** |
 | 面板检查 | `node tools\uicheck\panel_check.js` | 305 通过 / 0 失败 |
 | 版式审计 | `tools\slide_audit.py --gate` | error 0 · warn 0（核心 6 版式基线不变） |
 | R27 新增单测 | `-m unittest tests.test_design_spec tests.test_layout_data tests.test_design_preview` | **41 例 OK**（17 / 11 / 13） |
 | 数据版式过审计 | 5 页数据版式 deck | error 0 / warn 0 |
 | 版式冒烟 | 37 个 16:9 版式逐个渲染 | 全部画得出 |
 | 样张 | `tools\design_samples.py`（3 视觉风格 × 2 数据版式 → PNG + 对比页） | 见 `data/ppt_out/design_samples/index.html` |
+
+> **跑闸门的纪律（踩过两次才写下来）**
+> ① **别同时跑第二个测试套件**：两个 `unittest discover` 并行时，`test_slide_deck` 的真导出用例出现过一次
+> 「页数一致 ❌ + 内容零丢失 ❌」（单独跑绿、独占跑也绿 —— 导出中间件在共享的 `data/tmp/ppt_jobs`）；
+> ② **别把日志写进仓库里的 `data/tmp`**：会撞上 `test_slide_template.test_import_does_not_touch_other_dirs`
+> 的目录快照（它只允许写模板目录）—— 日志写 `%TEMP%`。
 
 ---
 
@@ -140,6 +146,8 @@ POST /api/slide/deck（带 design）
    否则 `unittest discover` 时 `ModuleNotFoundError: edu_agent`；
    另外"假 session_id 一定 400"的断言在**全量跑**时不成立（`get_session_doc` 会回落到当前会话），
    已改成两分支断言 —— **不是改测试迁就实现**，400 分支仍在断言里。
+7. **并发跑测试会互相干扰**：两个套件同时跑时，真导出用例出现过一次「页数一致 ❌ + 内容零丢失 ❌」
+   （单独跑/独占跑都绿）；日志写进 `data/tmp` 也会撞到"只许写模板目录"的守卫测试。
 
 ---
 
