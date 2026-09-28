@@ -105,6 +105,7 @@
    | `z` | 层级：相对步数（±9），在 `p:spTree` 里上移/下移几层 |
    | `size` | 字号，**设计像素**；落到 pptx 时 `pt = px × (EMU/px) ÷ 12700` |
    | `font` `color` `align` `lh` `bold` `italic` | 字体名 / `#RRGGBB` / `start\|middle\|end` / 行距 0.8–3 / 加粗 / 斜体 |
+   | `underline` | 下划线（2026-09-27 追加；与 `bold`/`italic` 一套，进 SVG 的 `text-decoration` 与 pptx 的 run） |
    | `0` 与 `""` 的语义 | **`dx:0` = 回版式原位、`size:0` = 取消字号覆盖、`font:""` = 跟随主题**（服务端会把它们从合并结果里去掉）；要"取消"就给 0/空串 |
 5. 文字超容量的会被**适度压缩**（去括号补充 → 从末尾减分句 → 最后才硬截），并在 `adjustments` 里留痕
    （`by` 字段值由 `agent-mapping` 改为 `mapping`：同一套执行代码现在也给老师的页内编辑用）。

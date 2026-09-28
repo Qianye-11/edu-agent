@@ -195,6 +195,8 @@ def text(cv: Canvas, x: float, y: float, s: object, *, size: float, weight: int 
         attrs.append('font-style="italic"')
     if anchor != "start":
         attrs.append(f'text-anchor="{anchor}"')
+    if o.get("underline"):
+        attrs.append('text-decoration="underline"')
     if cv.ls:
         attrs.append(f'letter-spacing="{cv.ls}em"')
     zk = zkey or slot

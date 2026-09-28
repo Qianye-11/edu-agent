@@ -1118,6 +1118,63 @@ def _md_sig(md: str) -> str:
     return hashlib.sha1((md or "").encode("utf-8")).hexdigest()[:12]
 
 
+class SlideFindReq(BaseModel):
+    """跨页查找 / 替换（R18）：与页内编辑**同一条写路径**（`slide_deck.apply_slot`）。
+
+    `scope`：`all`（整册，默认）/ `page`（只当前页）；`slots` 给了就只动那几个槽（"只替换这一处"）。
+    `replace` 给空串 = 删除匹配（WPS 允许空替换）。`query` 按**字面**找，不当正则。
+    """
+
+    session_id: str = ""
+    query: str = ""
+    replace: str = ""
+    index: int = 0
+    scope: str = "all"
+    slots: list[str] | None = None
+    case_sensitive: bool = False
+    do: str = "find"                # find | replace
+    slides: list[dict] | None = None
+    title: str = ""
+
+
+@app.post("/api/slide/find")
+def api_slide_find(body: SlideFindReq):
+    """**跨页查找 / 替换**：查找只读；替换走 `slide_deck.replace_text`（内部用 `apply_slot`）后落库。
+
+    为什么单开一个接口而不是前端循环调 `/api/slide/slot`：一次替换可能命中十几处、跨好几页，
+    循环调用会写十几次会话（还可能中途失败留下半成品）。这里一次算完、一次落库。
+    """
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not slides:
+        slides = [s for s in (_store.get_session_doc(sid).get("slides") or []) if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可查找的幻灯片（先有教案内容）"}, status_code=400)
+    query = str(body.query or "")
+    if not query.strip():
+        return {"ok": True, "hits": [], "changed": 0, "slides": slides, "query": "", "session_id": sid}
+    pages = None if str(body.scope or "all") == "all" else [int(body.index or 0)]
+    if str(body.do or "find").lower() != "replace":
+        hits = slide_deck.find_text(slides, query, case_sensitive=bool(body.case_sensitive),
+                                    pages=pages)
+        return {"ok": True, "query": query, "hits": hits,
+                "hit_pages": sorted({h["index"] for h in hits}), "changed": 0,
+                "slides": slides, "session_id": sid}
+    out = slide_deck.replace_text(slides, query, str(body.replace or ""),
+                                  case_sensitive=bool(body.case_sensitive), pages=pages,
+                                  slots=body.slots)
+    cleaned = slide_deck.clean_slides(out["slides"])
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    if str(body.title or "").strip():
+        cur["title"] = str(body.title).strip()
+    _store.set_session_doc(sid, cur)
+    return {"ok": True, "query": query, "replace": str(body.replace or ""),
+            "hits": out["hits"], "changed": out["changed"], "pages": out["pages"],
+            "page_count": len(out["pages"]), "slides": cleaned, "session_id": sid}
+
+
 @app.post("/api/slide/save")
 def api_slide_save(body: SlideSaveReq):
     """把面板里改过的幻灯片**存回会话**（`session_docs` 表；老库不需要迁移）。

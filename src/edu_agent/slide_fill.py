@@ -825,7 +825,7 @@ def _apply_style(shape, fill: dict, scale: float = 1.0) -> None:
     段落级（`para.font`）与 run 级都设：模板里有的段落一个 run 都没有，只设 run 级会漏
     （写文字时才生成 run，那时才吃段落级的默认值）。
     """
-    keys = ("size", "font", "bold", "italic", "color", "align", "lh")
+    keys = ("size", "font", "bold", "italic", "underline", "color", "align", "lh")
     if not any(k in fill for k in keys):
         return
     from pptx.dml.color import RGBColor
@@ -846,6 +846,8 @@ def _apply_style(shape, fill: dict, scale: float = 1.0) -> None:
                     f.bold = True
                 if fill.get("italic"):
                     f.italic = True
+                if fill.get("underline"):
+                    f.underline = True
                 if fill.get("font"):
                     f.name = str(fill["font"])
                 if pt:
@@ -1160,7 +1162,7 @@ def _apply_fill_patch(fill: dict, patch: dict, the_plan: dict) -> bool:
     if m:
         fill["color"] = "#" + m.group(1).upper()
         moved = True
-    for flag in ("bold", "italic"):
+    for flag in ("bold", "italic", "underline"):
         if patch.get(flag):
             fill[flag] = True
             moved = True

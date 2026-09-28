@@ -125,9 +125,130 @@ def _items(slide: dict) -> list[str]:
 #: 可编辑槽 → `clean_slides` 字段的映射（**唯一真相源**，R10）。
 #: 前端拿到 `boxes[].slot` 后，改动都回传到 `POST /api/slide/slot`，由这里的 `apply_slot` 落字段 ——
 #: 两边各写一套映射迟早会漂（改字段名时这里会红，前端只用 slot 字符串，不认字段名）。
-_SLOT_RE = re.compile(r"^(?P<base>title|subtitle|meta|label|closing|caption"
+_SLOT_RE = re.compile(r"^(?P<base>title|subtitle|meta|label|closing|caption|index|cover_title"
                       r"|block:(?P<bi>\d+)(?::label)?"
                       r"|(?P<side>left|right):(?:heading|bullet:(?P<ci>\d+)))$")
+
+
+def iter_text_slots(slide: dict) -> list[tuple[str, str]]:
+    """一页里**所有可编辑文字**的 `(槽位, 文本)` 清单（R18：查找替换与页内编辑共用这一份）。
+
+    为什么要有它：查找替换如果自己再走一遍字段，迟早和 `apply_slot` 的槽位命名漂开
+    （一个改 `blocks`、一个改 `bullets`，最后"找得到却替换不了"）。
+    这里只列举**当前真有字的槽**，顺序就是阅读顺序（标题 → 标签 → 正文块 → 两栏）。
+    """
+    out: list[tuple[str, str]] = []
+    title = _text(slide.get("name") or slide.get("title"))
+    if title:
+        out.append(("title", title))
+    for key in ("subtitle", "meta", "label", "caption", "closing", "index", "cover_title"):
+        v = _text(slide.get(key))
+        if not v:
+            continue
+        # 封面页的 `cover_title` 与 `name` 常常是同一串字 —— 那是**同一处**文字（渲染时取其一），
+        # 报两遍会让老师看到"找到 4 处"而页面上只有 3 处（踩过：替换数也跟着翻倍）。
+        if key == "cover_title" and v == title:
+            continue
+        out.append((key, v))
+    for i, b in enumerate(_blocks(slide) or [{"label": "", "text": b} for b in _bullets(slide)]):
+        if _text(b.get("label")):
+            out.append((f"block:{i}:label", _text(b["label"])))
+        if _text(b.get("text")):
+            out.append((f"block:{i}", _text(b["text"])))
+    for side in ("left", "right"):
+        col = slide.get(side) if isinstance(slide.get(side), dict) else {}
+        if _text(col.get("heading")):
+            out.append((f"{side}:heading", _text(col["heading"])))
+        for j, x in enumerate(col.get("bullets") or []):
+            if _text(x):
+                out.append((f"{side}:bullet:{j}", _text(x)))
+    return out
+
+
+def _find_spans(text: str, query: str, *, case_sensitive: bool = False) -> list[tuple[int, int]]:
+    """`query` 在 `text` 里的出现位置（**按字面找，不当正则**：老师输入 `(` 不该报错）。"""
+    q, t = str(query or ""), str(text or "")
+    if not q or not t:
+        return []
+    if case_sensitive:
+        hay, needle = t, q
+    else:
+        hay, needle = t.lower(), q.lower()
+    spans, i = [], hay.find(needle)
+    while i >= 0:
+        spans.append((i, i + len(q)))
+        i = hay.find(needle, i + len(q))
+    return spans
+
+
+def find_text(slides: list[dict] | None, query: str, *, case_sensitive: bool = False,
+              pages: list[int] | None = None) -> list[dict]:
+    """跨页找字：返回 `[{index, slot, text, snippet, count}]`（`pages` 给了就只找那几页）。
+
+    备注（`notes`）也算 —— 它是要讲给学生的台词，找不到会很奇怪；但它的槽位名不是版式槽，
+    所以 `slot` 给 `"notes"`，前端知道"跳页 + 高亮备注框"而不是"选中某一格"。
+    """
+    want = set(pages) if pages is not None else None
+    hits: list[dict] = []
+    for i, s in enumerate(slides or []):
+        if not isinstance(s, dict) or (want is not None and i not in want):
+            continue
+        for slot, text in iter_text_slots(s):
+            spans = _find_spans(text, query, case_sensitive=case_sensitive)
+            if spans:
+                a, b = spans[0]
+                hits.append({"index": i, "slot": slot, "text": text, "count": len(spans),
+                             "snippet": text[max(0, a - 8):b + 12]})
+        note = _text(s.get("notes"))
+        if note and _find_spans(note, query, case_sensitive=case_sensitive):
+            hits.append({"index": i, "slot": "notes", "text": note, "count": 1,
+                         "snippet": note[:40]})
+    return hits
+
+
+def replace_text(slides: list[dict] | None, query: str, replace: str, *,
+                 case_sensitive: bool = False, pages: list[int] | None = None,
+                 slots: list[str] | None = None) -> dict:
+    """跨页替换（**走 `apply_slot` 同一条写路径**）：返回 `{slides, changed, pages, hits}`。
+
+    `slots` 给了就只替换那几个槽（前端"只替换这一处"用）；`replace` 给空串 = 删除匹配。
+    改完的 `slides` 交给调用方过一遍 `clean_slides` 再落库（与页内编辑一致）。
+    """
+    want = set(pages) if pages is not None else None
+    only = set(slots) if slots else None
+    out = [dict(s) if isinstance(s, dict) else {} for s in (slides or [])]
+    changed, touched_pages, hits = 0, [], []
+    for i, s in enumerate(out):
+        if want is not None and i not in want:
+            continue
+        for slot, text in iter_text_slots(s):
+            if only is not None and slot not in only:
+                continue
+            spans = _find_spans(text, query, case_sensitive=case_sensitive)
+            if not spans:
+                continue
+            new = text
+            for a, b in reversed(spans):
+                new = new[:a] + str(replace) + new[b:]
+            res = apply_slot(s, slot, new)
+            if res.get("ok"):
+                changed += len(spans)
+                hits.append({"index": i, "slot": slot, "before": text, "after": new,
+                             "count": len(spans)})
+        note = _text(s.get("notes"))
+        if note and (only is None or "notes" in only):
+            spans = _find_spans(note, query, case_sensitive=case_sensitive)
+            if spans:
+                new = note
+                for a, b in reversed(spans):
+                    new = new[:a] + str(replace) + new[b:]
+                s["notes"] = new[:2000]
+                changed += len(spans)
+                hits.append({"index": i, "slot": "notes", "before": note, "after": new,
+                             "count": len(spans)})
+        if any(h["index"] == i for h in hits) and i not in touched_pages:
+            touched_pages.append(i)
+    return {"slides": out, "changed": changed, "pages": touched_pages, "hits": hits}
 
 
 def apply_slot(slide: dict, slot: str, text: str) -> dict:
@@ -151,11 +272,17 @@ def apply_slot(slide: dict, slot: str, text: str) -> dict:
         text = text[:400]
     base = m.group("base")
 
-    if base in ("title", "subtitle", "meta", "label", "closing", "caption"):
+    if base in ("title", "subtitle", "meta", "label", "closing", "caption", "index", "cover_title"):
         # 普通页的标题字段是 `name`，封面/结尾页是 `title`；两个都写，渲染时按版式取
         if base == "title":
+            old = _text(slide.get("name") or slide.get("title"))
             slide["title"] = text
             slide["name"] = text
+            # 封面页的标题可能另存在 `cover_title` 里（渲染时优先取它）——
+            # 它原来跟标题是同一串字时**一起改**，否则替换完封面还是老字（踩过）；
+            # 老师特意写的不一样的封面标题不动它。
+            if _text(slide.get("cover_title")) and _text(slide["cover_title"]) == old:
+                slide["cover_title"] = text
         else:
             slide[base] = text
         return {"ok": True, "slot": slot, "text": text}
@@ -485,7 +612,7 @@ def _clean_overrides(raw) -> dict:
         font = clean_font(val.get("font"))
         if font:
             item["font"] = font
-        for flag in ("bold", "italic"):        # R15：加粗/斜体（R18 的 Ctrl+B/I 也走这条）
+        for flag in ("bold", "italic", "underline"):   # R15/R18：加粗/斜体/下划线（Ctrl+B/I/U）
             if val.get(flag):
                 item[flag] = True
         if val.get("hidden"):

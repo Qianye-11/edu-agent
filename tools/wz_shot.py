@@ -29,7 +29,8 @@ BASE = "http://127.0.0.1:5174/"
 #    死循环 → Edge 一直不结束（踩过：整个截图进程 5 分钟超时）
 SHOT_JS = """
 <script>(function(){
-  var task = %(task)s, busy = false, n = 0, pick = %(pick)s, show = %(show)s, group = %(group)s;
+  var task = %(task)s, busy = false, n = 0, pick = %(pick)s, show = %(show)s, group = %(group)s,
+      keys = %(keys)s;
   function step(){
     if(busy) return; busy = true;
     try{
@@ -64,6 +65,11 @@ SHOT_JS = """
         var tab = document.querySelector('#wzDocPane .dp-tt[data-tool="' + group + '"]');
         if(tab && !tab.classList.contains('on')) tab.click();
       }
+      /* R18：快捷键表（--keys）—— 给验收留一张"表里都有什么"的图。同样防自激循环。 */
+      if(task === 'slides' && keys && !document.getElementById('dpKeyBox')){
+        var kbtn = document.getElementById('dpKeysBtn');
+        if(kbtn) kbtn.click();
+      }
       /* R17：全屏放映层（走老师那条路：按 F5）。同样要判断目标态，否则循环。 */
       if(task === 'slides' && show && !document.getElementById('dpShow')){
         var pg = document.querySelector('#wzDocPane .dp-canvas svg');
@@ -87,6 +93,7 @@ def main() -> int:
     size = next((a.split("=", 1)[1] for a in args if a.startswith("--size=")), "1600,1100")
     show = "--show" in args                      # 幻灯片页签：按 F5 进放映再拍（R17）
     group = next((a.split("=", 1)[1] for a in args if a.startswith("--group=")), "")
+    keys = "--keys" in args                     # 幻灯片页签：拉开快捷键表再拍（R18）
     args = [a for a in args if not a.startswith("--")]
     tabs = [t for t in args if t in ("plan", "doc", "md", "slides")] or \
            ["plan", "doc", "md", "slides"]
@@ -116,12 +123,14 @@ def main() -> int:
         page.write_text(doc_html[:doc_html.rfind("</body>")] +
                         (SHOT_JS % {"task": "'%s'" % tab, "pick": "'%s'" % pick,
                                     "show": "true" if show else "false",
-                                    "group": "'%s'" % group}) +
+                                    "group": "'%s'" % group,
+                                    "keys": "true" if keys else "false"}) +
                         doc_html[doc_html.rfind("</body>"):],
                         encoding="utf-8")
-        png = OUT / ("wz_%s%s%s%s%s.png" % (tab, "-sel" if (tab == "slides" and pick and not show) else "",
+        png = OUT / ("wz_%s%s%s%s%s%s.png" % (tab, "-sel" if (tab == "slides" and pick and not show) else "",
                                            "-show" if (tab == "slides" and show) else "",
                                            ("-" + group) if (tab == "slides" and group) else "",
+                                           "-keys" if (tab == "slides" and keys) else "",
                                            "" if size == "1600,1100" else "-tall"))
         r = subprocess.run([EDGE, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
                             "--force-device-scale-factor=1", "--window-size=" + size,

@@ -89,6 +89,7 @@ function makeDom(opts) {
   const deletes = [];
   const slots = [];
   const images = [];
+  const finds = [];
   /* R14：桩要像真服务端那样把 `patch`（拖动/改大小/层级/删除）应用到盒子上 ——
      真服务端在 ppt_svg.Canvas.box 里套覆盖，预览才会跟着动；桩不套就成了"假链路"（测不出回归）。 */
   const slotPatch = {};
@@ -255,6 +256,41 @@ function makeDom(opts) {
           return new Response(JSON.stringify({ ok: true, moved_to: 'content/ppt_templates/_trash/学校模板-stub' }),
             { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (p === '/api/slide/find') {
+          let b = {};
+          try { b = JSON.parse(op.body); } catch (e) {}
+          finds.push(b);
+          const q = String(b.query || '');
+          const all = [];
+          (b.slides || DOC_STUB.slides).forEach((s, i) => {
+            (s.blocks || []).forEach((bl, j) => {
+              if (q && String(bl.text || '').includes(q)) {
+                all.push({ index: i, slot: 'block:' + j, text: bl.text, count: 1, snippet: bl.text });
+              }
+            });
+            if (q && String(s.name || '').includes(q)) {
+              all.push({ index: i, slot: 'title', text: s.name, count: 1, snippet: s.name });
+            }
+          });
+          if ((b.do || 'find') === 'replace') {
+            const out = (b.slides || DOC_STUB.slides).map((s) => {
+              const c = { ...s };
+              if (q) {
+                c.name = String(c.name || '').split(q).join(b.replace || '');
+                c.blocks = (c.blocks || []).map((bl) => ({ ...bl,
+                  text: String(bl.text || '').split(q).join(b.replace || '') }));
+              }
+              return c;
+            });
+            const pages = [...new Set(all.map((h) => h.index))];
+            return new Response(JSON.stringify({ ok: true, query: q, replace: b.replace, hits: all,
+              changed: all.length, pages, page_count: pages.length, slides: out, session_id: 'stub' }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
+          return new Response(JSON.stringify({ ok: true, query: q, hits: all, changed: 0,
+            hit_pages: [...new Set(all.map((h) => h.index))], slides: b.slides || DOC_STUB.slides,
+            session_id: 'stub' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/image/providers') {
           return new Response(JSON.stringify({
             ok: true, enabled: !o.imgOff, usable: o.imgNoSource ? [] : ['pexels'],
@@ -320,7 +356,7 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots, images };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots, images, finds };
 }
 
 async function openDocPanel(doc) {
@@ -389,7 +425,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
   {
-    const { w, doc, errors, saves, renderCalls, slots, exports, images } = makeDom({ withDoc: true });
+    const { w, doc, errors, saves, renderCalls, slots, exports, images, finds } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -838,6 +874,129 @@ async function openDocPanel(doc) {
       doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await sleep(300);
       check('再按 Esc 退出（可反复进出）', !showLayer());
+
+      /* R18：快捷键 + 剪贴板 + 查找替换 */
+      {
+        const key = (k, opt) => doc.dispatchEvent(new w.KeyboardEvent('keydown',
+          Object.assign({ key: k, bubbles: true, cancelable: true }, opt || {})));
+        const ctrl = (k, opt) => key(k, Object.assign({ ctrlKey: true }, opt || {}));
+        const lastPatch2 = () => (slots.filter((s) => s.patch).pop() || {}).patch || {};
+
+        /* 快捷键表：表里写的每一条都真的绑了（结构 + 逐条行为两段验） */
+        ctrl('/'); await sleep(500);
+        const kbox = doc.getElementById('dpKeyBox');
+        check('Ctrl+/ 打开快捷键表', !!kbox && /Ctrl\+S/.test(txt(kbox)) && /F5/.test(txt(kbox)),
+          kbox ? txt(kbox).slice(0, 40) : '(没打开)');
+        const rows = kbox ? kbox.querySelectorAll('tr').length : 0;
+        check('快捷键表逐条列全（≥15 条）', rows >= 15, rows + ' 条');
+        doc.getElementById('dpKeyClose').click(); await sleep(400);
+        check('能收起快捷键表', !doc.getElementById('dpKeyBox'));
+
+        /* Ctrl+S：立刻存一次 */
+        const nSave = saves.length;
+        ctrl('s');
+        for (let i = 0; i < 12 && saves.length <= nSave; i++) await sleep(250);
+        check('Ctrl+S 立刻保存（不等防抖）', saves.length > nSave, saves.length + ' 次');
+
+        /* Ctrl+A 多选 → 批量 Delete */
+        boxOf('block:0').click(); await sleep(200);
+        ctrl('a'); await sleep(300);
+        const nSel = doc.querySelectorAll('#wzDocPane #dpCanvas .dp-selm').length + 1;
+        check('Ctrl+A 选中本页全部文字（细框标出其余几处）', nSel >= 3 && /已选/.test(txt(doc.getElementById('dpSelName'))),
+          nSel + ' 处 · ' + txt(doc.getElementById('dpSelName')));
+        doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await sleep(200);
+
+        /* Ctrl+B/I/U + 对齐 + 字号：逐条验 */
+        boxOf('block:0').click(); await sleep(200);
+        let n0 = slots.length;
+        ctrl('b'); await sleep(400);
+        check('Ctrl+B 加粗', slots.length > n0 && lastPatch2().bold === true, JSON.stringify(lastPatch2()));
+        n0 = slots.length;
+        ctrl('i'); await sleep(400);
+        check('Ctrl+I 斜体', slots.length > n0 && lastPatch2().italic === true, JSON.stringify(lastPatch2()));
+        n0 = slots.length;
+        ctrl('u'); await sleep(400);
+        check('Ctrl+U 下划线', slots.length > n0 && lastPatch2().underline === true, JSON.stringify(lastPatch2()));
+        n0 = slots.length;
+        ctrl('e'); await sleep(400);
+        check('Ctrl+E 居中', slots.length > n0 && lastPatch2().align === 'middle', JSON.stringify(lastPatch2()));
+        n0 = slots.length;
+        ctrl('l'); await sleep(400);
+        check('Ctrl+L 左对齐', slots.length > n0 && lastPatch2().align === 'start', JSON.stringify(lastPatch2()));
+        n0 = slots.length;
+        ctrl('r'); await sleep(400);
+        check('Ctrl+R 右对齐', slots.length > n0 && lastPatch2().align === 'end', JSON.stringify(lastPatch2()));
+        n0 = slots.length;
+        ctrl('='); await sleep(400);
+        check('Ctrl+= 字号加一档', slots.length > n0 && lastPatch2().size > 0, JSON.stringify(lastPatch2()));
+        n0 = slots.length;
+        ctrl('-'); await sleep(400);
+        check('Ctrl+- 字号减一档', slots.length > n0 && typeof lastPatch2().size === 'number',
+          JSON.stringify(lastPatch2()));
+        ctrl('0'); await sleep(300);
+        check('Ctrl+0 缩放回适应窗口',
+          doc.querySelector('#wzDocPane .dp-slidewrap').dataset.scale === '0.3750',
+          doc.querySelector('#wzDocPane .dp-slidewrap').dataset.scale);
+
+        /* 剪贴板：复制一处 → 粘到另一处 */
+        boxOf('block:0').click(); await sleep(200);
+        ctrl('c'); await sleep(250);
+        check('Ctrl+C 复制一处（提示带"复制了"）', /复制了/.test(toast()), toast());
+        boxOf('block:1').click(); await sleep(200);
+        const nSlot = slots.length;
+        ctrl('v');
+        for (let i = 0; i < 12 && slots.length <= nSlot; i++) await sleep(250);
+        check('Ctrl+V 粘到选中的那一格（文字 + 样式）',
+          slots.length > nSlot && slots[slots.length - 1].slot === 'block:1',
+          JSON.stringify(slots[slots.length - 1] || {}).slice(0, 80));
+        const nThumb0 = doc.querySelectorAll('#wzLeft .wz-thumb').length;
+        ctrl('d'); await sleep(700);
+        check('Ctrl+D 复制这一页', doc.querySelectorAll('#wzLeft .wz-thumb').length === nThumb0 + 1,
+          nThumb0 + ' → ' + doc.querySelectorAll('#wzLeft .wz-thumb').length);
+        doc.getElementById('dpUndo').click(); await sleep(700);   /* 撤回，别影响后面的用例 */
+
+        /* 查找 / 替换（跨页） */
+        ctrl('f'); await sleep(500);
+        check('Ctrl+F 拉开查找条', !!doc.getElementById('dpFindBar') &&
+          doc.getElementById('dpFindBar').style.display !== 'none');
+        doc.getElementById('dpFindQ').value = '函数';
+        const nFind0 = finds.length;
+        doc.getElementById('dpFindGo').click();
+        for (let i = 0; i < 12 && finds.length <= nFind0; i++) await sleep(250);
+        await sleep(600);                       /* 等响应回来并重画命中列表（请求记录 ≠ 画好了） */
+        const fReq = finds[finds.length - 1] || {};
+        check('查找请求发给服务端（do=find，带整册数据）',
+          fReq.do === 'find' && fReq.query === '函数' && Array.isArray(fReq.slides),
+          JSON.stringify({ do: fReq.do, query: fReq.query, pages: (fReq.slides || []).length }));
+        check('命中列表列出来了（点一条能跳页）',
+          doc.querySelectorAll('#dpFindHits [data-hit]').length > 0,
+          doc.querySelectorAll('#dpFindHits [data-hit]').length + ' 条命中');
+        const hitBtns = doc.querySelectorAll('#dpFindHits [data-hit]');
+        if (hitBtns.length) {
+          hitBtns[hitBtns.length - 1].click(); await sleep(600);
+          check('点命中项 → 跳到那一页', /第 \d+ \/ \d+ 页/.test(txt(doc.querySelector('#dpPgBar span'))),
+            txt(doc.querySelector('#dpPgBar span')));
+        }
+        ctrl('h'); await sleep(500);
+        check('Ctrl+H 露出替换框', doc.getElementById('dpFindRW').style.display !== 'none');
+        doc.getElementById('dpFindQ').value = '函数';
+        doc.getElementById('dpFindR').value = '函式';
+        const nFind1 = finds.length;
+        doc.getElementById('dpFindAll').click();
+        for (let i = 0; i < 12 && finds.length <= nFind1; i++) await sleep(250);
+        check('「全部替换」一次算完一次落库（do=replace）',
+          (finds[finds.length - 1] || {}).do === 'replace' &&
+          finds[finds.length - 1].replace === '函式',
+          JSON.stringify(((finds[finds.length - 1]) || {}).replace || null));
+        await sleep(400);
+        check('替换后如实报数（提示里有"替换了"或"没找到"）',
+          /替换了|没找到/.test(toast()), toast());
+        key('Escape'); await sleep(200);
+        doc.getElementById('dpFindClose').click(); await sleep(300);
+        check('能关掉查找条', doc.getElementById('dpFindBar').style.display === 'none');
+        check('无运行时错误（R18 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+      }
 
       /* 回到第 1 页：下面的老用例（本页属性条那几条）默认在第 1 页上跑 */
       doc.querySelector('#wzLeft .wz-thumb[data-thumb="0"]').click(); await sleep(600);
