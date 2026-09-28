@@ -50,13 +50,22 @@
 
 ### 1.2 guizang-ppt-skill（**AGPL-3.0** ⇒ 只借规则与数值，**不许抄模板/脚本**；只读副本在 `data/tmp/refs/`）
 
+> **2026-09-28 复查**：上游 `op7418/guizang-ppt-skill` 的 HEAD 仍是 `c91369c`（2026-08-07）**没有更新**；
+> 但第一次盘点**漏了几块大资产**（下面标 🆕），它们比阈值更值钱 —— 逐条补齐。
+
 | 资产 | 形态 | 我们怎么用 |
 |---|---|---|
 | `references/themes.md`（Style A 电子杂志×电子墨水 **5 套** ink/paper 主题，含实测色值） | 数值 | **可引用**：写成我们的主题 tokens（标 `source`） |
-| `references/themes-swiss.md`（Style B 瑞士国际主义 **4 套**单一锚点色 + 统一灰阶） | 数值 | 同上（这就是 `docs/22` §2A 说的"第 4 套风格"来源） |
-| `references/layouts.md`（Style A **10 个版式**）· `layouts-swiss.md`（Style B **22 个登记版式** + **P0 对齐四法则** + 组件必选/可选）· `swiss-layout-lock.md` | **结构规则（散文）** | **按规则自己实现**：在我们 `ppt_svg.py` 里写等价版式（自己的想法+代码），**不许复制它的 HTML/CSS** |
-| `scripts/validate-swiss-deck.mjs`（静态 + 渲染两级检查） | 规则与阈值 | ✅ 阈值已采纳进 `src/edu_agent/slide_audit.py`（0.74 / 170px / 0.93 / 32·14px / 版式白名单 / 主色 <10%）；**P0 对齐四法则尚未采纳** → 见 §4.3 |
-| `assets/template.html`(102KB) · `template-swiss.html`(163KB) | **AGPL 模板** | ❌ **一个字都不许进本仓库或本产品链路** |
+| `references/themes-swiss.md`（Style B **4 套**单一锚点色 + 统一灰阶） | 数值 | 同上；实测值：`--paper:#fafaf8` `--ink:#0a0a0a` 灰阶 `#f0f0ee/#d4d4d2/#737373`，锚点 `#002FA7` 克莱因蓝 · `#FFD500` 柠檬黄 · `#C5E803` 柠檬绿 · `#FF6B35` 安全橙（`--accent-on` 随之给白或黑） |
+| `references/layouts.md`（Style A **10 个版式**）· `layouts-swiss.md`（Style B **22 个登记版式** + **P0 对齐四法则** + 组件必选/可选）· `swiss-layout-lock.md`（Golden Source 规则：正文页必须来自登记版式，`<section>` 上写 `data-layout="Sxx"`） | **结构规则（散文）** | **按规则自己实现**：在我们 `ppt_svg.py` 里写等价版式（自己的想法+代码），**不许复制它的 HTML/CSS** |
+| 🆕 `references/checklist.md`（**36.8KB / 45 个具名检查项**：P0 硬错 · P1 节奏 · P2 打磨 · P3 操作细节） | **规则清单** | **这是它的"优化方案"本体**，我们只采纳了阈值。可测的条目值得逐条搬进 `slide_audit.py`，例如：kicker 必须在大标题**上方**；大字号双约束 `min(Xvw, Yvh)` 中 **Y ≥ X×1.6**；图片混排"直角、同高、只做证据"；底部分页安全区；**字号不得小到看不清 + 字重阶梯**；Hero 页与密集页**交替**（整册节奏）；同一概念中英文用法统一；页码一致；标题与正文间距 |
+| 🆕 `references/presenter-mode.md`（12 节：`SPEAKER_NOTES` 数据结构 / 稳定页面 ID / 时间控制与**排练** / 自动翻页 / 激光笔与观众屏 / 演前检查与快捷键 / 生成后验证）+ `scripts/validate-presenter-mode.mjs` | **行为契约** | 我们只有"全屏放映 + 方向键 + 备注"。**演讲者视图**（当前页 + 下一页 + 讲稿 + 计时）对老师上课是真需求 —— 按它的契约自己实现 |
+| 🆕 `references/screenshot-framing.md`（截图装框：优先级 / 语义参数 / 风格映射 / 背景强度规则）+ `assets/screenshot-backgrounds/`（Style A 5 张 + Style B 4 张 webp） | 规则 + **AGPL 图片资产** | 规则可借（截图按风格配上背景强度）；**9 张背景图不许进仓库**，要就自己生成 |
+| 🆕 `references/image-prompts.md`（**7 类配图提示词**：人文纪实 / 杂志信息图 / 流程 / 对比 / 系统关系 / 截图再设计 / 数据大字报 + 比例选择 + "**先选目标槽位、再生成图片**"） | 规则 | 正好接我们待定的 **AI 配图**能力；"先定槽位再定图片比例"与我们的 `media` 版式图位天然契合 |
+| 🆕 `references/components.md` + `swiss-map-component.md`（组件库；**地图组件** S08：必须有 `+`/`-`/`DRAG`，默认禁滚轮缩放以免触发翻页） | 规则 | 地图组件对地理课有用，但工作量大 —— 记进候选 |
+| `scripts/validate-swiss-deck.mjs`（静态 + 渲染两级检查；实测阈值：标题间距 `isLocal ? 14 : 32`、安全线 `H×0.93`、`bottomGap>170 && activeRatio<0.74` 判 warn） | 规则与阈值 | ✅ 阈值已采纳进 `src/edu_agent/slide_audit.py`；**清单条目与对齐法则尚未采纳** |
+| `assets/template.html`(102KB) · `template-swiss.html`(163KB) · `assets/motion.min.js`(62.7KB) · `assets/ppt-skill-showcase.png`(3.5MB) | **AGPL 资产** | ❌ **一个字都不许进本仓库或本产品链路**（含 9 张背景图） |
+| `SKILL.md`(42.7KB) · `docs/unification-plan.md` · `.github/workflows/presenter-runtime-sync.yml` | 说明与内部演进 | 读思路即可（它的 HTML deck 运行时我们**不引入**） |
 
 ---
 
@@ -185,6 +194,8 @@ ppt-master 的版式 SVG 本来就是**槽位化**的，样例（`presentation_c
 | **R29 · 剩下 15 套视觉风格** | 按 R27 的流程批量数值化（memphis / dark-tech / blueprint / chalkboard / paper-cut / pixel-art / vintage-poster / zine …）+ 5 种沟通模式接进"内容策略" | 每套 3 页样张；tokens 单测（字号在区间/字体本机已装/禁项扫描）全绿 |
 | **R30 · 其余版式族** | `report_core` / `editorial_bleed` / `story_vertical` / `presentation_core_43` 等族的常用版式继续编译（共 86 个，按需） | 同上（每个版式过闸门） |
 | **R31 · 优化方案补全** | guizang 的 P0 对齐四法则做成审计新检查 + 面板"一键按建议修"；`svg_quality_checker` 的建议接进结果条 | 负样本自证（`slide_audit --selftest` 扩例） |
+| **R32 · guizang 清单落地（复查后新增）** | 把 `checklist.md` 里**可测**的条目逐条搬进 `slide_audit.py`（kicker 位置 / 大字号双约束 `Y≥X×1.6` / 图片混排规则 / 底部分页安全区 / 字重阶梯 / **整册节奏**：Hero 与密集页交替 / 术语中英一致 / 页码一致），每条给"怎么修" | 每条都有正负样本；面板结果条能列出"哪一页、哪一条、怎么改" |
+| **R33 · 演讲者视图（复查后新增）** | 按 `presenter-mode.md` 的契约做**演讲者视图**：当前页 + 下一页 + 讲稿 + 计时（含排练），观众屏仍是全屏放映 | 双屏/单屏都能用；讲稿不串页；Esc 退出恢复；面板检查覆盖 |
 
 **为什么 R27 先上 3 套视觉风格 + 6 个版式**：这是老师真正会挑的粒度（风格=外观口味，版式=页面排法），
 一套做完就能拿去选；一下子上 18 套 × 86 版式只会做出一堆没人看的样张。
