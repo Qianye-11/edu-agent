@@ -1407,6 +1407,27 @@ def api_slide_slot(body: SlideSlotReq):
             "pages": len(cleaned), "warnings": warnings, "session_id": sid}
 
 
+@app.get("/api/slide/design/catalog")
+def api_slide_design_catalog(full: bool = False):
+    """R27a：**设计规格目录** —— 告诉 agent（与面板）"有哪些可调的东西"。
+
+    内容：视觉风格 18（纪律 + 我们给的默认数值）· 沟通模式 5 · 品牌 21（色板）· 版式 7 族 86 个 ·
+    可覆盖的数值键与硬边界 · **锁死清单**（画布/安全边距/元素白名单/预览=导出/审计 error 0/落盘红线）。
+
+    `?full=true` 才带上规则全文与版式槽位几何（默认只给 id 与一句话，别让目录接口吐 200KB 出去）。
+    注册表是**自包含**的（`content/ppt_templates/_design/*.json`，由 `tools/compile_design_registry.py`
+    从 `.deps` 编译而来）—— 两份 skill 不在场也照常可用（`docs/29` §1.2 红线）。
+    """
+    from edu_agent import design_spec as _ds
+
+    try:
+        return _ds.catalog(full=bool(full))
+    except FileNotFoundError as exc:                     # 注册表没编译过：说清怎么修，不 500
+        return JSONResponse({"ok": False, "error": f"设计规格注册表未就绪：{exc}",
+                             "hint": "跑 .venv\\Scripts\\python.exe tools\\compile_design_registry.py"},
+                            status_code=200)
+
+
 @app.get("/api/slide/image/providers")
 def api_slide_image_providers():
     """联网取图的状态：先把"现在能不能搜图、缺什么"说清楚（不假装能搜）。"""

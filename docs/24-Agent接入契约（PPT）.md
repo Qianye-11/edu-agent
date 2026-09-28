@@ -180,7 +180,88 @@
 
 ---
 
-## 7. 响应与错误码
+## 7. 让 agent 参与「预览里的 PPT」：三条做法（2026-09-28 补）
+
+> **先纠一个前提**：预览里的 PPT **不是**任何 agent / skill 画出来的，是服务端按 `slides` 数据**现渲染的 SVG**
+> （D13 单源：同一份 SVG 既做预览又做导出）。所以"agent 生成预览里的 PPT"＝**让 agent 负责数据**，
+> 不是让它画图。两个 skill 的位置：`ppt-master`（MIT）只在**导出**那一步上场；`guizang-ppt-skill`（AGPL）
+> **不在运行期上场**，只贡献了阈值（见 `docs/22` §2A / §7.1b）。
+
+| 做法 | agent 给什么 | 现在能不能跑 | 代价 |
+|---|---|---|---|
+| **1 · 只写内容** | `lesson`（本文 §2） | ✅ **0 开发** | 设计自由度＝我们的 6 版式 |
+| **2 · 整页交给 agent（推荐）** | `slides[]`：`layout` + 槽位文字 + **`objects[]`** + `image_url`，回传 `POST /api/slide/save` | ⚠️ **数据面已通**，缺"规格包 + 自查接口" | 无（每块仍可选中/改字，导出仍是原生形状） |
+| **3 · agent 直出 SVG** | 每页一段 SVG | ❌ 需新开口（机制上有先例：模板预览就是 `pptx_to_svg.py` 产出的 SVG 当预览页） | **丢掉页内编辑**（R14–R26 的选中/拖动/改字建立在槽位模型上） |
+
+### 7.1 做法 2 的实操（今天就能试）
+
+```jsonc
+POST /api/slide/save
+{ "session_id": "…", "title": "3.3 幂函数",
+  "slides": [
+    { "layout": "cover", "cover_title": "3.3 幂函数", "subtitle": "人教A版 · 高一", "meta": "1 课时" },
+    { "layout": "bullets", "name": "情境导入", "minutes": "5",
+      "bullets": ["投影五个实例", "追问：这些函数有什么共同点"],
+      "objects": [ { "kind": "shape", "shape": "rightArrow", "x": 880, "y": 320, "w": 280, "h": 90,
+                     "fill": "#EEF2F8", "stroke": "#2F6BFF" },
+                   { "kind": "text", "x": 120, "y": 430, "w": 400, "h": 60,
+                     "text": "先看第一象限", "size": 28 } ],
+      "image_url": "https://…/figure.png", "image_credit": "来源：Wikimedia" } ] }
+```
+
+**会在哪里被收干净（这是最容易踩的）**：`slide_deck.clean_slides()` **只认** §2 / §6 列出的那些键
+（`layout/name/title/minutes/label/bullets/blocks/caption/closing/subtitle/meta/index/cover_title/left/right/objects/image/notes/slots`），
+**其余键静默丢弃**；`layout` 只认登记的 6 个；单块文字 ≤400 字；一页 ≤30 个对象；数值越界会被夹。
+⇒ 别自己发明字段名（写了不报错，只是没生效）。
+
+### 7.2 给 agent 的三条硬约束（数值来自 tokens 与审计阈值，别凭感觉）
+
+1. **密度**：一页 ≤5 模块、每块 ≤22 字（超了服务端只排前 5 个 + 在 `warnings[]` 留痕，**不截断你的原文**）；
+2. **版式合规**：内容安全线 93%、底部空白 ≤170px、内容纵向占比 ≥74%、大标题与下一块间距 ≥32px（小标题 ≥14px）；
+3. **配色几何**：主色墨迹 <10% 画布；禁渐变 / 禁阴影 / 圆角 0–4px；字号必须取自主题的字号阶梯。
+
+> ⚠️ **R26 起，"每页被精简 / 建议拆页"这类提示不再显示在老师界面上** —— 所以 agent 塞多了，
+> 界面上看不出来。**必须读响应里的 `warnings[]` / `checks[]`**（`/api/slide/save`、`/api/slide/render`、
+> `/api/slide/fill`、`/api/slide/deck` 都会回），别指望界面兜底。
+
+### 7.3 两个 skill 各自怎么"给 agent 用"
+
+**`ppt-master`（MIT，可放心用）**
+
+| 用法 | 谁调 | 说明 |
+|---|---|---|
+| 交稿前自查 | **agent 自己** | `svg_quality_checker.py --canonical-authoring --stage final --quick-generate --json`（只在做法 3 里 agent 才产 SVG；做法 1/2 由我们调） |
+| 最终转换 | 我们 | `svg_to_pptx.py <job> --quick-generate`；**判报告里的 `status`，不判退出码**（`passed-with-warnings` 仍 exit 1） |
+| 红线 | — | **不许改 `.deps/ppt-master` 下任何文件**（它启动有完整性校验，改了直接拒跑）；不许把它的包 import 进你的代码 |
+
+**`guizang-ppt-skill`（AGPL-3.0 ⚠️ 不能给它跑）**
+
+* 它的模板 / 脚本 / HTML deck 运行时**一律不许**进本仓库或本产品链路（AGPL 有网络传染条款）；
+* 正确用法：**只借数值与阈值**——这部分**已经做完了**，烘在我们的 tokens（`content/ppt_templates/_builtin/*.json`）
+  与 `src/edu_agent/slide_audit.py` 的阈值里（0.74 / 170px / 0.93 / 32·14px / 版式白名单 / 主色 <10%）；
+* 想要它那套"瑞士风"外观 ⇒ 不是"用它"，而是**照 `docs/22` §2A 的数值新增一套我们的主题**（流程同"手绘墨"）。
+
+### 7.4 还缺的三样（我们这边补，agent 侧才不用盲写）
+
+| # | 要补的 | 作用 |
+|---|---|---|
+| 1 | `GET /api/slide/spec` | 规格包：6 版式的槽位名与容量 + tokens 数值 + 自由层对象能力 + **"哪些键会被丢掉"** |
+| 2 | `POST /api/slide/audit` | 自查：把当前 `slides` 跑一遍审计，回 error/warn + **怎么修**（现在审计只是命令行 `tools/slide_audit.py`） |
+| 3 | 本文 §9 的契约补丁 | 两条导出路径**不可混用**（有 `template_id` 走 python-pptx 原地填模板、不走 `svg_to_pptx`）+ 红线（AGPL / `.deps` 只读 / `content/plans` 一个字不写 / 预览=导出不能破） |
+
+> **✅ 已补（R27a，2026-09-28）**：`GET /api/slide/design/catalog` 上线 —— **设计规格目录**，
+> 告诉 agent"有哪些可调的东西"：**视觉风格 18**（每套带 `character` 一句话 + 我们给的默认数值 +
+> `rules` 纪律全文）· **沟通模式 5** · **品牌 21**（色板）· **版式 7 族 86 个**（槽位与装饰几何）·
+> 可覆盖的数值键与硬边界 · **锁死清单**（画布 1280×720 / 安全边距 / 元素白名单 / 预览=导出 / 审计 error 0 /
+> 落盘红线）。默认只给 id 与摘要，`?full=true` 才带规则全文与版式几何。
+> 注册表是**自包含**的（`content/ppt_templates/_design/*.json`，由 `tools/compile_design_registry.py`
+> 从 `.deps` 编译而来并入库）—— **两份 skill 不在场也照常可用**。
+> 配 `src/edu_agent/design_spec.py` 的解析器：`{visual_style, mode, brand, overrides, per_page}`
+> → 一份与内置主题同构的 tokens（越界夹回 + `warnings` 说明）。渲染接口（`design/preview`）在 R27c。
+
+---
+
+## 8. 响应与错误码
 成功：`{ok: true, schema, filename, outDir, file, pages, checks[], adjustments[], download_url}`
 
 | 情况 | HTTP | body |
@@ -196,7 +277,7 @@
 
 ---
 
-## 8. 变更记录
+## 9. 变更记录
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
@@ -208,10 +289,11 @@
 | — | 2026-09-27 | R15：`mapping[].fills[]` 追加样式键 `size/font/color/align/lh/bold/italic`；`POST /api/slide/render` 的响应追加 `fonts`（右栏字体清单，主题栈在前）与 `canvas` 的 `cols/gutter/content_w`（网格与吸附用）。**`0`/`""` 的语义**：`dx:0` = 回版式原位、`size:0` = 取消字号覆盖、`font:""` = 跟随主题（服务端从合并结果里去掉这些键）。代码审计新增两条 **warn**（不阻断）：`font-scale-off`（字号不在设计阶梯）、`font-family-off`（非主题字体） |
 | — | 2026-09-27 | **R18 前置（联网）**：新增 §5「配图：给我一个图片 URL 就行」；`POST /api/slide/image/attach`（`url`/`index`/`credit`/`action:"detach"`，需 `confirm:true`）；`lesson.slides[]` 支持 `image_url`/`image_credit`。skill `web-image`（默认开）。规矩：只认公网 http/https（拒内网）、≤10MB、png/jpg/webp/gif、落 `data/uploads/`。`GET /api/slide/image/providers` 报图源可用性（免 key 的两家本机连不上、Pexels/Pixabay 缺 key，都如实说） |
 | — | 2026-09-27 | **R21（自由层）**：新增 §6「你也可以直接给形状与文本框」；`lesson.slides[]` 支持 `objects[]`（`kind`/`shape`/绝对几何/填充描边/文字样式，一页 ≤30，id 撞车自动重编）；面板侧新增 `POST /api/slide/object`（`add/patch/delete/up/down/set`）。导出后是 pptx 里的原生可编辑形状 |
+| — | 2026-09-28 | **新增 §7「让 agent 参与预览里的 PPT」**：三条做法（只写内容 / 整页交给 agent + 自由层【推荐】/ agent 直出 SVG）、做法 2 的实操样例、给 agent 的三条硬约束、两个 skill 的用法与红线（ppt-master 交稿前自查、最终转换由我们调、不许改 `.deps`；guizang **不能给它跑**，只借数值）、以及我们还要补的三样（`GET /api/slide/spec`、`POST /api/slide/audit`、§9 契约补丁）。⚠️ 注明 **R26 起"每页被精简/建议拆页"提示不再显示在老师界面上，agent 必须读响应里的 `warnings[]`** |
 
 ---
 
-## 9. 最小示例（Python）
+## 10. 最小示例（Python）
 
 ```python
 import httpx

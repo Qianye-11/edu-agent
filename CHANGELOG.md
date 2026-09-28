@@ -83,6 +83,31 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 新增（R27a · 设计规格注册表 + 目录接口，2026-09-28）
+
+老师要的是「agent 收到要求后能**调控**预览里的 PPT，而不是固化成固定的东西」。R27 拆三步，这是第一步。
+
+1. **编译器** `tools/compile_design_registry.py`：把两份 skill 的设计规格读一遍、编译成**自包含**注册表并入库
+   （`.deps` 只用于"重新编译"）——
+   `content/ppt_templates/_design/{visual_styles,modes,brands,layouts,_meta}.json`，实测盘点
+   **视觉风格 18 · 沟通模式 5 · 品牌 21（色板）· 版式族 7 · 版式 86**（来源 commit `481e057`，MIT 标注在 `_meta`）。
+2. **"纪律 + 默认数值"**：visual style 原文**明确不含 HEX**，所以每套风格的默认色板/几何/密度由我们给 ——
+   `swiss-minimal`（直角、纯色、禁阴影、灰阶 + 单一锚点 `#002FA7`）、`ink-wash`（宣纸底 + 墨黑字 +
+   **单一朱红印色 `#9E2B25`**、更松的密度）、`editorial`（杂志层级、允许略密）**三套人工调**；
+   其余 15 套按各自纪律机械派生（暗色风格→暗底等），并在注册表里标 `tuned:false`（等样张评审再逐套调）。
+3. **解析器** `src/edu_agent/design_spec.py`：`{visual_style, mode, brand, overrides, per_page}` →
+   一份与内置主题**同构**的 tokens（渲染与审计读同一口径）。叠加顺序 **基准 → 风格 → 品牌 → overrides**；
+   越界**夹回并记 warn**（实测 `radius=99→16`、`blocks_max=50→8`、`body=4→16`），非法色值忽略并说明，
+   不认识的风格/模式/版式如实报错；`per_page` 命中版式并回填族（跨族重名优先 16:9 主力族）。
+4. **锁死清单一并发布**（"不固化 ≠ 不设底线"）：画布 1280×720 / 安全边距 72 / 元素白名单 / 禁项 /
+   预览=导出 / 审计 error 0 / `content/plans` 与 `.deps` 只读。
+5. **接口** `GET /api/slide/design/catalog`（默认给 id 与摘要，`?full=true` 带规则全文与版式几何）——
+   agent 现在就能读"**有哪些可调的东西**"；渲染接口（`design/preview`）在 R27c。
+
+验收：`tests/test_design_spec.py` **16 例 OK**（含"产物自包含、不许出现 `.deps` 路径"与接口层 2 例）；
+`full_gate` 新增 **[5b] 注册表与来源一致**（`.deps` 不在时跳过不阻断），`--only=registry,js,audit` **3/3 全过**；
+jscheck 6656 行 OK；审计 error 0 / warn 0。文档：`docs/29` §6 标 R27a 已交付、`docs/24` §7.4 更新。
+
 ### 运维（两份 skill 的副本位置与安装入口，2026-09-28）
 
 老师问「这两个 skill 在项目里有完整的副本吗」。核查 + 加固：

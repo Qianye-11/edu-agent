@@ -106,6 +106,25 @@ def unit() -> None:
     line("单元测试全绿", ok, detail)
 
 
+def registry() -> None:
+    """R27a：设计规格注册表 —— 编译产物是否与来源 skill 一致。
+
+    `.deps` 不在（换机器没装）时**跳过不阻断**：注册表本身是入库的、自包含的，
+    没有 skill 也能跑（`docs/29` §1.2 红线）；有 skill 时才做"产物 vs 来源"的一致性比对。
+    """
+    print("\n[5b] 设计规格注册表（tools/compile_design_registry.py --check）")
+    skill = ROOT / ".deps" / "ppt-master" / "skills" / "ppt-master" / "SKILL.md"
+    if not skill.is_file():
+        line("设计规格注册表", True, "ppt-master 不在（.deps），跳过比对 —— 注册表是自包含的，运行时不受影响")
+        return
+    code, out = run([PY, "tools/compile_design_registry.py", "--check"], timeout=600)
+    diff = [ln for ln in out.splitlines() if ln.startswith("DIFF")]
+    ok = code == 0 and not diff
+    n = len([ln for ln in out.splitlines() if ln.startswith("OK")])
+    line("设计规格注册表与来源一致", ok,
+         f"{n} 份一致" if ok else f"有 {len(diff)} 份需要重新编译：{' '.join(diff)[:60]}")
+
+
 def acceptance(with_wps: bool) -> None:
     print(f"\n[6] 导出验收（tools/ppt_acceptance.py{' --with-wps' if with_wps else ''}）")
     cmd = [PY, "tools/ppt_acceptance.py"] + (["--with-wps"] if with_wps else [])
@@ -187,7 +206,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true", help="跳过单测与导出验收（约 4 分钟）")
     ap.add_argument("--no-wps", action="store_true", help="导出验收不打开 WPS 真机")
-    ap.add_argument("--only", default="", help="只跑这几摊，逗号分隔：js,audit,smoke,panel,unit,accept,delivery,batch")
+    ap.add_argument("--only", default="",
+                    help="只跑这几摊，逗号分隔：js,audit,smoke,panel,unit,registry,accept,delivery,batch")
     args = ap.parse_args()
     want = {s.strip() for s in args.only.split(",") if s.strip()}
 
@@ -207,6 +227,8 @@ def main() -> int:
         panel()
     if on("unit") and not args.quick:
         unit()
+    if on("registry"):
+        registry()
     if on("accept") and not args.quick:
         acceptance(with_wps=not args.no_wps)
     if on("delivery"):
