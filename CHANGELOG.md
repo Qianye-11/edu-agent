@@ -83,6 +83,31 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 文档（用两份 skill 的模板与优化方案 · 计划书，2026-09-28）
+
+老师要求「让同事内嵌在教案中心的 agent 用这两个 skill 里的**模板与优化方案**去生成预览里的 PPT」。
+先把两边的资产**实读盘点**，再定怎么搬（`docs/29`）：
+
+- **ppt-master（MIT，可放心用）**：7 个版式族，每族一套**槽位化的版式 SVG**（`presentation_core` 就有 **20 个**：
+  标题页/标题正文/章节/两栏/对比/纯标题/空白/正文图注/图片图注/英雄陈述/编辑分栏/三卡/KPI/时间线/
+  数据故事/标题图/双图图注/截图焦点/图表洞察/表格汇总）—— 它们带 `data-pptx-placeholder` + `data-pptx-bounds`
+  + `data-pptx-layer`，**能直接编译成我们的槽位版式**；另有 **21 家品牌**色板规格、**8 套风格**方法论、
+  规格 Schema（`design_spec.schema.json`：canvas/visual_theme/typography_system/layout_principles…）、
+  以及一排**还没接**的模板工具（`pptx_template_import` / `template_validation` / `apply_template` / `template_preview_pptx`）。
+- **guizang（AGPL，只借规则）**：9 套色板（Style A 5 + Style B 4，含实测色值）、**32 个版式规则**
+  （Style A 10 + Style B 22 个锁定版式）、**P0 对齐四法则**、validate 脚本的检查项（阈值已采纳）。
+  **它的 HTML 模板一个字都不许进来**。
+- **三个编译器**（`docs/29` §2）：① 版式编译器（它的版式 SVG → 我们的槽位版式，保留 `source` 出处）
+  ② 主题/品牌编译器（品牌色板 → 我们的 tokens，字号与几何用我们已验收的阶梯）③ 模板直通
+  （把它的一族/一套成品变成可导入 .pptx，走我们已有的"导入→填充→预览→导出"路，代价是页内编辑退化成槽位填充）。
+- **优化方案**：`svg_quality_checker`（已用）、`pptx_intake/beautify_*`（已封装在 `ppt_polish.py`）、
+  `pptx_template_import/template_validation`（待接）、guizang 的 P0 四法则（待做成审计新检查）。
+- **红线**：AGPL 隔离、`.deps/ppt-master` 只读且不入库（编译产物必须自包含）、预览=导出不能破、
+  `content/plans` 一个字不写、判 `status` 不判退出码。
+- **建议先做 R27**：版式编译器 + `presentation_core` 最常用的 6 个版式（观感第一来源就是版式；主题只是换色）。
+
+`docs/29` 新增，`docs/00` 索引同步（本次只写文档，未改代码）。
+
 ### 变更（R26 · PPT 页文案与按钮收口，2026-09-28）
 
 > 老师：「ppt 页还有好多不必显示在前端的文字，和功能重叠的按钮」——结合 `docs/26`/`27`/`28` 又清了一轮。
