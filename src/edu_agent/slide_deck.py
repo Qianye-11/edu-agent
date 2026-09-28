@@ -662,7 +662,7 @@ def clean_objects(raw) -> list[dict]:
         if len(out) >= MAX_OBJECTS:
             break
         kind = str(o.get("kind") or "shape")
-        if kind not in ("shape", "text"):
+        if kind not in ("shape", "text", "image"):
             continue
         item: dict = {"kind": kind}
         oid = str(o.get("id") or "").strip()
@@ -676,6 +676,15 @@ def clean_objects(raw) -> list[dict]:
         if kind == "shape":
             shape = str(o.get("shape") or "rect")
             item["shape"] = shape if shape in OBJECT_SHAPES else "rect"
+        if kind == "image":
+            # 图：只认 uploads 下的图片相对路径（与 `slides[i].image` 同一套口径）
+            src = str(o.get("src") or "").strip().replace("\\", "/")
+            parts = [p for p in src.split("/") if p not in ("", ".")]
+            if (not parts or len(parts) > 3 or any(p == ".." for p in parts) or len(src) > 200
+                    or Path(parts[-1]).suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp", ".gif")):
+                continue                       # 认不出图源的对象**直接丢**（渲染不出东西来）
+            item["src"] = "/".join(parts)
+            item["fit"] = "contain" if str(o.get("fit")) == "contain" else "cover"
         for k, (lo, hi) in OBJ_RANGE.items():
             try:
                 v = float(o.get(k))
@@ -724,16 +733,34 @@ def clean_objects(raw) -> list[dict]:
 
 
 def new_object(kind: str = "shape", shape: str = "rect", *, canvas: tuple[float, float] = (1280, 720),
-               theme: dict | None = None, oid: str = "") -> dict:
+               theme: dict | None = None, oid: str = "", src: str = "",
+               pic: tuple[float, float] | None = None) -> dict:
     """新插入一个对象（默认摆中间、给个能看的默认配色）—— 前端点一下就调这里。
 
     默认外观守"瑞士风"硬规则（`docs/26` §11.2）：**直角、纯色、无渐变无阴影**；
     颜色取自主题（`soft` 底 + `accent` 描边），不自己编颜色。
+    `kind="image"` 时（R22）：`src` = uploads 下的相对路径，`pic` = (宽, 高) 像素，
+    用来**按原比例**摆一个合适大小的框（不把老师的照片拉变形）。
     """
     W, H = float(canvas[0] or 1280), float(canvas[1] or 720)
     pal = ((theme or {}).get("palette") or {})
     soft = _hex_color(pal.get("soft")) or "#EEF2F8"
     accent = _hex_color(pal.get("accent")) or "#2F6BFF"
+    if kind == "image" and src:
+        pw, ph = (pic or (0.0, 0.0))
+        if pw > 0 and ph > 0:                     # 按原比例摆一个 440px 宽的框（不拉变形）
+            w = 440.0
+            h = max(80.0, min(H - 2 * 72, w * ph / pw))
+            if h >= H - 2 * 72:
+                h = H - 2 * 72
+                w = max(120.0, h * pw / ph)
+        else:
+            w, h = 440.0, 300.0
+        obj = {"kind": "image", "src": src, "fit": "cover",
+               "x": round((W - w) / 2, 1), "y": round((H - h) / 2, 1), "w": round(w, 1), "h": round(h, 1)}
+        if oid:
+            obj["id"] = oid
+        return clean_objects([obj])[0]
     if kind == "text":
         w, h = 420.0, 90.0
         obj = {"kind": "text", "x": round((W - w) / 2, 1), "y": round((H - h) / 2, 1), "w": w, "h": h,

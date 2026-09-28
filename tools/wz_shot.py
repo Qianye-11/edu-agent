@@ -30,7 +30,8 @@ BASE = "http://127.0.0.1:5174/"
 SHOT_JS = """
 <script>(function(){
   var task = %(task)s, busy = false, n = 0, pick = %(pick)s, show = %(show)s, group = %(group)s,
-      keys = %(keys)s, railsel = %(railsel)s, drag = %(drag)s, objects = %(objects)s;
+      keys = %(keys)s, railsel = %(railsel)s, drag = %(drag)s, objects = %(objects)s,
+      image = %(image)s;
   function step(){
     if(busy) return; busy = true;
     try{
@@ -93,7 +94,7 @@ SHOT_JS = """
             clientY: r.bottom - 8 }));            /* 落在目标缩略图下半 = 插到它后面 */
         }
       }
-      /* R21：插一个文本框 + 一个形状（--objects），给"自由层"留验收图。防自激循环。 */
+      /* R21/R22：插文本框 + 形状（--objects）或插一张图（--image）给验收留图。防自激循环。 */
       if(task === 'slides' && objects){
         var insTab = document.querySelector('#wzDocPane .dp-tt[data-tool="insert"]');
         if(insTab && !insTab.classList.contains('on')) insTab.click();
@@ -105,6 +106,11 @@ SHOT_JS = """
           var sh = document.querySelector('#wzDocPane [data-shape="rightArrow"]');
           if(sh) sh.click();
         }
+      }
+      if(task === 'slides' && image && window.__edu){
+        var insTab2 = document.querySelector('#wzDocPane .dp-tt[data-tool="insert"]');
+        if(insTab2 && !insTab2.classList.contains('on')) insTab2.click();
+        if(!document.querySelector('#wzDocPane .dp-box[data-slot^="obj:"]')) window.__edu.imageInsert(image);
       }
       /* R17：全屏放映层（走老师那条路：按 F5）。同样要判断目标态，否则循环。 */
       if(task === 'slides' && show && !document.getElementById('dpShow')){
@@ -133,6 +139,7 @@ def main() -> int:
     railsel = next((a.split("=", 1)[1] for a in args if a.startswith("--railsel=")), "")
     drag = next((a.split("=", 1)[1] for a in args if a.startswith("--drag=")), "")
     objects = "--objects" in args                   # 幻灯片页签：插文本框 + 形状再拍（R21）
+    image = next((a.split("=", 1)[1] for a in args if a.startswith("--image=")), "")
     args = [a for a in args if not a.startswith("--")]
     tabs = [t for t in args if t in ("plan", "doc", "md", "slides")] or \
            ["plan", "doc", "md", "slides"]
@@ -166,15 +173,17 @@ def main() -> int:
                                     "keys": "true" if keys else "false",
                                     "railsel": ("'%s'" % railsel) if railsel else "''",
                                     "drag": ("'%s'" % drag) if drag else "''",
-                                    "objects": "true" if objects else "false"}) +
+                                    "objects": "true" if objects else "false",
+                                    "image": ("'%s'" % image) if image else "''"}) +
                         doc_html[doc_html.rfind("</body>"):],
                         encoding="utf-8")
-        png = OUT / ("wz_%s%s%s%s%s%s%s%s.png" % (tab, "-sel" if (tab == "slides" and pick and not show) else "",
+        png = OUT / ("wz_%s%s%s%s%s%s%s%s%s.png" % (tab, "-sel" if (tab == "slides" and pick and not show) else "",
                                            "-show" if (tab == "slides" and show) else "",
                                            ("-" + group) if (tab == "slides" and group) else "",
                                            "-keys" if (tab == "slides" and keys) else "",
                                            "-rail" if (tab == "slides" and (railsel or drag)) else "",
                                            "-obj" if (tab == "slides" and objects) else "",
+                                           "-img" if (tab == "slides" and image) else "",
                                            "" if size == "1600,1100" else "-tall"))
         r = subprocess.run([EDGE, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
                             "--force-device-scale-factor=1", "--window-size=" + size,

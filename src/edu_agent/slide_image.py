@@ -199,6 +199,123 @@ def _sniff_ext(data: bytes) -> str:
     return ""
 
 
+IMPORT_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+#: 上传原图的体积上限（比联网取图宽松一点：手机拍的照片常常 3~8MB）
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+#: 超过这个"最长边"就先缩一版（`image_treat.py --fit`）；预览与导出都会小很多
+FIT_MAX_SIDE = 1600
+
+
+def probe(path: Path) -> dict:
+    """读一张图的宽高与体积（读不了就返回 0 —— 不阻断上传）。"""
+    info = {"width": 0, "height": 0, "bytes": 0}
+    try:
+        info["bytes"] = path.stat().st_size
+    except OSError:
+        return info
+    try:
+        from PIL import Image            # python-pptx 已经带了 Pillow（不必新增依赖）
+
+        with Image.open(path) as im:
+            info["width"], info["height"] = int(im.width), int(im.height)
+            info["format"] = str(im.format or "")
+    except Exception:                    # noqa: BLE001 认不出就当"量不到"，照样能用
+        pass
+    return info
+
+
+def save_upload(data: bytes, filename: str, session_id: str = "") -> dict:
+    """把老师**本地上传**的一张图落到 `data/uploads/<会话>/`（R22）。
+
+    与联网取图同一套红线：只写 uploads、类型白名单（按文件头兜底）、体积上限。
+    返回 `{ok, path, bytes, sha256, mime, ext, width, height, treated, treated_path}`。
+    """
+    if not data:
+        return {"ok": False, "error": "这个文件是空的"}
+    if len(data) > MAX_UPLOAD_BYTES:
+        return {"ok": False, "error": f"图太大（>{MAX_UPLOAD_BYTES // 1024 // 1024}MB），先压一下再传"}
+    name = _safe_seg(Path(str(filename or "")).stem)[:28] or "upload"
+    # **文件头说了算**：名字叫 .png 但内容是别的东西（从聊天软件存下来常这样）→ 按真身收；
+    # 认不出图片签名的一律拒（红线：只进图片，别把任意文件写进 uploads）。
+    sniff = _sniff_ext(data)
+    if not sniff:
+        return {"ok": False, "error": "这不是图片（按文件头认不出 png/jpg/webp/gif）"}
+    ext = sniff
+    if ext not in IMPORT_EXT:
+        return {"ok": False, "error": f"这个图片格式先不支持（{ext}）"}
+    sid = _safe_seg(session_id) or "shared"
+    dst_dir = uploads_root() / sid
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    import time as _time
+    dst = dst_dir / f"{_time.strftime('%Y%m%d-%H%M%S')}-{name}{ext}"
+    if dst.exists():
+        dst = dst.with_name(f"{dst.stem}-{_time.time_ns() % 1000}{dst.suffix}")
+    dst.write_bytes(data)
+    rel = dst.relative_to(uploads_root()).as_posix()
+    got = {"ok": True, "path": rel, "file": str(dst), "bytes": len(data),
+           "sha256": hashlib.sha256(data).hexdigest()[:16],
+           "mime": _mime_of(ext) or "image/png", "ext": ext}
+    got.update({k: v for k, v in probe(dst).items() if k != "bytes"})
+    return got
+
+
+def optimize(rel_path: str, *, max_side: int = FIT_MAX_SIDE) -> dict:
+    """图太大就先**派生**一版小图（接 ppt-master 的 `image_treat.py --fit`）。
+
+    为什么要有这一步：手机拍的照片 4000×3000、好几 MB，直接内联进 SVG 会让预览与导出都很重；
+    `image_treat` 是**非破坏性**的（原图一定留着、绝不替换），派生文件落在同一个 uploads 目录。
+    任何失败都不阻断上传 —— 返回原图 + 一句说明（老师能看到"没缩成"）。
+    """
+    base = uploads_root()
+    src = (base / rel_path).resolve()
+    try:
+        src.relative_to(base.resolve())
+    except ValueError:
+        return {"ok": False, "error": "路径越界"}
+    if not src.is_file():
+        return {"ok": False, "error": "找不到这张图"}
+    info = probe(src)
+    if info.get("width") and info.get("height") and max(info["width"], info["height"]) <= max_side:
+        return {"ok": True, "path": rel_path, "treated": "", "info": info}
+    if not info.get("width"):
+        return {"ok": True, "path": rel_path, "treated": "", "info": info,
+                "note": "量不到像素尺寸，保持原图"}
+    from . import ppt_polish                     # 走它的脚本；没有它就用原图
+
+    tool = ppt_polish.scripts_dir() / "image_treat.py"
+    if not tool.is_file():
+        return {"ok": True, "path": rel_path, "treated": "", "info": info,
+                "note": "ppt-master 不在，保持原图"}
+    import shutil
+    import subprocess
+    import sys
+    work = ppt_polish.workroot() / f"imgtreat-{src.stem[:12]}"
+    imgs = work / "images"
+    imgs.mkdir(parents=True, exist_ok=True)
+    local = imgs / src.name
+    shutil.copy2(src, local)
+    out_name = f"{src.stem[:20]}-fit{max_side}.jpg"
+    cmd = [sys.executable, str(tool), str(work), src.name, "--output", out_name,
+           "--fit", f"{max_side}x{max_side}"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=180, cwd=str(work))
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"ok": True, "path": rel_path, "treated": "", "info": info,
+                "note": f"缩放没跑成（{type(exc).__name__}），保持原图"}
+    made = imgs / out_name
+    if proc.returncode != 0 or not made.is_file():
+        tail = " / ".join((proc.stderr or proc.stdout or "").strip().splitlines()[-2:])
+        return {"ok": True, "path": rel_path, "treated": "", "info": info,
+                "note": f"缩放没成功，保持原图（{tail[:120]}）"}
+    dst = src.parent / out_name
+    shutil.copy2(made, dst)
+    rel = dst.relative_to(base).as_posix()
+    out_info = probe(dst)
+    return {"ok": True, "path": rel, "treated": "fit", "from": rel_path, "info": out_info,
+            "note": f"大图已缩到 {out_info.get('width')}×{out_info.get('height')}（原图留着）"}
+
+
 def data_uri(rel_path: str, root: Path | None = None) -> str:
     """把 uploads 里的图读成 `data:` URI（**只读**，给预览/导出内联用）。
 

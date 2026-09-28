@@ -684,6 +684,8 @@ body.theme-dark .avt{color:#fff}
 .dp-imgin{flex:1;min-width:200px;height:26px;border:.5px solid var(--line-strong);border-radius:7px;padding:0 8px;font-size:12px;font-family:var(--font)}
 .dp-imgcr{width:130px;height:26px;border:.5px solid var(--line-strong);border-radius:7px;padding:0 8px;font-size:12px;font-family:var(--font)}
 .dp-toolgroup button:disabled{opacity:.45;cursor:not-allowed}
+/* R22：把图片拖到画布上时给个"能放"的提示 */
+.dp-canvas.dp-drop{outline:2px dashed var(--blue);outline-offset:-2px}
 /* R18：多选细框 / 查找替换条 / 快捷键表 / 命中高亮 */
 .dp-selm{position:absolute;box-sizing:border-box;border:1px dashed var(--blue);opacity:.7;z-index:7;pointer-events:none}
 .dp-findbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:.5px solid var(--line);border-radius:8px;background:#fff;padding:6px 8px;margin-bottom:6px}
@@ -5707,6 +5709,9 @@ body.wz-dragging{cursor:grabbing}
         '<span class="dp-cnt">插入：</span>' +
         '<button id="dpInsText" title="插入文本框（Ctrl+Alt+T 也行）">文本框</button>' +
         shapes +
+        '<button id="dpInsImg" title="上传本地图片（也能直接把图片拖到画布上）">图片…</button>' +
+        '<input id="dpImgFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" ' +
+          'style="display:none">' +
         '<span class="sp"></span>' +
         '<span class="dp-cnt">联网取图（同事的 agent 给图片 URL 也行）：</span>' +
         '<input id="dpImgUrl" class="dp-imgin" type="url" placeholder="https://… 图片地址" ' +
@@ -5719,7 +5724,8 @@ body.wz-dragging{cursor:grabbing}
         '<span class="dp-cnt" id="dpImgState">' + escHtml(DOCP_SL.imgState || '（正在读联网状态…）') + '</span>' +
         '<div class="dp-cnt" style="flex-basis:100%">形状走 ppt-master 的**预设形状目录**' +
         '（矩形/圆角/椭圆/三角/平行四边形/V 形/箭头/直线）—— 导出会变成 PPT 里原生可编辑的形状；' +
-        '默认外观守瑞士风硬规则：直角、纯色、无渐变无阴影。图片的**本地上传**在 R22 补</div></div>';
+        '默认外观守瑞士风硬规则：直角、纯色、无渐变无阴影。大图会先缩一版（原图留着），' +
+        '**不碰 content/plans**</div></div>';
     }
     if(g === 'show'){
       return '<div class="dp-toolgroup" data-group="show">' +
@@ -6268,10 +6274,19 @@ body.wz-dragging{cursor:grabbing}
   /* 自由层对象的右栏（R21）：位置/大小/字号/颜色/填充/对齐/字重/层级/删除 + 文字 */
   function docpObjPropsHtml(o){
     var isText = o.kind === 'text';
-    var name = isText ? '文本框' : ({rect: '矩形', roundRect: '圆角矩形', ellipse: '椭圆',
+    var isImg = o.kind === 'image';
+    var name = isImg ? '图片' : (isText ? '文本框' : ({rect: '矩形', roundRect: '圆角矩形', ellipse: '椭圆',
       triangle: '三角形', parallelogram: '平行四边形', chevron: 'V 形', rightArrow: '右箭头',
-      line: '直线'}[o.shape] || '形状');
+      line: '直线'}[o.shape] || '形状'));
     return '<div class="dp-props" id="dpProps"><b>属性 · ' + escHtml(name + ' ' + o.id) + '</b>' +
+      (isImg ? ('<div class="dp-cnt">图源：' + escHtml(String(o.src || '').split('/').pop()) +
+        '（存在 data/uploads/）</div>' +
+        '<div class="dp-prow"><span>铺法</span>' +
+          '<button data-ofit="cover"' + (o.fit !== 'contain' ? ' class="dark"' : '') +
+            ' title="铺满框、多的裁掉（不变形）">铺满</button>' +
+          '<button data-ofit="contain"' + (o.fit === 'contain' ? ' class="dark"' : '') +
+            ' title="完整收进框里（留白）">完整</button>' +
+        '</div>') : '') +
       '<div class="dp-prow"><span>位置</span>' +
         '<input id="dpOx" class="dp-pnum" type="number" step="1" value="' + Math.round(o.x) + '" title="X（设计像素）">' +
         '<input id="dpOy" class="dp-pnum" type="number" step="1" value="' + Math.round(o.y) + '" title="Y">' +
@@ -6287,9 +6302,9 @@ body.wz-dragging{cursor:grabbing}
         }).join('') + '</select></div>' +
       '<div class="dp-prow"><span>文字色</span>' +
         '<input id="dpOcolor" type="color" value="' + escHtml(o.color || '#1A1A1A') + '">' +
-        '<span>填充</span>' +
-        '<input id="dpOfill" type="color" value="' + escHtml(o.fill || '#EEF2F8') + '">' +
-        '<button id="dpOfillNone" title="去掉填充（只留描边）">无填充</button>' +
+        (isImg ? '' : ('<span>填充</span>' +
+          '<input id="dpOfill" type="color" value="' + escHtml(o.fill || '#EEF2F8') + '">' +
+          '<button id="dpOfillNone" title="去掉填充（只留描边）">无填充</button>')) +
       '</div>' +
       '<div class="dp-prow"><span>对齐</span>' +
         '<button data-oalign="start"' + (o.align !== 'middle' && o.align !== 'end' ? ' class="dark"' : '') + '>左</button>' +
@@ -6306,7 +6321,8 @@ body.wz-dragging{cursor:grabbing}
         '<button id="dpOdown">下移一层</button>' +
       '</div>' +
       '<div class="dp-prow"><span>文字</span>' +
-        '<textarea id="dpOtext" rows="2" placeholder="' + (isText ? '点这里写字' : '形状上也能叠一行字') + '">' +
+        '<textarea id="dpOtext" rows="2" placeholder="' + (isText ? '点这里写字'
+          : (isImg ? '图上也能叠一行说明' : '形状上也能叠一行字')) + '">' +
         escHtml(o.text || '') + '</textarea></div>' +
       '<div class="dp-prow"><button id="dpOdel" class="dark">删除这个对象</button>' +
         '<span class="dp-cnt">Delete 也行</span></div>' +
@@ -6345,6 +6361,11 @@ body.wz-dragging{cursor:grabbing}
     Array.prototype.forEach.call(bd.querySelectorAll('[data-oalign]'), function(b){
       b.addEventListener('click', function(){
         docpObjCommit(bd, DOCP_SL.sel, { align: b.dataset.oalign }, { label: '改对象对齐' });
+      });
+    });
+    Array.prototype.forEach.call(bd.querySelectorAll('[data-ofit]'), function(b){   /* R22：图的铺法 */
+      b.addEventListener('click', function(){
+        docpObjCommit(bd, DOCP_SL.sel, { fit: b.dataset.ofit }, { label: '改图片铺法' });
       });
     });
     [['dpObold', 'bold'], ['dpOitalic', 'italic'], ['dpOunder', 'underline']].forEach(function(pair){
@@ -6733,6 +6754,72 @@ body.wz-dragging{cursor:grabbing}
     Array.prototype.forEach.call(bd.querySelectorAll('[data-shape]'), function(b){
       b.addEventListener('click', function(){ docpObjInsert(bd, 'shape', b.dataset.shape); });
     });
+    /* R22：本地上传图片（按钮选文件 + 直接把图片拖到画布上） */
+    var pick = bd.querySelector('#dpInsImg');
+    var file = bd.querySelector('#dpImgFile');
+    if(pick && file){
+      pick.addEventListener('click', function(){ file.click(); });
+      file.addEventListener('change', function(){
+        if(file.files && file.files[0]) docpImageUpload(bd, file.files[0]);
+        file.value = '';                      /* 同一个文件能再选一次 */
+      });
+    }
+    var cv = bd.querySelector('#dpCanvas');
+    if(cv){
+      cv.addEventListener('dragover', function(ev){
+        if(ev.dataTransfer && Array.prototype.indexOf.call(ev.dataTransfer.types || [], 'Files') >= 0){
+          ev.preventDefault();
+          cv.classList.add('dp-drop');
+        }
+      });
+      cv.addEventListener('dragleave', function(){ cv.classList.remove('dp-drop'); });
+      cv.addEventListener('drop', function(ev){
+        var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+        if(!f) return;
+        ev.preventDefault();
+        cv.classList.remove('dp-drop');
+        docpImageUpload(bd, f);
+      });
+    }
+  }
+  /* 本地上传一张图（R22）：POST 到 /api/slide/image/upload → 拿回 uploads 相对路径 →
+     加一个 kind=image 的对象（能拖能缩放，跟形状一套）。失败一律如实报，不静默。 */
+  function docpImageUpload(bd, f){
+    if(!f){ return; }
+    if(!/^image\//.test(f.type || '')){
+      /* 类型也交给服务端按文件头兜底判，但明显不是图的先拦下（省一次上传） */
+      if(!/\.(png|jpe?g|webp|gif)$/i.test(f.name || '')){
+        showToast('这看着不是图片（认 png / jpg / webp / gif）', false);
+        return;
+      }
+    }
+    var fd = new FormData();
+    fd.append('file', f);
+    fd.append('session_id', CUR || '');
+    showToast('正在上传 ' + (f.name || '图片') + '…');
+    fetch('/api/slide/image/upload', { method: 'POST', body: fd }).then(function(r){ return r.json(); })
+      .then(function(d){
+        if(!d || !d.ok){ showToast('上传失败：' + ((d && d.error) || '未知错误'), false); return; }
+        var step = docpPushPagesUndo('插入图片');
+        spJson('/api/slide/object', 'POST', { session_id: CUR || '', index: DOCP_PAGE, action: 'add',
+                                              kind: 'image', src: d.path, theme_id: docpThemeGet(),
+                                              slides: (DOCP && DOCP.slides) || [],
+                                              title: (DOCP && DOCP.title) || '' }).then(function(r){
+          if(!r || !r.ok){
+            docpUndoPop();
+            showToast('插不进去：' + ((r && r.error) || '未知错误'), false);
+            return;
+          }
+          DOCP.slides = r.slides || DOCP.slides;
+          docpPagesUndoClose(step);
+          DOCP_SL.sig = '';
+          DOCP_SL.sel = 'obj:' + (r.id || '');
+          DOCP_SL.multi = [];
+          docpAfterEdit(true);
+          showToast((d.detail || '图插进来了') + (d.note ? ('　' + d.note) : '') +
+                    '（拖动摆位置、拉手柄改大小）');
+        }).catch(function(){ docpUndoPop(); showToast('插不进去（网络？）', false); });
+      }).catch(function(e){ showToast('上传失败：' + (e && e.message ? e.message : e), false); });
   }
   /* ==== 剪贴板 / 查找替换 / 快捷键（R18）=============================================
      剪贴板里的"对象" = **这一格的文字 + 样式覆盖**（版式给的槽位模型 + R21 的自由层对象，
@@ -7446,9 +7533,29 @@ body.wz-dragging{cursor:grabbing}
       switchView: switchView,                 /* 等价于点左侧导航 */
       wzTabSet: wzTabSet,                     /* 等价于点教案工作台页签 */
       dzRender: dzRender,                     /* 重画教案页签（排查用） */
+      /* R21/R22：给工具与自测用的编辑器入口（截图/面板检查不必去模拟文件选择框） */
+      objInsert: function(kind, shape){ var bd = docpEl('wzDocBody'); if(bd) docpObjInsert(bd, kind, shape); },
+      imageInsert: function(src, w, h){        /* 已经上传好的图（uploads 相对路径） */
+        var bd = docpEl('wzDocBody');
+        if(!bd) return;
+        var step = docpPushPagesUndo('插入图片');
+        spJson('/api/slide/object', 'POST', { session_id: CUR || '', index: DOCP_PAGE, action: 'add',
+                                              kind: 'image', src: src, theme_id: docpThemeGet(),
+                                              slides: (DOCP && DOCP.slides) || [],
+                                              title: (DOCP && DOCP.title) || '' }).then(function(r){
+          if(!r || !r.ok){ docpUndoPop(); showToast('插不进去：' + ((r && r.error) || ''), false); return; }
+          DOCP.slides = r.slides || DOCP.slides;
+          docpPagesUndoClose(step);
+          DOCP_SL.sig = '';
+          DOCP_SL.sel = 'obj:' + (r.id || '');
+          DOCP_SL.multi = [];
+          docpAfterEdit(true);
+        }).catch(function(){ docpUndoPop(); });
+      },
       get view(){ return currentView; },
       get doc(){ return DOCP ? { title: DOCP.title, slides: (DOCP.slides || []).length,
                                  hasMarkdown: !!(DOCP.markdown || '').trim() } : null; },
+      get objects(){ var s = docpSlideAt(DOCP_PAGE) || {}; return (s.objects || []).slice(); },
     };
   })();
 })();

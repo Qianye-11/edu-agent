@@ -91,6 +91,7 @@ function makeDom(opts) {
   const images = [];
   const finds = [];
   const objects = [];
+  const uploads = [];
   /* R14：桩要像真服务端那样把 `patch`（拖动/改大小/层级/删除）应用到盒子上 ——
      真服务端在 ppt_svg.Canvas.box 里套覆盖，预览才会跟着动；桩不套就成了"假链路"（测不出回归）。 */
   const slotPatch = {};
@@ -301,8 +302,11 @@ function makeDom(opts) {
               const id = 'o' + (objs.length + 1);
               objs.push(b.kind === 'text'
                 ? { kind: 'text', id, x: 430, y: 315, w: 420, h: 90, text: '点这里改字', size: 28 }
-                : { kind: 'shape', id, shape: b.shape || 'rect', x: 480, y: 280, w: 320, h: 160,
-                    fill: '#EEF2F8', stroke: '#2F6BFF' });
+                : (b.kind === 'image'
+                  ? { kind: 'image', id, src: b.src || 'stub/photo.jpg', fit: 'cover',
+                      x: 420, y: 210, w: 440, h: 248 }
+                  : { kind: 'shape', id, shape: b.shape || 'rect', x: 480, y: 280, w: 320, h: 160,
+                      fill: '#EEF2F8', stroke: '#2F6BFF' }));
               return { ...s, objects: objs };
             }
             if (b.action === 'patch') {
@@ -373,6 +377,14 @@ function makeDom(opts) {
             hit_pages: [...new Set(all.map((h) => h.index))], slides: b.slides || DOC_STUB.slides,
             session_id: 'stub' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (p === '/api/slide/image/upload') {
+          uploads.push(op.body);                 /* FormData：只记"有人上传了"，不解析 */
+          return new Response(JSON.stringify({ ok: true, path: 'stub/photo.jpg',
+            from: 'stub/photo-orig.jpg', bytes: 23456, sha256: 'stub', mime: 'image/jpeg',
+            width: 1600, height: 900, treated: 'fit', session_id: 'stub',
+            note: '大图已缩到 1600×900（原图留着）', detail: '图已收到（存在 data/uploads/）' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (p === '/api/slide/image/providers') {
           return new Response(JSON.stringify({
             ok: true, enabled: !o.imgOff, usable: o.imgNoSource ? [] : ['pexels'],
@@ -438,7 +450,7 @@ function makeDom(opts) {
       };
     },
   });
-  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots, images, finds, objects };
+  return { w: dom.window, doc: dom.window.document, errors, renderCalls, exports, saves, fills, deletes, slots, images, finds, objects, uploads };
 }
 
 async function openDocPanel(doc) {
@@ -507,7 +519,7 @@ async function openDocPanel(doc) {
 
   console.log('== 幻灯片：就地编辑（改字 / 增删块 / 换版式 / 排序 / 删页） ==');
   {
-    const { w, doc, errors, saves, renderCalls, slots, exports, images, finds, objects } = makeDom({ withDoc: true });
+    const { w, doc, errors, saves, renderCalls, slots, exports, images, finds, objects, uploads } = makeDom({ withDoc: true });
     await sleep(2500);
     await openDocPanel(doc);
     doc.querySelector('#wzTabs .wz-tab[data-wz="slides"]').click(); await sleep(1000);
@@ -1441,6 +1453,91 @@ async function openDocPanel(doc) {
           objBoxes().length === 0, '撤了 ' + guard + ' 次 · 还剩 ' +
           (objBoxes().map((b) => b.dataset.slot).join(',') || '0 个'));
         check('无运行时错误（R21 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+        doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
+      }
+
+      /* R22：插入图片（本地上传 → 挂成对象 → 铺法/拖动/删除 → 撤销） */
+      {
+        const key = (k, opt) => doc.dispatchEvent(new w.KeyboardEvent('keydown',
+          Object.assign({ key: k, bubbles: true, cancelable: true }, opt || {})));
+        const ctrlZ = () => key('z', { ctrlKey: true });
+        const objBoxes = () => Array.from(doc.querySelectorAll(
+          '#wzDocPane .dp-canvas .dp-box[data-slot^="obj:"]'));
+        const lastObj = () => objects[objects.length - 1] || {};
+        const lastUpload = () => uploads[uploads.length - 1];
+
+        doc.querySelector('#wzDocPane .dp-tt[data-tool="insert"]').click(); await sleep(400);
+        check('「插入」里有「图片…」按钮与文件选择框（只收图片类型）',
+          !!doc.getElementById('dpInsImg') && !!doc.getElementById('dpImgFile') &&
+          /image\//.test(doc.getElementById('dpImgFile').getAttribute('accept') || ''),
+          doc.getElementById('dpImgFile').getAttribute('accept'));
+
+        /* 直接把图片拖到画布上：dragover 要给"能放"的提示（真拖进来才算上传） */
+        const cv = doc.querySelector('#wzDocPane .dp-canvas');
+        cv.dispatchEvent(Object.assign(new w.Event('dragover', { bubbles: true, cancelable: true }),
+                                       { dataTransfer: { types: ['Files'], files: [] } }));
+        await sleep(200);
+        check('把图片拖到画布上会有"能放"的提示', cv.classList.contains('dp-drop'),
+          cv.className.slice(0, 60));
+        cv.dispatchEvent(new w.Event('dragleave', { bubbles: true }));
+        await sleep(150);
+        check('拖走提示就收起来', !cv.classList.contains('dp-drop'));
+
+        /* 上传（用工具入口插一张"已上传"的图；文件选择框在无头环境里造不出真文件） */
+        const n0 = objects.length;
+        w.__edu.imageInsert('stub/photo.jpg');
+        for (let i = 0; i < 12 && objects.length <= n0; i++) await sleep(250);
+        await sleep(700);
+        check('插图片发 add（kind=image + uploads 相对路径）',
+          lastObj().action === 'add' && lastObj().kind === 'image' && lastObj().src === 'stub/photo.jpg',
+          JSON.stringify(lastObj()).slice(0, 70));
+        check('图片在页面上有盒子（obj-image）', objBoxes().length === 1,
+          objBoxes().map((b) => b.dataset.slot + ':' + (b.dataset.kind || '')).join(','));
+
+        /* 右栏：图片属性（图源 + 铺法 + 位置大小 + 层级 + 删除） */
+        check('右栏是"图片属性"（图源 / 铺法 / 位置大小 / 删除都在）',
+          /属性 · 图片 /.test(txt(doc.getElementById('dpProps'))) &&
+          !!doc.querySelector('#dpProps [data-ofit="cover"]') &&
+          !!doc.querySelector('#dpProps [data-ofit="contain"]') &&
+          !!doc.getElementById('dpOw') && !!doc.getElementById('dpOdel'),
+          txt(doc.getElementById('dpProps')).slice(0, 60));
+
+        /* 铺法：铺满 → 完整（走 patch fit） */
+        const n1 = objects.length;
+        doc.querySelector('#dpProps [data-ofit="contain"]').click();
+        for (let i = 0; i < 12 && objects.length <= n1; i++) await sleep(250);
+        check('切"完整"发 patch {fit:contain}', (lastObj().patch || {}).fit === 'contain',
+          JSON.stringify(lastObj()).slice(0, 60));
+
+        /* 拖手柄改大小 → patch 里带 w/h（绝对几何）。手柄长在选框 `#dpSel` 上，不在盒子里 */
+        const handle = doc.querySelector('#wzDocPane #dpSel .dp-h-e') ||
+                       doc.querySelector('#wzDocPane #dpSel .dp-h');
+        const n2 = objects.length;
+        if (handle) {
+          handle.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true, cancelable: true,
+            clientX: 0, clientY: 0, button: 0 }));
+          doc.body.dispatchEvent(new w.MouseEvent('mousemove', { bubbles: true, clientX: 200, clientY: 0 }));
+          doc.body.dispatchEvent(new w.MouseEvent('mouseup', { bubbles: true, clientX: 200, clientY: 0 }));
+        }
+        for (let i = 0; i < 12 && objects.length <= n2; i++) await sleep(250);
+        check('拉手柄改大小发 patch（w/h 是绝对值）',
+          !!handle && lastObj().action === 'patch' && typeof (lastObj().patch || {}).w === 'number',
+          (handle ? '' : '没找到手柄 · ') + JSON.stringify(lastObj()).slice(0, 70));
+
+        /* 删除 + 撤销 */
+        const n3 = objects.length;
+        doc.getElementById('dpOdel').click();
+        for (let i = 0; i < 12 && objects.length <= n3; i++) await sleep(250);
+        await sleep(600);
+        check('删图片发 action=delete', lastObj().action === 'delete' && objBoxes().length === 0,
+          objBoxes().length + ' 个对象');
+        ctrlZ(); await sleep(1000);
+        check('图片能一次 Ctrl+Z 撤回', objBoxes().length === 1,
+          objBoxes().map((b) => b.dataset.slot).join(','));
+        check('无运行时错误（R22 这一段）', errors.length === 0, errors.slice(0, 2).join(' | '));
+        /* 收拾干净：把这张图撤掉，别影响后面的用例 */
+        let guard = 0;
+        while (objBoxes().length > 0 && guard < 8) { ctrlZ(); await sleep(500); guard++; }
         doc.querySelector('#wzDocPane .dp-tt[data-tool="home"]').click(); await sleep(300);
       }
 

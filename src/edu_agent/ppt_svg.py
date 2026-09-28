@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 
 from . import ppt_tokens as tk
+from . import slide_image
 
 #: 版式 id（与 docs/22 §5、docs/19 §8.4 一致）
 LAYOUTS = ("cover", "section", "bullets", "two-col", "media", "end")
@@ -761,6 +762,18 @@ def draw_objects(cv: Canvas, objects: list[dict] | None) -> str:
                 cv.box(slot, x, y, w, h, float(o.get("size") or 0), align="start",
                        kind="obj-shape", obj={"shape": o.get("shape"), "name": o.get("name") or ""})
             if str(o.get("text") or "").strip():
+                out.append(_object_text(cv, o, x, y, w, h, slot))
+            continue
+        if o.get("kind") == "image":
+            # R22：老师上传的图。**内联成 data: URI**（预览与导出都不依赖外部文件），
+            # `fit` 决定铺满裁切（cover）还是完整收进框里（contain）。
+            href = slide_image.data_uri(str(o.get("src") or ""))
+            if href:
+                out.append(image(x, y, w, h, href, fit=str(o.get("fit") or "cover")))
+            if cv.boxes is not None:
+                cv.box(slot, x, y, w, h, 0.0, align="start", kind="obj-image",
+                       obj={"shape": "image", "src": str(o.get("src") or "")})
+            if str(o.get("text") or "").strip():          # 图上也能配一行说明
                 out.append(_object_text(cv, o, x, y, w, h, slot))
             continue
         # 文本框：先描一个软色底（"有框"的观感），再放字

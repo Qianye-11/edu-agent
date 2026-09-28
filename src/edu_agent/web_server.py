@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 STATIC = ROOT / "static"
 
-from fastapi import FastAPI, UploadFile, File, Query  # noqa: E402
+from fastapi import FastAPI, UploadFile, File, Query, Form  # noqa: E402
 from fastapi.responses import StreamingResponse, HTMLResponse, Response, JSONResponse, FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
@@ -1484,6 +1484,36 @@ def api_slide_image_attach(body: SlideImageReq):
             "detail": f"已把这张图挂到第 {idx + 1} 页（{got.get('bytes', 0) // 1024} KB，存在 data/uploads/）"}
 
 
+@app.post("/api/slide/image/upload")
+async def api_slide_image_upload(file: UploadFile = File(...), session_id: str = Form(""),
+                                 treat: str = Form("1")):
+    """**本地上传一张图**（R22）：落到 `data/uploads/<会话>/`，太大就先缩一版（`image_treat --fit`）。
+
+    与联网取图同一套红线：只写 uploads（`content/plans` 一个字不写）、类型白名单（按文件头兜底）、
+    体积上限 20MB。返回的是**相对 uploads 的路径** —— 前端拿它去 `POST /api/slide/object`
+    加一个 `kind:"image"` 的对象（这样图能像形状一样拖/缩放，而不是只能放"图文"版式的固定槽）。
+    """
+    from edu_agent import slide_image as _si
+
+    data = await file.read()
+    sid = str(session_id or "").strip() or (_store.current_id() or "")
+    got = _si.save_upload(data, file.filename or "upload.png", sid)
+    if not got.get("ok"):
+        return JSONResponse({"ok": False, "error": got.get("error") or "上传失败"}, status_code=400)
+    out = dict(got)
+    out.pop("file", None)
+    if str(treat or "1") not in ("0", "false", ""):
+        opt = _si.optimize(got["path"])
+        if opt.get("ok") and opt.get("path") != got["path"]:
+            out.update({"path": opt["path"], "from": got["path"], "treated": opt.get("treated") or "",
+                        "width": (opt.get("info") or {}).get("width", out.get("width")),
+                        "height": (opt.get("info") or {}).get("height", out.get("height"))})
+        if opt.get("note"):
+            out["note"] = opt["note"]
+    out.update({"session_id": sid, "detail": "图已收到（存在 data/uploads/）" + ("；" + out["note"] if out.get("note") else "")})
+    return out
+
+
 class SlideObjectReq(BaseModel):
     """自由层对象（R21）：插入 / 改 / 删 / 上下移一个**老师自己造的**文本框或形状。
 
@@ -1503,6 +1533,7 @@ class SlideObjectReq(BaseModel):
     slides: list[dict] | None = None
     title: str = ""
     theme_id: str = ""
+    src: str = ""                    # kind="image" 用：uploads 下的相对路径
 
 
 @app.post("/api/slide/object")
@@ -1530,11 +1561,18 @@ def api_slide_object(body: SlideObjectReq):
     if act == "add":
         oid = slide_deck.next_object_id(objs)
         focus = oid
+        pic = None
+        if str(body.kind) == "image":
+            from edu_agent import slide_image as _si
+            info = _si.probe(_si.uploads_root() / str(body.src or "x"))
+            if info.get("width") and info.get("height"):
+                pic = (float(info["width"]), float(info["height"]))
         objs = objs + [slide_deck.new_object(body.kind, body.shape, canvas=(1280, 720),
-                                             theme=slide_deck.theme(body.theme_id), oid=oid)]
+                                             theme=slide_deck.theme(body.theme_id), oid=oid,
+                                             src=str(body.src or ""), pic=pic)]
         if len(objs) > slide_deck.MAX_OBJECTS:
             return {"ok": False, "error": f"一页最多 {slide_deck.MAX_OBJECTS} 个对象（先删几个）"}
-        detail = "加了一个" + ("文本框" if body.kind == "text" else "形状")
+        detail = ("加了一个" + {"text": "文本框", "image": "图片"}.get(str(body.kind), "形状"))
     elif act == "patch":
         got = slide_deck.patch_object(objs, body.id, body.patch)
         if not got.get("ok"):
