@@ -83,6 +83,25 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 运维（两份 skill 的副本位置与安装入口，2026-09-28）
+
+老师问「这两个 skill 在项目里有完整的副本吗」。核查 + 加固：
+
+- **都有完整副本，但都不进 git 仓库**（`.gitignore` 忽略 `.deps/`）：
+  `ppt-master` = `.deps/ppt-master`（**210.7 MB / 13,258 文件**，完整 git 仓库 @ `481e057`，运行时外部调用）；
+  `guizang-ppt-skill` = `.deps/refs/guizang-ppt-skill`（**11.2 MB / 70 文件**，完整 git 仓库 @ `c91369c`，只读参考）。
+  `git ls-files` 两份均为 **0 个跟踪文件** —— AGPL 与体积两条红线都守住。
+- **一处风险已修**：guizang 参考副本原先在 `data/tmp/refs/`（**临时目录**，一句清理就没了）→ 挪到
+  `.deps/refs/` 与 ppt-master 同级；上游新版探针副本也挪到 `.deps/refs/ppt-master-next`（sparse）。
+- **新增 `deploy/setup_skills.cmd`**：先装/修 ppt-master，再按钉住的 commit 克隆 guizang 参考副本，
+  最后逐条自检关键文件（LICENSE / themes / layouts / checklist / presenter-mode / validate-swiss-deck.mjs）
+  并打印 commit —— **换机器一条命令复原**。
+- **文档同步**：`docs/04` 新增 §2.1（许可 / 装到哪 / 怎么用 / 升级前跑四条硬验收 / 上游探针命令）；
+  `docs/00` 目录树写清 `.deps` 三个内容；`docs/22` §11 与 `docs/26` §11.4 的旧路径改成 `.deps/refs/`；
+  `docs/29` §1.2 补一段（含红线：**编译产物必须自包含 —— 两份 skill 不在场也要能跑**）。
+
+未改产品代码。
+
 ### 文档（"agent 可调控、不固化"的设计通道，2026-09-28）
 
 老师明确目标：**两个 skill 整合后，通识 agent 收到要求时要能按"直接选用内置模板"去调控预览里的 PPT，

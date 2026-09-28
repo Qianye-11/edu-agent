@@ -48,7 +48,14 @@
 | 质量方案 | `svg_quality_checker.py`（+ `--canonical-authoring --stage final`） | 出"最终质量报告"，判 `status`（**不判退出码**） | ✅ 已在用（导出前必跑） |
 | 文档 | `docs/zh/templates-architecture.md`(31KB) · `templates-guide.md`(34KB) · `scripts/docs/template-tools.md`(18KB) | 模板体系怎么组织、怎么用、命令行怎么调 | 编译器的说明书，先读它再写代码 |
 
-### 1.2 guizang-ppt-skill（**AGPL-3.0** ⇒ 只借规则与数值，**不许抄模板/脚本**；只读副本在 `data/tmp/refs/`）
+### 1.2 guizang-ppt-skill（**AGPL-3.0** ⇒ 只借规则与数值，**不许抄模板/脚本**；只读副本在 `.deps/refs/guizang-ppt-skill`）
+
+> **副本在哪、算不算"项目里的"**（2026-09-28 明确）：两份 skill 都在**本机磁盘**上有**完整副本**，但**都不进 git 仓库**（`.gitignore`：`.deps/`、`data/`）——
+> * `ppt-master`：`.deps/ppt-master`（**210.7 MB / 13,258 文件**，完整 git 仓库 @ `481e057`），运行时**外部调用**它；
+> * `guizang-ppt-skill`：`.deps/refs/guizang-ppt-skill`（**11.2 MB / 70 文件**，完整 git 仓库 @ `c91369c`），**只读参考**；
+> * 换机器复原：跑 `deploy/setup_skills.cmd`（先装 ppt-master，再按钉住的 commit 克隆 guizang 参考副本；
+>   原先它躺在 `data/tmp/refs/`（临时目录，一句清理就没了），**已挪到 `.deps/refs/`** 与 ppt-master 同级）。
+> * 编译产物必须**自包含**：R27 的注册表要能在两份 skill **不在场**时照常跑（原始副本只用于"重新编译"）。
 
 > **2026-09-28 复查**：上游 `op7418/guizang-ppt-skill` 的 HEAD 仍是 `c91369c`（2026-08-07）**没有更新**；
 > 但第一次盘点**漏了几块大资产**（下面标 🆕），它们比阈值更值钱 —— 逐条补齐。

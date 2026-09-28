@@ -475,7 +475,7 @@ R13 剩余项与 R15 一起做（右栏与快捷键分组时顺路）。→ **�
 | skill | 许可 | 在哪 | 与项目的关系 |
 |---|---|---|---|
 | [ppt-master](https://github.com/hugohe3/ppt-master) | **MIT** | `.deps/ppt-master`，钉 commit **`481e057e`** | **真在跑**：`svg_to_pptx.py`（下载▾「PPT 新版式」）、`svg_quality_checker.py`、`pptx_intake.py`+`beautify_inventory.py`（PPT 优化/零丢失）、`pptx_to_svg.py`（填充预览）。**只外部调用脚本，不改它的文件**（它有 `require_skill_integrity()`） |
-| [guizang-ppt-skill](https://github.com/op7418/guizang-ppt-skill) | **AGPL-3.0** | 参考副本 `data/tmp/refs/`（`data/` 不入库 → 仓库里没有它的文件） | **一行代码都没进来**。只借两块：两套视觉系统的**数值与硬规则**（→ 审计可测定义 `docs/22` §7.1b）、校验脚本的**思路**（→ 我们按阈值自己重写 `slide_audit.py`） |
+| [guizang-ppt-skill](https://github.com/op7418/guizang-ppt-skill) | **AGPL-3.0** | 参考副本 `.deps/refs/guizang-ppt-skill`（`.deps/` 不入库 → 仓库里没有它的文件；装法见 `deploy/setup_skills.cmd`） | **一行代码都没进来**。只借两块：两套视觉系统的**数值与硬规则**（→ 审计可测定义 `docs/22` §7.1b）、校验脚本的**思路**（→ 我们按阈值自己重写 `slide_audit.py`） |
 
 ### 11.1 逐轮怎么接
 
@@ -527,7 +527,7 @@ R13 剩余项与 R15 一起做（右栏与快捷键分组时顺路）。→ **�
 
 | 维度 | ppt-master（MIT） | guizang-ppt-skill（AGPL-3.0） |
 |---|---|---|
-| 体积 | **210.6 MB**（`.deps/ppt-master`，不入库：`.gitignore` 的 `.deps/`） | 参考副本 **11.2 MB**（`data/tmp/refs/`，`data/` 不入库，可随时删） |
+| 体积 | **210.6 MB**（`.deps/ppt-master`，不入库：`.gitignore` 的 `.deps/`） | 参考副本 **11.2 MB**（`.deps/refs/guizang-ppt-skill`，不入库，可随时重装：`deploy/setup_skills.cmd`） |
 | 仓库内的文件 | 0（第三方不入库） | **0**（`git ls-files` 搜 `guizang` 为空；只有 1 篇文档记出处与红线） |
 | 它自己的依赖 | **19+ 项**：PyYAML / python-pptx / XlsxWriter / skia-pathops / uharfbuzz / PyMuPDF / mammoth / markdownify / ebooklib / nbconvert / openpyxl / Pillow / numpy / requests / beautifulsoup4 / **curl_cffi** / **google-genai** / **edge-tts** / flask | 无（不跑它的代码） |
 | 我们实际用到的脚本 | **5 个**：`svg_to_pptx.py`、`svg_quality_checker.py`、`pptx_intake.py`、`beautify_inventory.py`、`pptx_to_svg.py`（+ 计划里要接的 `preset_shape_svg.py` / `image_treat.py` / `pptx_delivery_check.py` / `batch_validate.py`） | 0 |
