@@ -45,6 +45,37 @@ QUIET_SIDE = {"cover": "right", "section": "left", "bullets": "right",
 #: 画布背景铺满整页，不算"内容"
 _BG_RATIO = 0.98
 
+#: 数据版式的安静侧：按槽位几何推断（都靠左 → 右侧安静；都靠右 → 左侧安静；居中/跨栏 → 不设）。
+#: 为什么需要：`QUIET_SIDE` 只登记了核心 6 个版式，注册表版式若按默认"两侧都要平衡"判，
+#: 那些**本来就是左对齐**的版式会全被判 error（踩过：title_content 失衡 100%）。
+_QUIET_CACHE: dict[str, str | None] = {}
+
+
+def _quiet_side_of_layout(layout: str) -> str | None:
+    if layout in _QUIET_CACHE:
+        return _QUIET_CACHE[layout]
+    side: str | None = None
+    try:
+        from edu_agent import layout_data
+
+        spec = layout_data.registry().get(str(layout).replace("reg:", ""))
+        if spec:
+            slots = [s for s in spec.get("slots") or [] if len(s.get("bounds") or []) == 4]
+            if slots:
+                starts = [s for s in slots if str(s.get("align") or "start") == "start"]
+                if starts and max(s["bounds"][2] for s in starts) >= 1280 * 0.4:
+                    side = "right"          # 宽槽 + 左对齐正文（这套版式的常态）→ 右侧安静
+                elif all(str(s.get("align") or "") in ("middle", "end") for s in slots):
+                    side = None             # 居中/右对齐 → 两侧都要平衡
+                elif min(s["bounds"][0] for s in slots) >= 1280 * 0.25:
+                    side = "left"
+                else:
+                    side = "right"
+    except Exception:                                          # noqa: BLE001
+        side = None
+    _QUIET_CACHE[layout] = side
+    return side
+
 
 # ---------------------------------------------------------------- SVG → 盒子
 
@@ -196,10 +227,10 @@ def audit_page(theme: dict, svg: str, layout: str, page_no: int = 1,
     def add(level: str, code: str, detail: str, fix: str) -> None:
         findings.append({"level": level, "code": code, "page": page_no, "detail": detail, "fix": fix})
 
-    # 1) 版式白名单
-    if layout not in slide_deck.LAYOUTS:
-        add("error", "whitelist", f"版式 {layout!r} 不在登记的 6 个里",
-            "用 slide_deck.LAYOUTS 里的版式，别临时自创")
+    # 1) 版式白名单（核心 6 个 + R27b 的注册表数据版式；`reg:<id>` 自定义写法也认）
+    if layout not in slide_deck.LAYOUTS and not str(layout).startswith("reg:"):
+        add("error", "whitelist", f"版式 {layout!r} 不在白名单里（核心 6 个 + 注册表数据版式）",
+            "用 slide_deck.LAYOUTS 里的版式（注册表版式见 GET /api/slide/design/catalog），别临时自创")
 
     # 2) 宽高比
     root = ET.fromstring(svg)
@@ -270,6 +301,8 @@ def audit_page(theme: dict, svg: str, layout: str, page_no: int = 1,
         imbalance = {"horizontal": abs(left - right) / total, "vertical": abs(top - bot) / (top + bot or 1.0),
                      "heavy": "left" if left >= right else "right"}
         quiet = QUIET_SIDE.get(layout)
+        if quiet is None and layout not in QUIET_SIDE:
+            quiet = _quiet_side_of_layout(layout)      # R27b：数据版式按槽位几何推断安静侧
         if imbalance["horizontal"] > LIMITS["imbalance_max"]:
             if quiet and imbalance["heavy"] != quiet:
                 add("info", "imbalance",

@@ -153,6 +153,19 @@ class ResolveTest(unittest.TestCase):
         self.assertEqual(t["canvas"]["h"], base["canvas"]["h"])
         self.assertTrue(t["id"].startswith("design-"))
 
+    def test_catalog_marks_which_layouts_fit_our_canvas(self):
+        """我们固定 1280×720：1:1 / 竖版 / 3:4 的族要**明确标 unusable**，别让 agent 选到画不出的版式。"""
+        c = ds.catalog()
+        fams = {f["id"]: f for f in c["layout_families"]}
+        self.assertTrue(fams["presentation_core"]["usable"])
+        self.assertTrue(fams["report_core"]["usable"])
+        for bad in ("moments_square", "story_vertical", "xiaohongshu_post"):
+            self.assertFalse(fams[bad]["usable"], f"{bad} 不是 16:9，应标 unusable")
+        usable = [l for f in c["layout_families"] for l in f["layouts"] if l["usable"]]
+        self.assertGreaterEqual(len(usable), 30)
+        self.assertTrue(all("usable" in l for f in c["layout_families"] for l in f["layouts"]))
+        self.assertTrue(any("usable=true" in h for h in c["hints"]))
+
     def test_catalog_full_includes_rules_and_geometry(self):
         lean = ds.catalog()
         full = ds.catalog(full=True)

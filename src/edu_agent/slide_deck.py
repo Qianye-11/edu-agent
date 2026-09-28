@@ -27,7 +27,11 @@ from . import ppt_tokens as tk
 from . import slide_image
 
 #: 版式 id（与 docs/22 §5 一致；显式 `layout` 只认这些，其余按位置推断）
-LAYOUTS = ppt_svg.LAYOUTS
+#: R27b：除**核心 6 个**之外，注册表里那 **86 个数据版式**也认（`ppt-master` 编译而来，见 `layout_data`）；
+#: 自定义版式写 `reg:<id>`。清洗（`clean_slides`）与审计白名单都读这一份，避免两处各写一套。
+LAYOUTS = ppt_svg.LAYOUTS + tuple(
+    lid for lid in __import__("edu_agent.layout_data", fromlist=["ids"]).ids()
+    if lid not in ppt_svg.LAYOUTS)
 
 #: 演示用的示例教案（样张工具与审计工具共用一份，避免两处各写一套）
 SAMPLE_DECK: list[dict] = [

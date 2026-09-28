@@ -823,18 +823,34 @@ def render_slide(t: dict, layout: str, slots: dict | None = None, *, index: int 
     `objects`（R21）是老师**自己插入**的文本框与形状（自由层）：画在版式内容之后、页脚之前，
     组内按数组顺序叠放（`上移一层/下移一层` = 换数组位置）。形状发的是 ppt-master 认的
     **规范预设组**（`data-pptx-authoring="preset"` …），所以导出会变成原生可编辑形状。
+
+    R27b：**核心 6 个版式仍走这里的代码**（内容驱动、逐字节不变）；**其它版式走数据**
+    （`layout_data`，读 R27a 编译的注册表：86 个版式 + `reg:` 前缀的自定义版式）。
     """
-    if layout not in _RENDERERS:
-        raise ValueError(f"没有这个版式：{layout}（可选：{', '.join(LAYOUTS)}）")
-    cv = Canvas(t, boxes, overrides)
-    warn = warnings if warnings is not None else []
-    sl = slots or {}
-    body = order_z(cv, _RENDERERS[layout](cv, sl, index, total, warn))
-    free = draw_objects(cv, objects or [])
-    tail = "" if layout == "cover" else footer(cv, index, total)
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{cv.w}" height="{cv.h}" '
-            f'viewBox="0 0 {cv.w} {cv.h}">' + rect(0, 0, cv.w, cv.h, fill=cv.bg) + body + free +
-            tail + "</svg>")
+    if layout in _RENDERERS:
+        cv = Canvas(t, boxes, overrides)
+        warn = warnings if warnings is not None else []
+        sl = slots or {}
+        body = order_z(cv, _RENDERERS[layout](cv, sl, index, total, warn))
+        free = draw_objects(cv, objects or [])
+        tail = "" if layout == "cover" else footer(cv, index, total)
+        return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{cv.w}" height="{cv.h}" '
+                f'viewBox="0 0 {cv.w} {cv.h}">' + rect(0, 0, cv.w, cv.h, fill=cv.bg) + body + free +
+                tail + "</svg>")
+    # 数据驱动的版式（注册表里的，或 `reg:<id>` 自定义）
+    from edu_agent import layout_data
+
+    if layout_data.is_registry_layout(layout):
+        svg = layout_data.render_body(t, slots or {}, layout, index=index, total=total,
+                                      warnings=warnings, boxes=boxes)
+        if objects:
+            cv = Canvas(t, boxes, overrides)
+            free = draw_objects(cv, objects)
+            if free:
+                svg = svg[: svg.rfind("</svg>")] + free + "</svg>"
+        return svg
+    raise ValueError(f"没有这个版式：{layout}（核心 {', '.join(LAYOUTS)}；"
+                     f"注册表版式见 GET /api/slide/design/catalog）")
 
 
 def render_deck(t: dict, slides: list[dict], warnings: list[str] | None = None) -> list[str]:

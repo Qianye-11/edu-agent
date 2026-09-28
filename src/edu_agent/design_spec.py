@@ -121,6 +121,24 @@ def find_layout(family_id: str, layout_id: str) -> dict | None:
     return None
 
 
+def _layout_usable(layout: dict) -> bool:
+    """这个版式能不能画进我们的画布（固定 1280×720 的 16:9）。
+
+    ⚠️ 注册表里有 1:1 / 竖版 / 3:4（小红书）的族 —— 它们的槽位坐标会超出 720 高，
+    **别硬画**（会画出一张"半张纸"）。目录里如实标出来，让 agent 一眼避开。
+    """
+    c = layout.get("canvas") or []
+    try:
+        w, h = float(c[0]), float(c[1])
+    except (IndexError, TypeError, ValueError):
+        return False
+    return h > 0 and abs(w / h - 16 / 9) < 0.02 and w >= 1200
+
+
+def _family_usable(family: dict) -> bool:
+    return any(_layout_usable(l) for l in family.get("layouts") or [])
+
+
 def catalog(*, full: bool = False) -> dict:
     """给 agent 的"可调什么"目录。
 
@@ -147,7 +165,9 @@ def catalog(*, full: bool = False) -> dict:
     for f in layout_families():
         item: dict[str, Any] = {"id": f["id"], "summary": f["summary"],
                                 "canvas_format": f["canvas_format"], "count": len(f["layouts"]),
+                                "usable": _family_usable(f),
                                 "layouts": [{"id": l["id"], "name": l["name"],
+                                             "usable": _layout_usable(l),
                                              "slots": [s["placeholder"] for s in l["slots"]]}
                                             for l in f["layouts"]]}
         if full:
@@ -174,7 +194,8 @@ def catalog(*, full: bool = False) -> dict:
             "选一个 visual_style（看 character 与 defaults）；mode 与 style 相互独立，任意搭配。",
             "想换主色就给 overrides.palette.accent；想更松/更密给 overrides.density。",
             "越界的数值会被夹回并在 warnings 里说明 —— 不会报错，但也不会生效。",
-            "per_page 可以逐页指定版式（id 见 layout_families）。",
+            "per_page 可以逐页指定版式（id 见 layout_families）；**只管 usable=true 的** —— "
+            "usable=false 的是 1:1 / 竖版 / 3:4 的族，画不进我们 1280×720 的页面。",
             "锁死项（locked）不许破：画布 1280×720、安全边距、元素白名单、预览=导出、审计 error 0。",
         ],
     }
