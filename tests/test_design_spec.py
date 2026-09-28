@@ -12,12 +12,17 @@
 from __future__ import annotations
 
 import json
+import sys
 import unittest
 from pathlib import Path
 
-from edu_agent import design_spec as ds
+# 与本仓库其它测试一致的引导：把 src/ 加进来（`unittest discover` 时 cwd 是仓库根，但不保证 PYTHONPATH）
+_PROJ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_PROJ / "src"))
 
-ROOT = Path(__file__).resolve().parents[1]
+from edu_agent import design_spec as ds          # noqa: E402
+
+ROOT = _PROJ
 
 
 class RegistryTest(unittest.TestCase):
