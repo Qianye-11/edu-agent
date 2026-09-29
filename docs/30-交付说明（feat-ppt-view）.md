@@ -169,3 +169,52 @@ POST /api/slide/deck（带 design）
 * **不支持** 1:1 / 竖版 / 3:4 的版式族（画布固定 1280×720），目录里标 `usable:false`；
 * 18 套视觉风格里**只有 3 套是人工调的数值**，其余 15 套为派生值（等样张评审后逐套调）；
 * 合并方式：**Squash and merge**（`docs/13` §一）。
+
+---
+
+## 八、给评审人的验收三步（`docs/13` §二，每条都给命令）
+
+**第一步 · 看 PR 范围（30 秒）**：改的文件是不是只有这件事该动的？有没有把第三方代码或大文件塞进来？
+
+```bash
+git fetch origin && git diff --stat origin/main...feat/ppt-view
+# 期望：没有 .deps/ 下的文件、没有 data/ 与 .env、没有 node_modules；
+#      热点文件只有 web_server.py / static/index.html / slide_deck.py 三个（已在 §三 说明）
+git diff --stat origin/main...feat/ppt-view | tail -1        # 规模：75 个文件 · +37,752 / -665
+```
+
+**第二步 · 在自己机器上从零走一遍（5~10 分钟）**：照 §三 的命令；关键在于**第 2 步的注册表盘点**与
+**第 7 步的闸门**必须和这里写的一致：
+
+```cmd
+deploy\setup_skills.cmd
+.venv\Scripts\python.exe tools\compile_design_registry.py --check       :: 期望：5 份一致
+.venv\Scripts\python.exe -u src\edu_agent\web_server.py                 :: 另开一个窗口
+curl http://127.0.0.1:5174/api/slide/spec                               :: 期望：total_usable=43
+.venv\Scripts\python.exe tools\full_gate.py                             :: 期望：9/9 全过
+```
+
+> ⚠️ 跑闸门前确认 `curl http://127.0.0.1:5174/` 通（体检与面板检查这两摊是**真调本机服务**的）；
+> 跑闸门时**别同时跑第二个测试套件**（见 §五 第 7 条）。
+
+**第三步 · 确认版本锁（1 分钟）**：`docs/04` §2.1 与本文 §二里写了两个外部依赖的 commit ——
+`ppt-master 481e057`、`guizang-ppt-skill c91369c`；换版本要先重跑 `docs/22` §6.2 四条硬验收。
+
+---
+
+## 九、样张（三套视觉风格 × 两种数据版式）
+
+同一份 `slides` 数据，只换 `visual_style` 与 `per_page.layout`；下面是**真实产物**（1280×720 PNG，
+由 `tools/design_samples.py --png` 出，与预览/导出同一份 SVG 渲染而来）：
+
+| 视觉风格 | 英雄陈述（`hero_statement`） | 标题正文（`title_content`） |
+|---|---|---|
+| **ink-wash 水墨**（宣纸底 + 墨黑字 + 单一朱红印色 `#9E2B25`） | ![ink-wash hero](assets/r27/ink-wash-hero.png) | ![ink-wash title_content](assets/r27/ink-wash-title-content.png) |
+| **swiss-minimal 瑞士极简**（灰阶 + 单一锚点 `#002FA7`、直角禁阴影） | ![swiss hero](assets/r27/swiss-minimal-hero.png) | ![swiss title_content](assets/r27/swiss-minimal-title-content.png) |
+| **editorial 杂志**（细分隔线 + 分栏，`#B3261E`） | ![editorial hero](assets/r27/editorial-hero.png) | ![editorial title_content](assets/r27/editorial-title-content.png) |
+
+复现：`.venv\Scripts\python.exe tools\design_samples.py --png`（产物同时在
+`data/ppt_out/design_samples/`，含 `index.html` 对比页；仓库里这份图在 `docs/assets/r27/`）。
+
+> 这三套是**人工调过数值**的（注册表里 `tuned:true`）；其余 15 套视觉风格目前是"纪律 + 派生默认值"，
+> 等老师挑完口味再逐套调（`docs/29` §6 的 R29）。

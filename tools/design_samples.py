@@ -60,12 +60,16 @@ def main() -> int:
                 from edu_agent import slide_media
 
                 try:
-                    png = OUT / f"{name}.png"
-                    slide_media.render_png(svg, png, scale=1)
+                    # ⚠️ `render_png` 收的是**页面列表 + 输出目录**（`prefix` 决定文件名），不是 (svg, 路径)：
+                    #    传错会把 SVG 当字符串逐字符渲染成上千页（实测卡死，踩过）。
+                    res = slide_media.render_png([svg], OUT, prefix=name, scale=1)
+                    if not res.get("ok") or not res.get("files"):
+                        raise RuntimeError(res.get("error") or "没出图")
+                    png = Path(res["files"][0])
                     st = slide_media.png_stats(png)
                     note += f" · PNG {png.stat().st_size // 1024}KB · 墨迹 {st.get('ink', 0):.1%}"
                 except Exception as exc:  # noqa: BLE001 出不了 PNG 不影响样张
-                    note += f" · PNG 失败（{type(exc).__name__}）"
+                    note += f" · PNG 失败（{type(exc).__name__}: {exc}）"
             print(f"{name}: 版式={built['layouts'][i]} 主色={r.palette['accent']} SVG={len(svg)} 字节")
             cards.append(f'<figure><div class="frame">{svg}</div>'
                          f'<figcaption>{html.escape(note)}</figcaption></figure>')
