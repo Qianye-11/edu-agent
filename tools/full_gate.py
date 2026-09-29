@@ -63,6 +63,32 @@ def line(name: str, ok: bool, detail: str) -> None:
     print(f"  {'✅' if ok else '❌'} {name}　{detail}")
 
 
+def service_up(timeout: float = 3.0) -> bool:
+    """本机服务（127.0.0.1:5174）在不在。
+
+    **为什么闸门要知道这件事**：第 [3] 摊 PPT 体检与第 [4] 摊面板检查都要**真调**这个服务
+    （前者打接口、后者在 jsdom 里 fetch 真服务）—— 服务没起时它们会报 `httpx ConnectError`
+    之类，看起来像"代码坏了"，实际只是没开服务（踩过两次，白查一轮）。
+    所以：服务没起就**明确跳过这两摊**并在矩阵里写明，不算绿也不算红。
+    """
+    import socket
+
+    try:
+        with socket.create_connection(("127.0.0.1", 5174), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def line_skip(name: str, why: str) -> None:
+    """跳过一摊：单独记一类，矩阵里标 ⏭️ —— **不计入"全过"**（诚实优先）。"""
+    SKIPPED.append((name, why))
+    print(f"  ⏭️  {name}　{why}")
+
+
+SKIPPED: list[tuple[str, str]] = []
+
+
 # ---------------------------------------------------------------- 各摊验收
 def jscheck() -> None:
     print("\n[1] 前端内联脚本语法（tools/jscheck.py）")
@@ -82,6 +108,10 @@ def audit() -> None:
 
 def smoke() -> None:
     print("\n[3] PPT 体检（tools/ppt_smoke.py）")
+    if not service_up():
+        line_skip("PPT 体检全过", "本机服务没起（127.0.0.1:5174）—— 先跑："
+                                  ".venv\\Scripts\\python.exe -u src\\edu_agent\\web_server.py")
+        return
     code, out = run([PY, "tools/ppt_smoke.py"])
     m = re.search(r"(\d+)\s*/\s*(\d+)\s*项通过", out)
     ok = code == 0 and bool(m) and m.group(1) == m.group(2)
@@ -90,6 +120,9 @@ def smoke() -> None:
 
 def panel() -> None:
     print("\n[4] 面板检查（node tools/uicheck/panel_check.js）")
+    if not service_up():
+        line_skip("面板检查 0 失败", "本机服务没起（127.0.0.1:5174）—— 面板检查要 fetch 真服务")
+        return
     code, out = run([NODE, "tools/uicheck/panel_check.js"])
     m = re.search(r"结果：(\d+)\s*通过\s*/\s*(\d+)\s*失败", out)
     ok = code == 0 and bool(m) and m.group(2) == "0"
@@ -241,11 +274,18 @@ def main() -> int:
     print("=" * 78)
     for name, ok, detail in RESULTS:
         print(f"  {'✅' if ok else '❌'} {name:<18} {detail}")
+    for name, why in SKIPPED:
+        print(f"  ⏭️  {name:<18} {why}")
     bad = [n for n, ok, _ in RESULTS if not ok]
     print()
     if bad:
-        print(f"结果：{len(RESULTS) - len(bad)}/{len(RESULTS)} 通过 —— 没过的：{('、'.join(bad))}")
+        print(f"结果：{len(RESULTS) - len(bad)}/{len(RESULTS)} 通过 —— 没过的：{('、'.join(bad))}"
+              + (f"；另有 {len(SKIPPED)} 摊跳过" if SKIPPED else ""))
         return 1
+    if SKIPPED:
+        print(f"结果：{len(RESULTS)}/{len(RESULTS)} 全过，但**有 {len(SKIPPED)} 摊被跳过** "
+              f"（{'、'.join(n for n, _ in SKIPPED)}）—— 要把它们补跑完才算能交")
+        return 2
     print(f"结果：{len(RESULTS)}/{len(RESULTS)} 全过 —— 这一版可以交")
     return 0
 
