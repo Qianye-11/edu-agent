@@ -1042,6 +1042,104 @@ class SlideDesignPreviewReq(BaseModel):
     annotate: bool = True                 # 默认带可编辑盒子（预览要能点着改）
 
 
+class SlideAuditReq(BaseModel):
+    """**R27c 的自查端**：把一份 `slides` 跑一遍审计，回"哪一页、哪一条、怎么改"。
+
+    只读、不落盘。给了 `design` 就用它解析出的数值审（与渲染同一份口径）。
+    """
+
+    slides: list[dict] | None = None
+    session_id: str = ""
+    design: dict | None = None
+    theme_id: str = ""
+
+
+@app.get("/api/slide/spec")
+def api_slide_spec():
+    """**给 agent 的规格包**（`docs/24` §7.4 的那一个）：我这边认什么、有什么可选、红线在哪。
+
+    与 `/api/slide/design/catalog` 的区别：那个讲"**设计上可调什么**"（风格/品牌/版式），
+    这个讲"**内容上怎么交**"（认哪些键、密度上限、版式白名单、返回里哪些字段要读）。
+    """
+    from edu_agent import design_spec as _ds
+    from edu_agent import layout_data as _ld
+    from edu_agent import slide_deck as _sd
+
+    base = _ds.base_tokens()
+    cat = _ds.catalog()
+    usable = list(_ld.ids())          # 16:9 且**去重**（跨族重名只算一次，与 slide_deck.LAYOUTS 一致）
+    return {
+        "ok": True,
+        "schema": "edu-agent.slide-spec.v1",
+        "endpoints": {
+            "spec": "GET /api/slide/spec（本文）",
+            "design_catalog": "GET /api/slide/design/catalog?full=true（视觉风格/模式/品牌/版式 与它们的规则）",
+            "preview": "POST /api/slide/design/preview（按 design 出预览，不落盘）",
+            "audit": "POST /api/slide/audit（自查：error/warn + 怎么改）",
+            "save": "POST /api/slide/save（把 slides 存回会话）",
+            "deck": "POST /api/slide/deck（出 pptx，落盘要 confirm）",
+            "fill_plan": "GET /api/slide/fill/plan（模板槽位 + 草案）",
+            "fill": "POST /api/slide/fill（按 mapping 填模板）",
+            "object": "POST /api/slide/object（自由层对象 add/patch/delete/up/down/set）",
+            "image_attach": "POST /api/slide/image/attach（给个图片 URL 挂到某页）",
+        },
+        "accepted_keys": list(_sd.SLIDE_KEYS),
+        "dropped_silently": ["不认识的键会被丢掉（不报错）—— 只认上面这些"],
+        "limits": {"chars_per_block": 400, "notes_chars": 2000, "objects_per_page": 30,
+                   "image_mb": 10, "svg_override_bytes": 200_000},
+        "density": base["density"],
+        "canvas": base["canvas"],
+        "type_steps": {k: base["type"][k] for k in ("cover", "title", "label", "body", "caption")},
+        "ranges": base["ranges"],
+        "layouts": {"core": list(_sd.ppt_svg.LAYOUTS), "usable_from_registry": usable,
+                    "total_usable": len(_sd.LAYOUTS),
+                    "custom_prefix": "reg:<id>"},
+        "must_read_in_response": ["warnings[]（越界夹回 / 密度提示 —— 界面不显示，必须自己读）",
+                                 "checks[]（导出后的硬验收结论）",
+                                 "adjustments[]（模板填充时的压缩留痕）"],
+        "locked": _ds.locked(),
+        "hints": ["先 GET /api/slide/spec 看认什么，再 GET /api/slide/design/catalog 挑风格与版式，",
+                  "改完 POST /api/slide/audit 自查（error 必须为 0），最后 POST /api/slide/deck 出稿。"],
+    }
+
+
+@app.post("/api/slide/audit")
+def api_slide_audit(body: SlideAuditReq):
+    """把一份 `slides` 跑一遍审计（只读）：回 `errors/warnings/infos`，每条都带"怎么改"。"""
+    from edu_agent import design_spec as _ds
+    from edu_agent import slide_audit as _sa
+    from edu_agent import slide_deck as _sd
+
+    slides_in = body.slides
+    if not slides_in:
+        doc = _store.get_session_doc(str(body.session_id or "").strip() or (_store.current_id() or ""))
+        slides_in = doc.get("slides") or []
+    slides = _sd.clean_slides(slides_in)
+    if not slides:
+        return JSONResponse({"ok": False, "schema": "edu-agent.slide-audit.v1",
+                             "error": "没有可审的页：给 slides，或先让会话里有一份教案"}, status_code=400)
+    r = _ds.resolve(body.design) if isinstance(body.design, dict) and body.design else None
+    if r:
+        slides = _ds.apply_to_slides(slides, r)
+    tokens = r.as_tokens() if r else None
+    theme_id = r.visual_style if r else (body.theme_id or "tech-editorial")
+    built = _sd.build_deck(theme_id, slides, tokens=tokens)
+    rep = _sa.audit_pages(theme_id, built["pages"], layouts=built["layouts"], tokens=tokens)
+    return {
+        "ok": rep["ok"],
+        "schema": "edu-agent.slide-audit.v1",
+        "theme_id": rep.get("theme_id"),
+        "stats": rep["stats"],
+        "errors": rep["errors"], "warnings": rep["warnings"], "infos": rep["infos"],
+        "pages": [{"page": i + 1, "layout": built["layouts"][i], "findings": row["findings"]}
+                  for i, row in enumerate(rep["pages"])],
+        "design": ({"visual_style": r.visual_style, "applied": r.applied, "warnings": r.warnings}
+                   if r else None),
+        "hints": ["error 必须清零再出稿；warning 可以留，但要逐条判断是不是有意的。",
+                  "每条 findings 都带 `fix`（怎么改）—— 别拿「删内容」当解法，宁可拆页。"],
+    }
+
+
 @app.post("/api/slide/design/preview")
 def api_slide_design_preview(body: SlideDesignPreviewReq):
     """按设计规格出**预览**（R27c）：`design` → 解析数值 → 渲染每页 SVG（不落盘）。

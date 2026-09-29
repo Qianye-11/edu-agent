@@ -31,7 +31,10 @@
 * **R27b**：核心 6 个版式**保持代码不动**；其余走数据（`layout_data.py`）。只有 **16:9** 的族可用（**37 个版式**），
   1:1/竖版/3:4 明确报错指路；`slide_deck.LAYOUTS` = 核心 6 + 这 37 个。
 * **R27c**：`POST /api/slide/design/preview`（只读）按 `design` 出预览，回 `resolved/applied/warnings/locked`；
-  `POST /api/slide/deck` 新增可选 `design`（**不给 = 与以前完全一致**）；`slides[i].svg_override` 整页逃生口。
+  `POST /api/slide/deck` 新增可选 `design`（**不给 = 与以前完全一致**）；`slides[i].svg_override` 整页逃生口；
+  **另补齐 `docs/24` §7.4 的两个接口**：`GET /api/slide/spec`（内容规格包：认哪些键 / 上限 / 可用版式
+  `total_usable=43` / 锁死清单）与 `POST /api/slide/audit`（自查：`errors/warnings/infos`，每条带 `fix`）。
+  样张：`tools/design_samples.py` 出「3 视觉风格 × 2 数据版式」6 页 SVG + `index.html`（内联 SVG，不依赖浏览器）。
 
 ---
 

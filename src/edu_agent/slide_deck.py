@@ -883,24 +883,31 @@ def patch_object(objects: list[dict] | None, oid: str, patch: dict | None) -> di
     return {"ok": True, "objects": cleaned, "obj": got}
 
 
+#: `slides[i]` 认的键（**唯一真源**：`clean_slides()` 按它收、`GET /api/slide/spec` 按它公布）。
+#: 不在这张表里的键会被**静默丢掉** —— 这也是 agent 最容易踩的地方，所以规格包里直接列出来。
+SLIDE_TEXT_KEYS = ("name", "title", "minutes", "label", "caption", "closing",
+                   "subtitle", "meta", "index", "cover_title")
+SLIDE_KEYS = SLIDE_TEXT_KEYS + ("layout", "bullets", "blocks", "left", "right",
+                                "objects", "image", "notes", "slots", "svg_override")
+
+
 def clean_slides(slides: list[dict] | None) -> list[dict]:
     """把面板传来的编辑结果**收干净**再存/再渲染（保守：不认识的就丢，绝不悄悄改字）。
 
-    只保留认识的键：`layout/name/title/minutes/label/bullets/blocks/caption/closing/
-    subtitle/meta/index/left/right/objects/image/notes/slots`；字符串去首尾空白；
-    `layout` 只认登记过的 6 个；空条目丢掉；单块文字上限 400 字（防手滑粘贴一整篇）。
+    只保留认识的键（见 `SLIDE_KEYS`，`GET /api/slide/spec` 会把这张表直接给 agent）；
+    字符串去首尾空白；`layout` 只认白名单（核心 6 个 + 注册表数据版式，R27b）；
+    空条目丢掉；单块文字上限 400 字（防手滑粘贴一整篇）；`svg_override` 不合规一律丢（R27c）。
     """
     out: list[dict] = []
     for raw in slides or []:
         if not isinstance(raw, dict):
             continue
         s: dict = {}
-        for key in ("name", "title", "minutes", "label", "caption", "closing",
-                    "subtitle", "meta", "index", "cover_title"):
+        for key in SLIDE_TEXT_KEYS:                       # 与 SLIDE_KEYS 同一份真源
             if key in raw:
                 s[key] = _text(raw[key])[:120]
         layout = _text(raw.get("layout"))
-        if layout in LAYOUTS:
+        if layout in LAYOUTS or str(layout).startswith("reg:"):
             s["layout"] = layout
         bullets = [_text(b)[:400] for b in (raw.get("bullets") or []) if _text(b)]
         if bullets:

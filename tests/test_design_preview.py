@@ -133,23 +133,24 @@ class EndpointTest(unittest.TestCase):
         self.assertTrue(any("越界" in w for w in body["warnings"]), body["warnings"])
 
     def test_preview_falls_back_to_session_then_errors(self):
-        """给 slides 就用；不给就用会话里那份；**两边都没有才 400**（不是 500）。
+        """给 slides 就用；不给就回落到会话那份；**两边都没有才 400**（不许 500）。
 
-        ⚠️ 别断言"假 session_id 一定 400"：`get_session_doc` 在找不到时会**回落到当前会话**
-        （全量测试跑起来时当前会话里通常有教案），所以这里只断言"要么渲染、要么明确报错"。
+        ⚠️ 这里**故意不假设"当前会话里一定有教案"**：全量跑时它取决于别的测试跑过什么
+        （踩过：单跑绿、全量红）。所以只断言契约本身 —— 200 就带 pages，400 就带清楚的原因。
         """
-        r = self.client.post("/api/slide/design/preview", json={"design": {}, "slides": []})
-        self.assertEqual(r.status_code, 200, "会话里通常有教案 —— 应当回落到会话那份")
+        r = self.client.post("/api/slide/design/preview",
+                             json={"design": {}, "slides": self.lesson["slides"]})
+        self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["pages"])
-        r2 = self.client.post("/api/slide/design/preview",
-                              json={"design": {}, "slides": [], "session_id": "no-such-session-xyz"})
-        self.assertIn(r2.status_code, (200, 400))
-        body2 = r2.json()
-        if r2.status_code == 400:
-            self.assertFalse(body2["ok"])
-            self.assertIn("没有可渲染的页", body2["error"])
+
+        r2 = self.client.post("/api/slide/design/preview", json={"design": {}})
+        self.assertIn(r2.status_code, (200, 400), "回落会话：有就渲染，没有就明确报错，不许 500")
+        body = r2.json()
+        if r2.status_code == 200:
+            self.assertTrue(body["ok"] and body["pages"])
         else:
-            self.assertTrue(body2["ok"] and body2["pages"])
+            self.assertFalse(body["ok"])
+            self.assertIn("没有可渲染的页", body["error"])
 
     def test_preview_without_design_is_backward_compatible(self):
         """不传 design：仍然能出预览（用基准主题），等于今天的行为。"""
@@ -166,6 +167,74 @@ class EndpointTest(unittest.TestCase):
         body = r.json()
         self.assertIn("agent 自己画的这一页", body["pages"][1])
         self.assertEqual(body["layouts"][1], "svg-override")
+
+
+class SpecAndAuditTest(unittest.TestCase):
+    """R27c 的另外两个接口：`GET /api/slide/spec`（内容规格包）与 `POST /api/slide/audit`（自查）。"""
+
+    def setUp(self):
+        from fastapi.testclient import TestClient
+
+        from edu_agent import web_server
+
+        self.client = TestClient(web_server.app)
+
+    def test_spec_lists_keys_limits_and_layouts(self):
+        r = self.client.get("/api/slide/spec")
+        self.assertEqual(r.status_code, 200)
+        b = r.json()
+        self.assertTrue(b["ok"])
+        self.assertEqual(b["schema"], "edu-agent.slide-spec.v1")
+        for key in ("layout", "bullets", "blocks", "objects", "svg_override", "notes"):
+            self.assertIn(key, b["accepted_keys"])
+        self.assertEqual(b["limits"]["chars_per_block"], 400)
+        self.assertEqual(b["limits"]["objects_per_page"], 30)
+        self.assertIn("cover", b["layouts"]["core"])
+        self.assertGreaterEqual(len(b["layouts"]["usable_from_registry"]), 30)
+        reg = b["layouts"]["usable_from_registry"]
+        self.assertEqual(len(reg), len(set(reg)), "注册表版式要去重（跨族重名只算一次）")
+        # 与渲染白名单一致：不该出现"规格包说有、实际渲染不认"的版式
+        from edu_agent import slide_deck
+
+        self.assertEqual(set(reg), set(slide_deck.LAYOUTS) - set(b["layouts"]["core"]))
+        self.assertEqual(b["layouts"]["total_usable"], len(slide_deck.LAYOUTS))
+        self.assertIn("design/preview", b["endpoints"]["preview"])
+        self.assertEqual(b["canvas"]["w"], 1280)
+        self.assertIn("warnings[]", " ".join(b["must_read_in_response"]))
+        self.assertTrue(b["locked"]["preview_equals_export"])
+
+    def test_audit_reports_error_with_fix(self):
+        # ⚠️ `clean_slides()` 会把"全空的一页"丢掉：判据是 name/title/bullets/blocks/left 至少有一个
+        #    （只有 cover_title/subtitle 的封面页会被当空页丢掉 —— 踩过）。所以封面页也带上 name。
+        slides = [{"layout": "cover", "name": "3.3 幂函数", "cover_title": "3.3 幂函数", "subtitle": "人教A版"},
+                  {"layout": "bullets", "name": "情境导入",
+                   "bullets": ["投影五个实例", "追问：这些函数有什么共同点"]}]
+        r = self.client.post("/api/slide/audit", json={"slides": slides})
+        self.assertEqual(r.status_code, 200)
+        b = r.json()
+        self.assertTrue(b["ok"], b.get("errors"))
+        self.assertEqual(b["stats"]["errors"], 0)
+        self.assertEqual(len(b["pages"]), 2)
+        for row in b["pages"]:
+            self.assertIn("layout", row)
+            for f in row["findings"]:
+                self.assertIn("fix", f)
+
+    def test_audit_accepts_design(self):
+        slides = [{"layout": "cover", "name": "水墨", "cover_title": "水墨"},
+                  {"layout": "bullets", "name": "要点", "bullets": ["一", "二"]}]
+        r = self.client.post("/api/slide/audit",
+                             json={"slides": slides, "design": {"visual_style": "ink-wash"}})
+        b = r.json()
+        self.assertTrue(b["ok"], b.get("errors"))
+        self.assertTrue(b["theme_id"].endswith("ink-wash"), b["theme_id"])
+        self.assertEqual(b["design"]["visual_style"], "ink-wash")
+
+    def test_audit_needs_something_to_audit(self):
+        r = self.client.post("/api/slide/audit", json={"slides": [], "session_id": "no-such-xyz"})
+        self.assertIn(r.status_code, (200, 400))
+        if r.status_code == 400:
+            self.assertIn("没有可审的页", r.json()["error"])
 
 
 if __name__ == "__main__":

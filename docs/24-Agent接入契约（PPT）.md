@@ -245,8 +245,8 @@ POST /api/slide/save
 
 | # | 要补的 | 作用 |
 |---|---|---|
-| 1 | `GET /api/slide/spec` | 规格包：6 版式的槽位名与容量 + tokens 数值 + 自由层对象能力 + **"哪些键会被丢掉"** |
-| 2 | `POST /api/slide/audit` | 自查：把当前 `slides` 跑一遍审计，回 error/warn + **怎么修**（现在审计只是命令行 `tools/slide_audit.py`） |
+| 1 | ~~`GET /api/slide/spec`~~ | ✅ **已上线（R27c）**：**内容规格包** —— 认哪些键（`accepted_keys`，不认识的**静默丢掉**）、上限（单块 400 字 / 备注 2000 / 一页 30 对象 / 图 10MB / 逃生口 200KB）、画布与字号阶梯、**可用版式**（核心 6 + 注册表 **37**、`total_usable=43`）、`must_read_in_response`、锁死清单、相关接口一览 |
+| 2 | ~~`POST /api/slide/audit`~~ | ✅ **已上线（R27c）**：**自查** —— 把一份 `slides`（或会话里那份）跑一遍审计，回 `errors/warnings/infos`，**每条都带 `fix`（怎么改）**；可带 `design` 用同一份数值审（与渲染同口径） |
 | 3 | 本文 §9 的契约补丁 | 两条导出路径**不可混用**（有 `template_id` 走 python-pptx 原地填模板、不走 `svg_to_pptx`）+ 红线（AGPL / `.deps` 只读 / `content/plans` 一个字不写 / 预览=导出不能破） |
 
 > **✅ 已补（R27a，2026-09-28）**：`GET /api/slide/design/catalog` 上线 —— **设计规格目录**，

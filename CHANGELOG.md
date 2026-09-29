@@ -83,6 +83,29 @@
 
 验收：单测 481 全绿 · 面板检查 114 → **121** · 体检 48/48 · 截图人眼过。
 
+### 新增（R27c 收尾 · 规格包 / 自查接口 / 样张，2026-09-29）
+
+R27c 的主体（`design/preview` + `deck` 的 `design` 字段 + `svg_override` 逃生口）已随 `1fb644d` 交付；
+这一步把 `docs/24` §7.4 里承诺"R27 一起做掉"的两样补齐，并补上样张证据：
+
+1. **`GET /api/slide/spec`（内容规格包）**：agent 交稿前先读它 —— 认哪些键（`accepted_keys`，**不认识的静默丢掉**）、
+   上限（单块 400 字 / 备注 2000 / 一页 30 对象 / 图 10MB / 逃生口 200KB）、画布与字号阶梯、
+   **可用版式**（核心 6 + 注册表 **37**，`total_usable=43`）、`must_read_in_response`（warnings/checks/adjustments）、
+   锁死清单，以及相关接口一览。实测：`ok=True`、`total_usable=43`、键表 20 个。
+2. **`POST /api/slide/audit`（自查）**：把一份 `slides`（或会话里那份）跑一遍审计，回
+   `errors/warnings/infos`，**每条 findings 带 `fix`（怎么改）**；可带 `design` 用同一份数值审
+   （渲染与审计同口径：`audit_pages(..., tokens=)` 新增这个形参）。实测：theme=`design-swiss-minimal`、error 0。
+3. **样张对比页** `tools/design_samples.py`：3 视觉风格 × 2 数据版式 = 6 页 SVG + `index.html`。
+   **默认不转 PNG**（内联 SVG 就能"打开即看"，且与导出逐字节同源）—— 本机 Edge 常被别的任务占住，
+   样张不该依赖浏览器；要看 PNG 再加 `--png`。实测换风格后颜色确实不同：
+   ink-wash `#F8F6F2`/`#2B2B2B` ↔ swiss-minimal `#FAFAF8`/`#0A0A0A`。
+4. **顺手收紧一处**：`slide_deck.SLIDE_KEYS` 成为"认哪些键"的**唯一真源**（`clean_slides` 与 `spec` 共用）；
+   `layout` 白名单同时接受 `reg:<id>` 写法；`clean_slides` 的"全空一页丢掉"判据写进注释
+   （只有 `cover_title/subtitle` 的封面页会被当空页丢掉 —— 踩过）。
+
+验收：`tests/test_design_preview.py` **13 → 17 例**（新增 spec 4 例、audit 3 例，含"注册表版式去重且与
+`slide_deck.LAYOUTS` 一致"）；R27 三个套件 **45 例 OK**；全量闸门见 `docs/30` 第四节。
+
 ### 新增（R27b · 版式数据化：注册表版式可渲染、可审计、导出同源，2026-09-28）
 
 接 R27a。老师要"agent 能调控、不固化"，所以这一步让**版式也能选**：

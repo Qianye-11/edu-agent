@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
-"""R27 交付证据：把"设计规格通道"渲出来的页面出成 PNG（三套视觉风格 × 两种版式）。
+"""R27 交付证据：把"设计规格通道"渲出来的页面做成**样张对比页**（视觉风格 × 数据版式）。
 
-为什么单独写一个：`docs/13` 要求界面/观感类改动**留截图证据**。数据版式与视觉风格都是"看"的东西，
-所以这里用**同一个预览接口的那条渲染路径**（`design_spec.resolve` → `slide_deck.build_deck`）
-出 SVG，再用 `slide_media.render_png`（Edge 无头，1280×720）转成 PNG，拼成一张对比图。
+为什么默认不转 PNG（`docs/13` 要的截图证据在这里用 SVG 更好）：
+* 预览＝导出的那份源就是 **SVG**（`docs/22` D13），HTML 里**内联**它就能"打开即看、且与导出逐字节同一份"；
+* 转 PNG 要拉 Edge 无头 —— 本机 Edge 常被别的任务占住（实测卡在 0KB 不动），而**样张是给人挑口味的，
+  不该依赖浏览器**。要看 PNG 再单独加 `--png`。
 
-用法：.venv\\Scripts\\python.exe tools/design_samples.py
-产物：data/ppt_out/design_samples/{index.html, *.png}
+用法：
+    .venv\\Scripts\\python.exe tools\\design_samples.py            # 只出 SVG + index.html（秒级）
+    .venv\\Scripts\\python.exe tools\\design_samples.py --png      # 顺带出 PNG（需要 Edge 空闲）
+产物：data/ppt_out/design_samples/{index.html, <风格>-<页>.svg[, .png]}
 """
 
 from __future__ import annotations
 
+import argparse
 import html
 import sys
 from pathlib import Path
@@ -18,12 +22,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from edu_agent import design_spec as ds  # noqa: E402
-from edu_agent import slide_deck, slide_media  # noqa: E402
+from edu_agent import slide_deck  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "ppt_out" / "design_samples"
 
-#: 三套视觉风格（R27a 里人工调过的那三套）+ 两种数据版式
+#: 先上人工调过数值的三套视觉风格 × 两种数据版式（R27b 的 16:9 版式）
 STYLES = ["ink-wash", "swiss-minimal", "editorial"]
 LAYOUTS = ["hero_statement", "title_content"]
 
@@ -37,7 +41,11 @@ SLIDES = [
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--png", action="store_true", help="顺带出 PNG（要 Edge 空闲，会慢）")
+    args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+
     cards: list[str] = []
     for sid in STYLES:
         r = ds.resolve({"visual_style": sid, "mode": "instructional",
@@ -45,22 +53,37 @@ def main() -> int:
         slides = ds.apply_to_slides(SLIDES, r)
         built = slide_deck.build_deck(sid, slides, title="3.3 幂函数", tokens=r.as_tokens())
         for i, svg in enumerate(built["pages"]):
-            png = OUT / f"{sid}-{i + 1}.png"
-            slide_media.render_png(svg, png, scale=1)
-            print(f"{sid} 第 {i + 1} 页 → {png.name}（{png.stat().st_size // 1024} KB）"
-                  f"  版式={built['layouts'][i]}  主色={r.palette['accent']}")
-            st = slide_media.png_stats(png)
-            cards.append(
-                f'<figure><img src="{png.name}" width="560">'
-                f'<figcaption><b>{html.escape(sid)}</b> · {built["layouts"][i]} · '
-                f'主色 {r.palette["accent"]} · 墨迹 {st.get("ink", 0):.1%}</figcaption></figure>')
-    doc = ("<!doctype html><meta charset='utf-8'><title>R27 设计规格样张</title>"
-           "<style>body{font:14px/1.6 system-ui,'微软雅黑';margin:24px}"
-           "figure{display:inline-block;margin:0 16px 20px 0}figcaption{color:#555;font-size:12px}"
-           "h1{font-size:20px}</style>"
-           "<h1>R27 设计规格通道样张（视觉风格 × 数据版式）</h1>" + "".join(cards))
+            name = f"{sid}-{i + 1}"
+            (OUT / f"{name}.svg").write_text(svg, encoding="utf-8")
+            note = f"{sid} · 版式 {built['layouts'][i]} · 主色 {r.palette['accent']}"
+            if args.png:
+                from edu_agent import slide_media
+
+                try:
+                    png = OUT / f"{name}.png"
+                    slide_media.render_png(svg, png, scale=1)
+                    st = slide_media.png_stats(png)
+                    note += f" · PNG {png.stat().st_size // 1024}KB · 墨迹 {st.get('ink', 0):.1%}"
+                except Exception as exc:  # noqa: BLE001 出不了 PNG 不影响样张
+                    note += f" · PNG 失败（{type(exc).__name__}）"
+            print(f"{name}: 版式={built['layouts'][i]} 主色={r.palette['accent']} SVG={len(svg)} 字节")
+            cards.append(f'<figure><div class="frame">{svg}</div>'
+                         f'<figcaption>{html.escape(note)}</figcaption></figure>')
+
+    doc = ("<!doctype html><html lang='zh'><meta charset='utf-8'>"
+           "<title>R27 设计规格样张（视觉风格 × 数据版式）</title>"
+           "<style>body{font:14px/1.7 system-ui,'微软雅黑';margin:24px;background:#f6f7f9}"
+           "h1{font-size:20px;margin:0 0 4px}p.sub{color:#666;margin:0 0 20px}"
+           "figure{display:inline-block;margin:0 18px 22px 0;vertical-align:top}"
+           ".frame{width:640px;border:1px solid #dfe3e8;border-radius:8px;overflow:hidden;background:#fff}"
+           ".frame svg{display:block;width:100%;height:auto}"
+           "figcaption{color:#555;font-size:12px;margin-top:6px}</style>"
+           "<h1>R27 设计规格通道样张</h1>"
+           "<p class='sub'>同一份 <code>slides</code> 数据，只换 <b>visual_style</b> 与 <b>per_page.layout</b> —— "
+           "页面是服务端渲染的 SVG（预览与导出同一份源）。</p>" + "".join(cards) + "</html>")
     (OUT / "index.html").write_text(doc, encoding="utf-8")
     print("对比页：", OUT / "index.html")
+    print("SVG 数：", len(list(OUT.glob("*.svg"))))
     return 0
 
 
