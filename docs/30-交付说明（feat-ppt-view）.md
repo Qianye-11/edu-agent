@@ -116,7 +116,7 @@ POST /api/slide/deck（带 design）
 
 | 验收 | 命令 | 结果 |
 |---|---|---|
-| 全量闸门（九摊，**独占机器跑**） | `tools\full_gate.py` | **9/9 全过**：内联语法 1 段 / 6656 行 · 版式审计 **error 0 · warn 0** · PPT 体检 **49/49** · 面板检查 **305 通过 / 0 失败** · 单元测试 **625 例 OK（跳过 2）** · 设计规格注册表与来源一致（5 份） · 导出验收 **35/35（含 WPS 真机）** · 产物交付体检 passed / passed-with-advisories · 任务目录校验 **error 0** |
+| 全量闸门（九摊，**独占机器跑**） | `tools\full_gate.py` | **9/9 全过**：内联语法 1 段 / 6656 行 · 版式审计 **error 0 · warn 0** · PPT 体检 **49/49** · 面板检查 **305 通过 / 0 失败** · 单元测试 **629 例 OK（跳过 2）** · 设计规格注册表与来源一致（5 份） · 导出验收 **35/35（含 WPS 真机）** · 产物交付体检 passed / passed-with-advisories · 任务目录校验 **error 0** |
 | 面板检查 | `node tools\uicheck\panel_check.js` | 305 通过 / 0 失败 |
 | 版式审计 | `tools\slide_audit.py --gate` | error 0 · warn 0（核心 6 版式基线不变） |
 | R27 新增单测 | `-m unittest tests.test_design_spec tests.test_layout_data tests.test_design_preview` | **41 例 OK**（17 / 11 / 13） |
