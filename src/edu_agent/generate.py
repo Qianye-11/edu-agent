@@ -22,9 +22,9 @@ import time
 
 from pydantic import BaseModel, Field
 
-from edu_agent import logsetup, math_verify, preprocess, prompts, session
+from edu_agent import logsetup, math_verify, preprocess, prompts, routing, session
 from edu_agent.config import get_chat_llm
-from edu_agent.retrieve import retrieve
+from edu_agent.retrieve import expand_neighbors, retrieve
 
 log = logsetup.get_logger("generate")
 
@@ -86,9 +86,9 @@ def _retrieve_with_fallback(rq: str, original: str, qtype: str, top_k: int,
                             proc: preprocess.Processed):
     """坐标/章节过滤优先，命中失败逐级回退（章节过滤 -> 全文 -> 原文检索）。"""
     kinds = _kind_filter_for(qtype)
-    # hybrid=False：dense-only 实测 0.25s vs hybrid 4.0s，命中质量相同（09-07 单例对比）；
-    # 编号/术语问法已由 preprocess 坐标解析 + 章级 metadata 过滤兜底，bm25 保留可手动开
-    kw: dict = {"top_k": top_k, "hybrid": False}
+    # 细粒度索引下启用 Dense + BM25 真并集；15 题黄金集由 Dense MRR 0.889
+    # 提升到 Hybrid MRR 0.967，且 BM25 进程内缓存后开销可控。
+    kw: dict = {"top_k": top_k, "hybrid": True}
     if kinds:
         kw["kinds"] = kinds
     ch = proc.ref.chapter if proc.ref else None
@@ -99,16 +99,16 @@ def _retrieve_with_fallback(rq: str, original: str, qtype: str, top_k: int,
             hits = []
         if hits:
             logsetup.event(log, "retrieve", scope="chapter:" + ch, hits=len(hits))
-            return hits
+            return expand_neighbors(hits)
     hits = retrieve(rq, **kw)
     if hits:
         logsetup.event(log, "retrieve", scope="full", hits=len(hits))
-        return hits
+        return expand_neighbors(hits)
     if rq != original:
         hits = retrieve(original, **kw)
         if hits:
             logsetup.event(log, "retrieve", scope="original", hits=len(hits))
-            return hits
+            return expand_neighbors(hits)
     logsetup.event(log, "retrieve", scope="none", hits=0)
     return []
 
@@ -410,7 +410,7 @@ def _summarize_history(history, max_chars: int = 600) -> str:
 def ask_stream(question: str, history=None, memory_prefix: str = "",
                top_k: int = 3, snippet_len: int = 400,
                source: str | None = None, persist_dir=None, collection: str | None = None,
-               empathy: str = ""):
+               empathy: str = "", evidence_prefix: str = ""):
     """流式问答生成器。
 
     empathy（可选，2026-09-27 新增）：当学生带着情绪提问时，由 edu_agent.care 生成的一句
@@ -423,20 +423,44 @@ def ask_stream(question: str, history=None, memory_prefix: str = "",
     """
     from edu_agent.grounded import degrade
 
-    kk = None if source else _kind_filter_for(classify(question))
-    hits = retrieve(question, kinds=kk, top_k=top_k, hybrid=False,
-                    source=source, persist_dir=persist_dir, collection=collection)
+    proc = preprocess.preprocess(question)
+    rq = proc.query or question
+    # ``collection`` 也可以指向同一 Chroma 目录下的独立官方教材库；这种场景没有
+    # 单份 PDF 的 source 过滤，但同样必须绕过默认教材的 BM25 索引。
+    if collection == "edu_rj_textbooks":
+        from edu_agent.rj_textbooks import search as search_rj_textbooks
+
+        hits = search_rj_textbooks(rq, top_k=top_k, source=source)
+    elif source or collection:
+        hits = retrieve(rq, top_k=top_k, hybrid=False, source=source,
+                        persist_dir=persist_dir, collection=collection)
+    else:
+        hits = _retrieve_with_fallback(rq, question, proc.qtype, top_k, proc)
     if not hits:
         yield {"type": "status", "text": "检索无结果"}
         rec = degrade(question, reason="检索为空")
-        yield {"type": "done", "answer_md": rec.answer_md, "citations": [], "coverage": "low", "confidence": 0.0}
+        done = {"type": "done", "answer_md": rec.answer_md, "citations": [],
+                "coverage": "low", "confidence": 0.0}
+        involves, why = routing.involves_plan_topic(question, hits)     # 意图信号仍可能命中
+        if involves:
+            done["plan_options"] = {"suggest": True, "reason": why}
+        yield done
+        return
+    best_distance = min(h.score for h in hits)
+    if best_distance > 1.05:
+        yield {"type": "status", "text": "检索结果相关度过低"}
+        rec = degrade(question, reason="检索置信过低，不硬编", kind="low_confidence")
+        yield {"type": "done", "answer_md": rec.answer_md, "citations": [],
+               "coverage": "low", "confidence": 0.0}
         return
 
     blocks = []
     if memory_prefix:
-        blocks.append("【长期记忆】" + memory_prefix)
+        blocks.append("【辅助上下文（用于理解偏好与意图，不是教材事实来源）】\n" + memory_prefix)
     if history:
         blocks.append("【最近对话（仅用于理解指代）】\n" + _summarize_history(history))
+    if evidence_prefix:
+        blocks.append(evidence_prefix)
     blocks.append(_snippet_block(hits, snippet_len=snippet_len))
     if empathy:
         # 学生带着情绪提问：要求模型先接住情绪再讲题（只加一句指示，不改其它协议）
@@ -516,12 +540,16 @@ def ask_stream(question: str, history=None, memory_prefix: str = "",
             coverage = obj.get("coverage", "medium")
             confidence = float(obj.get("confidence", 0.5))
             allowed = {i + 1: h for i, h in enumerate(hits)}
+            used = {int(n) for n in re.findall(r"\[(\d+)\]", answer)}
             for c in obj.get("citations", []):
                 idx = int(c.get("index", 0))
                 h = allowed.get(idx)
-                if not h:
+                if not h or idx not in used:
                     continue
                 md = h.metadata
+                quote = str(c.get("quote") or "").strip()
+                if not quote or quote not in h.text:
+                    quote = h.text[:80]
                 citations.append({
                     "index": idx,
                     "chapter": md.get("chapter", ""),
@@ -530,16 +558,28 @@ def ask_stream(question: str, history=None, memory_prefix: str = "",
                     "page": md.get("page"),
                     "source": md.get("source", ""),
                     "book": md.get("book", ""),
-                    "quote": (c.get("quote") or h.text[:80])[:80],
+                    "quote": quote[:80],
                 })
         except Exception:
             citations = []
-    if not citations and "未收录" in answer:
+    valid_indices = {c["index"] for c in citations}
+    answer = re.sub(r"\[(\d+)\]",
+                    lambda m: m.group(0) if int(m.group(1)) in valid_indices else "",
+                    answer)
+    retrieval_confidence = max(0.0, min(1.0, 1.0 - best_distance / 2.0))
+    confidence = min(max(confidence, 0.0), retrieval_confidence)
+    if not citations:
         coverage = "low"
         confidence = 0.0
     answer = math_verify.attach_verify(question, answer)
-    yield {"type": "done", "answer_md": answer, "citations": citations,
-           "coverage": coverage, "confidence": min(max(confidence, 0.0), 1.0)}
+    done = {"type": "done", "answer_md": answer, "citations": citations,
+            "coverage": coverage, "confidence": min(max(confidence, 0.0), 1.0)}
+    # 教案/PPT 联动（2026-09-12 一期）：涉及教案/PPT 时带上信号，
+    # 由 web 网关据此追加 options 事件、前端渲染两个选项。
+    involves, why = routing.involves_plan_topic(question, hits)
+    if involves:
+        done["plan_options"] = {"suggest": True, "reason": why}
+    yield done
 
 
 if __name__ == "__main__":

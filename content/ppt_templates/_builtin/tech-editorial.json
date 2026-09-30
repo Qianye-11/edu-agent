@@ -1,0 +1,29 @@
+{
+  "id": "tech-editorial",
+  "name": "学术蓝",
+  "source": "futuristic-tech-editorial-ppt-skill/references/style-system.md",
+  "canvas": { "w": 1280, "h": 720, "margin": 72, "content_w": [1040, 1120], "cols": 12, "gutter": 24, "bg": "#FFFFFF" },
+  "palette": {
+    "text": "#2B2B2B",
+    "accent": "#2F6BFF",
+    "sub": "#6B6B6B",
+    "line": "#E6EAF2",
+    "soft": "#F7F9FC",
+    "accent_max_ratio": 0.10
+  },
+  "type": {
+    "cover": 72, "title": 44, "label": 12, "body": 24, "caption": 15,
+    "lh_title": 1.08, "lh_body": 1.35, "para_gap_ratio": 0.6, "letter_spacing": 0
+  },
+  "ranges": {
+    "cover": [56, 76], "title": [36, 48], "label": [11, 13], "body": [18, 24], "caption": [12, 15]
+  },
+  "weights": { "cover": 700, "title": 700, "label": 600, "body": 400 },
+  "fonts": { "latin": "Arial", "ea": "微软雅黑", "stack": ["Arial", "微软雅黑", "sans-serif"] },
+  "geometry": { "line_w": [1, 2], "radius": [0, 4], "shadow": false, "glow": false, "gradient": false, "texture": false },
+  "density": { "blocks_max": 5, "chars_per_block_max": 22 },
+  "notes": [
+    "全部数值照抄上游 style-system.md（画布/边距/内容宽/12 栏 24px gutter/配色/字号区间/行高/几何），未改写。",
+    "内容宽取区间上限 1120 作版心：左侧从安全边距起、右侧因此更安静（上游要求不对称、留一侧更安静）。"
+  ]
+}

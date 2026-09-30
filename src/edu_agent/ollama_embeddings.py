@@ -6,9 +6,48 @@
 """
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
+import time
+from urllib.parse import urlparse
+
 import requests
 
 BGE_M3_DIM = 1024
+_START_ATTEMPTED = False
+
+
+def _start_local_ollama(base_url: str) -> bool:
+    """本机 Ollama 未运行时尝试拉起一次，避免 Agent B 因 embedding 服务缺席而整体失败。
+
+    只处理 localhost，远程 Ollama 的连接与权限由部署方负责；同时每个 Python
+    进程只尝试一次，避免服务异常时反复派生子进程。成功标准是 /api/tags 可访问。
+    """
+    global _START_ATTEMPTED
+    host = (urlparse(base_url).hostname or "").lower()
+    if _START_ATTEMPTED or host not in {"localhost", "127.0.0.1", "::1"}:
+        return False
+    _START_ATTEMPTED = True
+    executable = shutil.which("ollama")
+    if not executable:
+        return False
+    kwargs: dict = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+                    "stderr": subprocess.DEVNULL}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    try:
+        subprocess.Popen([executable, "serve"], **kwargs)
+    except OSError:
+        return False
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            if requests.get(f"{base_url}/api/tags", timeout=1).ok:
+                return True
+        except requests.RequestException:
+            time.sleep(0.25)
+    return False
 
 
 class OllamaBgeM3Embeddings:
@@ -32,7 +71,7 @@ class OllamaBgeM3Embeddings:
         out: list[list[float]] = []
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
-            r = requests.post(
+            request = lambda: requests.post(
                 f"{self.base_url}/api/embed",
                 json={"model": self.model, "input": list(batch),
                       "keep_alive": self.keep_alive},
@@ -40,6 +79,14 @@ class OllamaBgeM3Embeddings:
                 # 避免 Ollama 未启动/被防火墙黑洞时一次提问挂满 300s 才报错
                 timeout=(5, 300),
             )
+            try:
+                r = request()
+            except requests.ConnectionError as error:
+                if not _start_local_ollama(self.base_url):
+                    raise RuntimeError(
+                        "本机 Ollama 未运行，且自动启动失败。请启动 Ollama 后重试。"
+                    ) from error
+                r = request()
             if r.status_code != 200:
                 raise RuntimeError(f"Ollama /api/embed {r.status_code}: {r.text[:300]}")
             embs: list[list[float]] = r.json().get("embeddings") or []

@@ -1,0 +1,46 @@
+{
+ "compiled_by": "tools/compile_design_registry.py",
+ "source_skill": "ppt-master",
+ "source_commit": "481e057",
+ "source_license": "MIT",
+ "counts": {
+  "visual_styles": 18,
+  "modes": 5,
+  "brands": 21,
+  "layout_families": 7,
+  "layouts": 86
+ },
+ "note": "自包含注册表：两份 skill 不在场也能跑（docs/29 §1.2 红线）。guizang-ppt-skill（AGPL）不参与编译，只在文档里核对数值。",
+ "locked": {
+  "canvas": {
+   "w": 1280,
+   "h": 720,
+   "note": "16:9，设计像素；导出 1px = 0.75pt"
+  },
+  "safe_margin_min": 72,
+  "type_steps_note": "字号必须取自主题 tokens 的 5 档（偏离只记 warn，不阻断）",
+  "elements": [
+   "rect",
+   "line",
+   "path",
+   "circle",
+   "text",
+   "polyline",
+   "ellipse",
+   "polygon"
+  ],
+  "forbidden": [
+   "filter/阴影",
+   "渐变（部分风格允许，导出前会被审计判 warn）",
+   "外链图片",
+   "非预设自由形状（导出走预设形状目录）"
+  ],
+  "preview_equals_export": true,
+  "audit": "tools/slide_audit.py --gate 必须 error 0",
+  "no_write": [
+   "content/plans/",
+   "模板原稿",
+   ".deps/ppt-master"
+  ]
+ }
+}

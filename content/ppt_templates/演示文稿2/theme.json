@@ -1,0 +1,117 @@
+{
+  "id": "演示文稿2",
+  "name": "演示文稿2",
+  "source": "ppt_template_6f8287f1cfa74e67809048600fd0acce.pptx",
+  "kind": "pptx",
+  "tokens": {
+    "id": "演示文稿2",
+    "name": "演示文稿2",
+    "source": "template.pptx（导入的演示模板）",
+    "canvas": {
+      "w": 1280,
+      "h": 720,
+      "margin": 72,
+      "content_w": [
+        1040,
+        1120
+      ],
+      "cols": 12,
+      "gutter": 24,
+      "bg": "#FFFFFF"
+    },
+    "palette": {
+      "text": "#000000",
+      "accent": "#004D73",
+      "accent2": "#3C7AAB",
+      "sub": "#616161",
+      "line": "#DBDBDB",
+      "soft": "#E0EAEE",
+      "accent_max_ratio": 0.1
+    },
+    "type": {
+      "cover": 76.0,
+      "title": 48.0,
+      "label": 12,
+      "body": 24.0,
+      "caption": 15.0,
+      "lh_title": 1.08,
+      "lh_body": 1.35,
+      "para_gap_ratio": 0.6,
+      "letter_spacing": 0
+    },
+    "ranges": {
+      "cover": [
+        56,
+        76
+      ],
+      "title": [
+        36,
+        48
+      ],
+      "label": [
+        11,
+        13
+      ],
+      "body": [
+        18,
+        24
+      ],
+      "caption": [
+        12,
+        15
+      ]
+    },
+    "weights": {
+      "cover": 700,
+      "title": 700,
+      "label": 600,
+      "body": 400
+    },
+    "fonts": {
+      "latin": "Arial",
+      "ea": "微软雅黑",
+      "stack": [
+        "Arial",
+        "微软雅黑",
+        "sans-serif"
+      ]
+    },
+    "geometry": {
+      "line_w": [
+        1,
+        2
+      ],
+      "radius": [
+        0,
+        4
+      ],
+      "shadow": false,
+      "glow": false,
+      "gradient": false,
+      "texture": false
+    },
+    "density": {
+      "blocks_max": 5,
+      "chars_per_block_max": 22
+    },
+    "notes": [
+      "配色取自模板主题：text=#000000 accent=#004D73 bg=#FFFFFF",
+      "画布/版式仍用本项目的 1280×720 与 6 个版式（docs/19 §9.2）"
+    ],
+    "derived": {
+      "sub": {
+        "from": "text",
+        "over": "canvas.bg",
+        "alpha": 0.62
+      }
+    }
+  },
+  "degraded": [
+    "模板西文字体《等线 Light》本机没装 → 用 Arial",
+    "cover 字号 128px 超出规范区间 [56,76] → 夹到 76px",
+    "title 字号 88px 超出规范区间 [36,48] → 夹到 48px",
+    "body 字号 72px 超出规范区间 [18,24] → 夹到 24px",
+    "caption 字号 58.7px 超出规范区间 [12,15] → 夹到 15px"
+  ],
+  "imported": "2026-09-29 17:00:53"
+}

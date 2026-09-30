@@ -1,0 +1,17 @@
+{
+  "spec_version": 2,
+  "template_id": "复习课",
+  "name": "单元复习课模板",
+  "source": "builtin-preset",
+  "blocks": [
+    {"id": "rev_basic", "kind": "section", "level": 1, "title": "复习主题与范围", "elements": [{"id": "rev_basic_p", "type": "para", "text": "复习主题：\n教材范围：\n课时：", "align": "", "runs": []}]},
+    {"id": "rev_goal", "kind": "section", "level": 1, "title": "复习目标", "elements": [{"id": "rev_goal_p", "type": "para", "text": "知识整合目标：\n方法迁移目标：\n达成标准：", "align": "", "runs": []}]},
+    {"id": "rev_map", "kind": "section", "level": 1, "title": "知识网络", "elements": [{"id": "rev_map_p", "type": "para", "text": "用结构图、表格或要点梳理概念、性质、方法之间的联系。", "align": "", "runs": []}]},
+    {"id": "rev_diag", "kind": "section", "level": 1, "title": "课前诊断", "elements": [{"id": "rev_diag_table", "type": "table", "header": true, "cells": [[{"text": "诊断任务", "b": true, "align": "center"}, {"text": "预期问题", "b": true, "align": "center"}, {"text": "教学调整", "b": true, "align": "center"}], [{"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}]]}]},
+    {"id": "rev_example", "kind": "section", "level": 1, "title": "典例精讲", "elements": [{"id": "rev_example_p", "type": "para", "text": "典例：\n方法提炼：\n一题多解或多题归一：", "align": "", "runs": []}]},
+    {"id": "rev_error", "kind": "section", "level": 1, "title": "易错点辨析", "elements": [{"id": "rev_error_p", "type": "para", "text": "易错表现：\n错误原因：\n辨析策略：", "align": "", "runs": []}]},
+    {"id": "rev_practice", "kind": "section", "level": 1, "title": "分层训练", "elements": [{"id": "rev_practice_table", "type": "table", "header": true, "cells": [[{"text": "层级", "b": true, "align": "center"}, {"text": "任务", "b": true, "align": "center"}, {"text": "评价标准", "b": true, "align": "center"}], [{"text": "基础巩固", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}], [{"text": "综合提升", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}]]}]},
+    {"id": "rev_summary", "kind": "section", "level": 1, "title": "课堂总结与作业", "elements": [{"id": "rev_summary_p", "type": "para", "text": "课堂总结：\n必做作业：\n选做作业：", "align": "", "runs": []}]},
+    {"id": "rev_reflect", "kind": "section", "level": 1, "title": "教学反思", "elements": [{"id": "rev_reflect_p", "type": "para", "text": "课后填写。", "align": "", "runs": []}]}
+  ]
+}

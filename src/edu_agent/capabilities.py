@@ -32,7 +32,7 @@ _TOOLS_CACHE_TTL = 300.0  # MCP 工具清单缓存（要起子进程，慢）
 
 
 # ---------- 第三方 WPS MCP（wps-skills）安装位置解析 ----------
-# 交接约定（edu-agent-WPS接入交接要求.md）：第三方源码/node_modules **不入库**，
+# 交接约定（docs/09-WPS接入交接要求.md）：第三方源码/node_modules **不入库**，
 # 由 deploy/setup_wps_mcp.cmd 克隆到仓库外的固定位置。解析优先级：
 #   1) 环境变量 WPS_MCP_ENTRY（直接指向 dist/index.js）
 #   2) 环境变量 WPS_MCP_DIR（wps-skills 克隆目录）
@@ -131,6 +131,8 @@ class SkillSpec:
     vendor: str = ""          # 详情页那行来源小字（留空则用 WPS 的默认文案）
     trial: str = ""           # 非空 = 详情页提供「试用」面板：ask（提问即答）/ workbench（工作台预览）
     entry: str = "scripts/ask.py"   # 入口脚本（相对技能目录）；平台按它调用技能
+    builtin: bool = False     # True = 内置能力（没有 skills/<id>/SKILL.md 实体，UI 显示「内置」而非「文件缺失」）
+    probe: Callable[[], tuple[bool, str]] | None = None   # 可选：返回 (running, detail)
 
 
 MCP_SPECS: tuple[McpSpec, ...] = (
@@ -172,6 +174,20 @@ SKILL_SPECS: tuple[SkillSpec, ...] = (
               desc="提问即答：把问题交给本机 Ollama 模型回答（免 API Key、可离线）",
               category="通用能力", mcp="", trial="ask",
               vendor="本工作区技能 · 内部封装本机 Ollama · MIT"),
+    # 2026-09-12：会话内文档预览（纯前端内存渲染，不落盘、不碰 WPS）
+    # 关闭它只会让会话页不渲染右侧预览面板，**完全不影响导出链路**。
+    SkillSpec(id="doc-session-preview", name="会话文档预览", icon="D",
+              desc="AI 生成文档后，在会话页右侧唤起多格式预览面板（内存渲染，不落盘、不调用 WPS）",
+              category="文档", builtin=True),
+    SkillSpec(id="vision-math", name="图片与公式分析", icon="V",
+              desc="识别题目截图、函数图象、几何图和图片公式，并附本地符号校验结果",
+              category="教学", builtin=True, probe=lambda: _vision_probe()),
+    # 2026-09-26：课件生成 —— 第三方引擎 ppt-master（MIT，装在仓库外 D:\hermes\ppt-master）。
+    # 只借它的「编译器层」（质量门 + SVG→原生 DrawingML），页面由 scripts/wsl_ppt_bridge.py
+    # 用固定版式确定性渲染；本机 SAC 拦 lxml，故实际渲染在 WSL 里执行（与 wsl_docx 后路同因）。
+    SkillSpec(id="ppt-master", name="课件生成（原生 PPTX）", icon="P",
+              desc="教材内容 → 原生可编辑 PPTX：单个形状可选中拖动、中文字体正确、不依赖 Office",
+              category="文档", builtin=True, probe=lambda: _ppt_engine_probe()),
 )
 
 _KIND_SPECS: dict[str, dict[str, McpSpec | SkillSpec]] = {
@@ -423,6 +439,26 @@ def _probe_mcp(spec: McpSpec, deep: bool = False) -> dict:
     return out
 
 
+def _ppt_engine_probe() -> tuple[bool, str]:
+    """课件生成引擎（ppt-master）探活。available() 自带 lru_cache，只在首次起一次 WSL。"""
+    try:
+        from edu_agent import ppt_master
+
+        return ppt_master.available()
+    except Exception as exc:  # noqa: BLE001  探测失败只影响状态显示，绝不阻断业务链路
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _vision_probe() -> tuple[bool, str]:
+    """视觉能力只检查配置，不在状态轮询中发起计费请求。"""
+    try:
+        from edu_agent import vision
+
+        return vision.available()
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{type(exc).__name__}: {exc}"
+
+
 def _skill_files(spec: SkillSpec) -> dict:
     """读技能目录里 SKILL.md 的 front-matter（name/description/size）。
 
@@ -463,16 +499,39 @@ def snapshot(deep: bool = False) -> dict:
         files = _skill_files(spec)
         bound = spec.mcp
         bound_en = is_enabled("mcp", bound) if bound else True
+        running, detail = None, ""
+        if spec.probe is not None:                 # 只有声明了 probe 的技能才做真探活
+            try:
+                running, detail = spec.probe()
+            except Exception as exc:  # noqa: BLE001
+                running, detail = False, f"{type(exc).__name__}: {exc}"
         skill_rows.append({
             "id": spec.id, "name": spec.name, "desc": spec.desc or files.get("desc", ""),
             "category": spec.category, "icon": spec.icon, "mcp": bound,
             "enabled": en, "active": en and bound_en,
             "installed": files["exists"], "size": files["size"], "path": files["path"],
             "vendor": spec.vendor, "trial": spec.trial,
+            "builtin": spec.builtin,
+            "running": running, "detail": detail,
         })
-    return {"mcp": mcp_rows, "skills": skill_rows,
+    # 2026-09-19：再加一路「自建技能」——agent 自己写出来的 SKILL.md（经验→技能回路），
+    # 与第三方 wps-skills 那批分开列，前端单独展示；读不到就当空表，绝不影响快照。
+    local_rows: list[dict] = []
+    try:
+        from edu_agent import skills_local
+
+        local_rows = skills_local.list_skills()
+    except Exception:  # noqa: BLE001
+        local_rows = []
+    return {"mcp": mcp_rows, "skills": skill_rows, "skills_local": local_rows,
             "wps_export_ready": wps_available()[0],
+            "session_doc_preview_ready": session_preview_ready(),
             "state_file": str(state_path())}
+
+
+def session_preview_ready() -> bool:
+    """会话内文档预览是否启用（只影响会话页右侧预览面板的渲染，不影响任何导出）。"""
+    return is_enabled("skill", "doc-session-preview")
 
 
 def wps_available() -> tuple[bool, str]:

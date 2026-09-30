@@ -1,0 +1,9355 @@
+{
+ "families": [
+  {
+   "id": "editorial_bleed",
+   "summary": "A structure-only 16:9 system with 10 authored PowerPoint Layouts whose images bleed to the canvas edge and whose text sits on the image behind a scrim.",
+   "canvas_format": "ppt169",
+   "layouts": [
+    {
+     "id": "hero_full",
+     "name": "Hero Full",
+     "file": "01_hero_full.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1280.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        448.0,
+        1120.0,
+        96.0
+       ],
+       "size": 52.0,
+       "fill": "#FFFFFF",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        80.0,
+        568.0,
+        880.0,
+        56.0
+       ],
+       "size": 22.0,
+       "fill": "#E2E8F0",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "hero_side_scrim",
+     "name": "Hero with Side Scrim",
+     "file": "02_hero_side_scrim.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1280.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        236.0,
+        640.0,
+        88.0
+       ],
+       "size": 44.0,
+       "fill": "#FFFFFF",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        356.0,
+        640.0,
+        200.0
+       ],
+       "size": 22.0,
+       "fill": "#CBD5E1",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "split_bleed",
+     "name": "Split Bleed",
+     "file": "03_split_bleed.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        640.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        720.0,
+        216.0,
+        480.0,
+        88.0
+       ],
+       "size": 40.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        720.0,
+        336.0,
+        480.0,
+        240.0
+       ],
+       "size": 21.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "split-bleed-accent",
+        "x": "720",
+        "y": "168",
+        "width": "72",
+        "height": "6",
+        "rx": "3",
+        "fill": "#475569",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "split_bleed_reverse",
+     "name": "Split Bleed Reverse",
+     "file": "04_split_bleed_reverse.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        640.0,
+        0.0,
+        640.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        216.0,
+        480.0,
+        88.0
+       ],
+       "size": 40.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        336.0,
+        480.0,
+        240.0
+       ],
+       "size": 21.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "split-bleed-reverse-accent",
+        "x": "80",
+        "y": "168",
+        "width": "72",
+        "height": "6",
+        "rx": "3",
+        "fill": "#475569",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "chapter_full",
+     "name": "Chapter Full",
+     "file": "05_chapter_full.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1280.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        232.0,
+        320.0,
+        72.0
+       ],
+       "size": 56.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        332.0,
+        1120.0,
+        96.0
+       ],
+       "size": 52.0,
+       "fill": "#FFFFFF",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        452.0,
+        880.0,
+        56.0
+       ],
+       "size": 22.0,
+       "fill": "#CBD5E1",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "quote_over_image",
+     "name": "Quote over Image",
+     "file": "06_quote_over_image.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1280.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        160.0,
+        268.0,
+        960.0,
+        184.0
+       ],
+       "size": 44.0,
+       "fill": "#FFFFFF",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        160.0,
+        492.0,
+        960.0,
+        48.0
+       ],
+       "size": 20.0,
+       "fill": "#94A3B8",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "triptych",
+     "name": "Triptych",
+     "file": "07_triptych.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        427.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        427.0,
+        0.0,
+        427.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        854.0,
+        0.0,
+        426.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        64.0,
+        1120.0,
+        72.0
+       ],
+       "size": 34.0,
+       "fill": "#FFFFFF",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        32.0,
+        560.0,
+        363.0,
+        128.0
+       ],
+       "size": 20.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        459.0,
+        560.0,
+        363.0,
+        128.0
+       ],
+       "size": 20.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        886.0,
+        560.0,
+        362.0,
+        128.0
+       ],
+       "size": 20.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "image_grid_four",
+     "name": "Four-Image Grid",
+     "file": "08_image_grid_four.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        640.0,
+        360.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        640.0,
+        0.0,
+        640.0,
+        360.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        360.0,
+        640.0,
+        360.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        640.0,
+        360.0,
+        640.0,
+        360.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        32.0,
+        268.0,
+        576.0,
+        64.0
+       ],
+       "size": 18.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        672.0,
+        268.0,
+        576.0,
+        64.0
+       ],
+       "size": 18.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        32.0,
+        628.0,
+        576.0,
+        64.0
+       ],
+       "size": 18.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        672.0,
+        628.0,
+        576.0,
+        64.0
+       ],
+       "size": 18.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "full_statement",
+     "name": "Full Statement",
+     "file": "09_full_statement.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        328.0,
+        1120.0,
+        200.0
+       ],
+       "size": 64.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        556.0,
+        880.0,
+        56.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "full-statement-accent",
+        "x": "80",
+        "y": "272",
+        "width": "96",
+        "height": "8",
+        "rx": "4",
+        "fill": "#475569",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "closing_full",
+     "name": "Closing Full",
+     "file": "10_closing_full.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1280.0,
+        720.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        468.0,
+        1120.0,
+        88.0
+       ],
+       "size": 44.0,
+       "fill": "#FFFFFF",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        580.0,
+        880.0,
+        48.0
+       ],
+       "size": 20.0,
+       "fill": "#CBD5E1",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#0F172A",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "moments_square",
+   "summary": "A structure-only 1:1 system with 8 authored PowerPoint Layouts that use both horizontal and vertical division on a square canvas.",
+   "canvas_format": "moments",
+   "layouts": [
+    {
+     "id": "cover",
+     "name": "Cover",
+     "file": "01_cover.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        360.0,
+        880.0,
+        240.0
+       ],
+       "size": 68.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        140.0,
+        640.0,
+        800.0,
+        100.0
+       ],
+       "size": 30.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        100.0,
+        960.0,
+        880.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#475569",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "cover-accent",
+        "x": "490",
+        "y": "300",
+        "width": "100",
+        "height": "8",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "cover-brand-band",
+        "x": "0",
+        "y": "900",
+        "width": "1080",
+        "height": "180",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "statement",
+     "name": "Statement",
+     "file": "02_statement.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        400.0,
+        880.0,
+        300.0
+       ],
+       "size": 60.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        140.0,
+        760.0,
+        800.0,
+        100.0
+       ],
+       "size": 30.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "statement-accent",
+        "x": "490",
+        "y": "340",
+        "width": "100",
+        "height": "8",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_content",
+     "name": "Title and Content",
+     "file": "03_title_content.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        110.0,
+        880.0,
+        210.0
+       ],
+       "size": 60.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        100.0,
+        380.0,
+        880.0,
+        500.0
+       ],
+       "size": 30.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        100.0,
+        940.0,
+        880.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "title-content-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "2",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "two_column",
+     "name": "Two Column",
+     "file": "04_two_column.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        110.0,
+        880.0,
+        210.0
+       ],
+       "size": 60.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        132.0,
+        412.0,
+        356.0,
+        436.0
+       ],
+       "size": 28.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        592.0,
+        412.0,
+        356.0,
+        436.0
+       ],
+       "size": 28.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        100.0,
+        940.0,
+        880.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-column-left-panel",
+        "x": "100",
+        "y": "380",
+        "width": "420",
+        "height": "500",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-column-right-panel",
+        "x": "560",
+        "y": "380",
+        "width": "420",
+        "height": "500",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "three_row",
+     "name": "Three Row",
+     "file": "05_three_row.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        110.0,
+        880.0,
+        210.0
+       ],
+       "size": 60.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        220.0,
+        404.0,
+        736.0,
+        100.0
+       ],
+       "size": 28.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        220.0,
+        580.0,
+        736.0,
+        100.0
+       ],
+       "size": 28.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        220.0,
+        756.0,
+        736.0,
+        100.0
+       ],
+       "size": 28.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        100.0,
+        940.0,
+        880.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-row-one",
+        "x": "100",
+        "y": "380",
+        "width": "880",
+        "height": "148",
+        "rx": "16",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-row-two",
+        "x": "100",
+        "y": "556",
+        "width": "880",
+        "height": "148",
+        "rx": "16",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-row-three",
+        "x": "100",
+        "y": "732",
+        "width": "880",
+        "height": "148",
+        "rx": "16",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "three-row-marker-one",
+        "cx": "168",
+        "cy": "454",
+        "r": "28",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "three-row-marker-two",
+        "cx": "168",
+        "cy": "630",
+        "r": "28",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "three-row-marker-three",
+        "cx": "168",
+        "cy": "806",
+        "r": "28",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "image_center",
+     "name": "Centered Image",
+     "file": "06_image_center.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        110.0,
+        880.0,
+        180.0
+       ],
+       "size": 56.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        290.0,
+        330.0,
+        500.0,
+        500.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        140.0,
+        870.0,
+        800.0,
+        70.0
+       ],
+       "size": 28.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "image-center-panel",
+        "x": "290",
+        "y": "330",
+        "width": "500",
+        "height": "500",
+        "rx": "24",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "image_full",
+     "name": "Full-Bleed Image",
+     "file": "07_image_full.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1080.0,
+        820.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        860.0,
+        880.0,
+        80.0
+       ],
+       "size": 44.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        100.0,
+        950.0,
+        880.0,
+        70.0
+       ],
+       "size": 26.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "image-full-caption-band",
+        "x": "0",
+        "y": "820",
+        "width": "1080",
+        "height": "260",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "ending",
+     "name": "Ending",
+     "file": "08_ending.svg",
+     "canvas": [
+      1080.0,
+      1080.0
+     ],
+     "viewBox": "0 0 1080 1080",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        100.0,
+        400.0,
+        880.0,
+        260.0
+       ],
+       "size": 60.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        140.0,
+        720.0,
+        800.0,
+        100.0
+       ],
+       "size": 30.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        100.0,
+        960.0,
+        880.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#475569",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1080",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "ending-accent",
+        "x": "490",
+        "y": "340",
+        "width": "100",
+        "height": "8",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "ending-brand-band",
+        "x": "0",
+        "y": "900",
+        "width": "1080",
+        "height": "180",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "presentation_core",
+   "summary": "A structure-only 16:9 system with 20 authored PowerPoint Layouts for general, editorial, image, process, and data presentations.",
+   "canvas_format": "ppt169",
+   "layouts": [
+    {
+     "id": "title_slide",
+     "name": "Title Slide",
+     "file": "01_title_slide.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        112.0,
+        216.0,
+        1056.0,
+        116.0
+       ],
+       "size": 54.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        112.0,
+        350.0,
+        880.0,
+        64.0
+       ],
+       "size": 26.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "title-slide-accent",
+        "x": "64",
+        "y": "216",
+        "width": "8",
+        "height": "192",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_content",
+     "name": "Title and Content",
+     "file": "02_title_content.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        88.0,
+        176.0,
+        1104.0,
+        456.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "title-content-rule",
+        "x": "64",
+        "y": "120",
+        "width": "96",
+        "height": "4",
+        "rx": "2",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "title-content-panel",
+        "x": "64",
+        "y": "152",
+        "width": "1152",
+        "height": "504",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "section_header",
+     "name": "Section Header",
+     "file": "03_section_header.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        160.0,
+        224.0,
+        896.0,
+        112.0
+       ],
+       "size": 50.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        160.0,
+        356.0,
+        800.0,
+        92.0
+       ],
+       "size": 24.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "section-header-rail",
+        "x": "64",
+        "y": "144",
+        "width": "8",
+        "height": "432",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "section-header-anchor",
+        "cx": "1128",
+        "cy": "180",
+        "r": "72",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "two_content",
+     "name": "Two Content",
+     "file": "04_two_content.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        88.0,
+        176.0,
+        504.0,
+        456.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        688.0,
+        176.0,
+        504.0,
+        456.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-content-left-panel",
+        "x": "64",
+        "y": "152",
+        "width": "552",
+        "height": "504",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-content-right-panel",
+        "x": "664",
+        "y": "152",
+        "width": "552",
+        "height": "504",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "comparison",
+     "name": "Comparison",
+     "file": "05_comparison.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        88.0,
+        176.0,
+        504.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        88.0,
+        248.0,
+        504.0,
+        376.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        688.0,
+        176.0,
+        504.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        688.0,
+        248.0,
+        504.0,
+        376.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "comparison-left-panel",
+        "x": "64",
+        "y": "152",
+        "width": "552",
+        "height": "504",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "comparison-right-panel",
+        "x": "664",
+        "y": "152",
+        "width": "552",
+        "height": "504",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "comparison-divider",
+        "x": "638",
+        "y": "184",
+        "width": "4",
+        "height": "440",
+        "rx": "2",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_only",
+     "name": "Title Only",
+     "file": "06_title_only.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "title-only-rule",
+        "x": "64",
+        "y": "120",
+        "width": "1152",
+        "height": "2",
+        "fill": "#D6DCE3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "blank",
+     "name": "Blank",
+     "file": "07_blank.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "content_caption",
+     "name": "Content with Caption",
+     "file": "08_content_caption.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        112.0,
+        256.0,
+        104.0
+       ],
+       "size": 34.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        64.0,
+        248.0,
+        256.0,
+        296.0
+       ],
+       "size": 22.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        424.0,
+        88.0,
+        768.0,
+        544.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "content-caption-rail",
+        "x": "360",
+        "y": "64",
+        "width": "2",
+        "height": "592",
+        "fill": "#D6DCE3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "content-caption-panel",
+        "x": "400",
+        "y": "64",
+        "width": "816",
+        "height": "592",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "picture_caption",
+     "name": "Picture with Caption",
+     "file": "09_picture_caption.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        888.0,
+        112.0,
+        296.0,
+        104.0
+       ],
+       "size": 34.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        888.0,
+        248.0,
+        296.0,
+        296.0
+       ],
+       "size": 22.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        64.0,
+        64.0,
+        752.0,
+        592.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "picture-caption-image-panel",
+        "x": "64",
+        "y": "64",
+        "width": "752",
+        "height": "592",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "picture-caption-panel",
+        "x": "856",
+        "y": "64",
+        "width": "360",
+        "height": "592",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "hero_statement",
+     "name": "Hero Statement",
+     "file": "10_hero_statement.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        96.0,
+        184.0,
+        1088.0,
+        208.0
+       ],
+       "size": 68.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        96.0,
+        424.0,
+        760.0,
+        72.0
+       ],
+       "size": 26.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "hero-statement-field",
+        "x": "64",
+        "y": "96",
+        "width": "1152",
+        "height": "528",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "hero-statement-accent",
+        "x": "96",
+        "y": "144",
+        "width": "160",
+        "height": "6",
+        "rx": "3",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "editorial_split",
+     "name": "Editorial Split",
+     "file": "11_editorial_split.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        64.0,
+        448.0,
+        104.0
+       ],
+       "size": 38.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        64.0,
+        208.0,
+        448.0,
+        352.0
+       ],
+       "size": 24.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        592.0,
+        64.0,
+        624.0,
+        592.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "editorial-split-image-panel",
+        "x": "592",
+        "y": "64",
+        "width": "624",
+        "height": "592",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "editorial-split-rail",
+        "x": "552",
+        "y": "64",
+        "width": "4",
+        "height": "592",
+        "rx": "2",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "three_card",
+     "name": "Three-Card Synthesis",
+     "file": "12_three_card.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        48.0,
+        1152.0,
+        80.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        88.0,
+        192.0,
+        320.0,
+        424.0
+       ],
+       "size": 22.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        480.0,
+        192.0,
+        320.0,
+        424.0
+       ],
+       "size": 22.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        872.0,
+        192.0,
+        320.0,
+        424.0
+       ],
+       "size": 22.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-card-panel-one",
+        "x": "64",
+        "y": "168",
+        "width": "368",
+        "height": "472",
+        "rx": "16",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-card-panel-two",
+        "x": "456",
+        "y": "168",
+        "width": "368",
+        "height": "472",
+        "rx": "16",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-card-panel-three",
+        "x": "848",
+        "y": "168",
+        "width": "368",
+        "height": "472",
+        "rx": "16",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "kpi_dashboard",
+     "name": "KPI Dashboard",
+     "file": "13_kpi_dashboard.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        80.0,
+        168.0,
+        232.0,
+        96.0
+       ],
+       "size": 28.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        376.0,
+        168.0,
+        232.0,
+        96.0
+       ],
+       "size": 28.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        672.0,
+        168.0,
+        232.0,
+        96.0
+       ],
+       "size": 28.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        968.0,
+        168.0,
+        232.0,
+        96.0
+       ],
+       "size": 28.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        88.0,
+        344.0,
+        1104.0,
+        272.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-dashboard-card-one",
+        "x": "64",
+        "y": "152",
+        "width": "264",
+        "height": "128",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-dashboard-card-two",
+        "x": "360",
+        "y": "152",
+        "width": "264",
+        "height": "128",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-dashboard-card-three",
+        "x": "656",
+        "y": "152",
+        "width": "264",
+        "height": "128",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-dashboard-card-four",
+        "x": "952",
+        "y": "152",
+        "width": "264",
+        "height": "128",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-dashboard-evidence-panel",
+        "x": "64",
+        "y": "320",
+        "width": "1152",
+        "height": "320",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "process_timeline",
+     "name": "Process Timeline",
+     "file": "14_process_timeline.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        80.0,
+        168.0,
+        232.0,
+        344.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        376.0,
+        168.0,
+        232.0,
+        344.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        672.0,
+        168.0,
+        232.0,
+        344.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        968.0,
+        168.0,
+        232.0,
+        344.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        88.0,
+        584.0,
+        1104.0,
+        40.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "process-timeline-takeaway-panel",
+        "x": "64",
+        "y": "568",
+        "width": "1152",
+        "height": "72",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "process-timeline-axis",
+        "stroke": "#CBD5E1",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-one",
+        "cx": "196",
+        "cy": "256",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-two",
+        "cx": "492",
+        "cy": "256",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-three",
+        "cx": "788",
+        "cy": "256",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-four",
+        "cx": "1084",
+        "cy": "256",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "data_story",
+     "name": "Data Story",
+     "file": "15_data_story.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        88.0,
+        176.0,
+        712.0,
+        408.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        888.0,
+        184.0,
+        296.0,
+        360.0
+       ],
+       "size": 24.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        64.0,
+        648.0,
+        1152.0,
+        32.0
+       ],
+       "size": 14.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "data-story-evidence-panel",
+        "x": "64",
+        "y": "152",
+        "width": "760",
+        "height": "456",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "data-story-insight-panel",
+        "x": "856",
+        "y": "152",
+        "width": "360",
+        "height": "456",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "data-story-source-rule",
+        "x": "64",
+        "y": "632",
+        "width": "1152",
+        "height": "2",
+        "fill": "#D6DCE3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_picture",
+     "name": "Title and Picture",
+     "file": "16_title_picture.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        64.0,
+        152.0,
+        1152.0,
+        504.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "title-picture-rule",
+        "x": "64",
+        "y": "120",
+        "width": "96",
+        "height": "4",
+        "rx": "2",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "title-picture-image-panel",
+        "x": "64",
+        "y": "152",
+        "width": "1152",
+        "height": "504",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "two_picture_caption",
+     "name": "Two Pictures with Captions",
+     "file": "17_two_picture_caption.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        64.0,
+        152.0,
+        552.0,
+        320.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        664.0,
+        152.0,
+        552.0,
+        320.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        88.0,
+        520.0,
+        504.0,
+        96.0
+       ],
+       "size": 22.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        688.0,
+        520.0,
+        504.0,
+        96.0
+       ],
+       "size": 22.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-picture-left-panel",
+        "x": "64",
+        "y": "152",
+        "width": "552",
+        "height": "320",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-picture-right-panel",
+        "x": "664",
+        "y": "152",
+        "width": "552",
+        "height": "320",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-picture-left-caption-panel",
+        "x": "64",
+        "y": "496",
+        "width": "552",
+        "height": "144",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-picture-right-caption-panel",
+        "x": "664",
+        "y": "496",
+        "width": "552",
+        "height": "144",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "screenshot_focus",
+     "name": "Screenshot Focus",
+     "file": "18_screenshot_focus.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        64.0,
+        196.0,
+        824.0,
+        420.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        968.0,
+        184.0,
+        216.0,
+        304.0
+       ],
+       "size": 22.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        952.0,
+        536.0,
+        232.0,
+        40.0
+       ],
+       "size": 14.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "screenshot-focus-frame",
+        "x": "64",
+        "y": "152",
+        "width": "824",
+        "height": "464",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#CBD5E1",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "screenshot-focus-browser-bar",
+        "x": "64",
+        "y": "152",
+        "width": "824",
+        "height": "44",
+        "rx": "12",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "screenshot-focus-note-panel",
+        "x": "920",
+        "y": "152",
+        "width": "296",
+        "height": "464",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "screenshot-focus-note-accent",
+        "x": "944",
+        "y": "184",
+        "width": "4",
+        "height": "80",
+        "rx": "2",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "screenshot-focus-source-rule",
+        "x": "952",
+        "y": "520",
+        "width": "232",
+        "height": "2",
+        "fill": "#D6DCE3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "screenshot-focus-browser-dot-one",
+        "cx": "92",
+        "cy": "174",
+        "r": "6",
+        "fill": "#94A3B8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "screenshot-focus-browser-dot-two",
+        "cx": "116",
+        "cy": "174",
+        "r": "6",
+        "fill": "#94A3B8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "screenshot-focus-browser-dot-three",
+        "cx": "140",
+        "cy": "174",
+        "r": "6",
+        "fill": "#94A3B8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "chart_insight",
+     "name": "Chart and Insight",
+     "file": "19_chart_insight.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "chart",
+       "bounds": [
+        88.0,
+        176.0,
+        712.0,
+        408.0
+       ],
+       "size": 14.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        888.0,
+        184.0,
+        296.0,
+        360.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        888.0,
+        552.0,
+        296.0,
+        32.0
+       ],
+       "size": 14.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "chart-insight-chart-panel",
+        "x": "64",
+        "y": "152",
+        "width": "760",
+        "height": "456",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "chart-insight-message-panel",
+        "x": "856",
+        "y": "152",
+        "width": "360",
+        "height": "456",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "table_summary",
+     "name": "Table and Summary",
+     "file": "20_table_summary.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        64.0,
+        40.0,
+        1152.0,
+        72.0
+       ],
+       "size": 36.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "table",
+       "bounds": [
+        88.0,
+        176.0,
+        776.0,
+        408.0
+       ],
+       "size": 16.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        952.0,
+        184.0,
+        232.0,
+        344.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        952.0,
+        552.0,
+        232.0,
+        32.0
+       ],
+       "size": 14.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "table-summary-table-panel",
+        "x": "64",
+        "y": "152",
+        "width": "824",
+        "height": "456",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "table-summary-message-panel",
+        "x": "920",
+        "y": "152",
+        "width": "296",
+        "height": "456",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "presentation_core_43",
+   "summary": "A structure-only 4:3 system with 16 authored PowerPoint Layouts for projector, classroom, academic, and meeting-room presentations.",
+   "canvas_format": "ppt43",
+   "layouts": [
+    {
+     "id": "title_slide",
+     "name": "Title Slide",
+     "file": "01_title_slide.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        96.0,
+        248.0,
+        872.0,
+        104.0
+       ],
+       "size": 46.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        96.0,
+        372.0,
+        720.0,
+        56.0
+       ],
+       "size": 22.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "title-slide-accent",
+        "x": "56",
+        "y": "248",
+        "width": "8",
+        "height": "176",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_content",
+     "name": "Title and Content",
+     "file": "02_title_content.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        56.0,
+        152.0,
+        912.0,
+        560.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "title-content-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "2",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "section_header",
+     "name": "Section Header",
+     "file": "03_section_header.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        320.0,
+        912.0,
+        96.0
+       ],
+       "size": 44.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        56.0,
+        436.0,
+        768.0,
+        72.0
+       ],
+       "size": 20.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "section-header-accent",
+        "x": "56",
+        "y": "280",
+        "width": "64",
+        "height": "6",
+        "rx": "3",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "two_content",
+     "name": "Two Content",
+     "file": "04_two_content.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        160.0,
+        392.0,
+        528.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        552.0,
+        160.0,
+        392.0,
+        528.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-content-left-panel",
+        "x": "56",
+        "y": "136",
+        "width": "440",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-content-right-panel",
+        "x": "528",
+        "y": "136",
+        "width": "440",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "comparison",
+     "name": "Comparison",
+     "file": "05_comparison.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        152.0,
+        392.0,
+        32.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        240.0,
+        392.0,
+        448.0
+       ],
+       "size": 19.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        552.0,
+        152.0,
+        392.0,
+        32.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        552.0,
+        240.0,
+        392.0,
+        448.0
+       ],
+       "size": 19.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "comparison-left-head",
+        "x": "56",
+        "y": "136",
+        "width": "440",
+        "height": "64",
+        "rx": "12",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "comparison-right-head",
+        "x": "528",
+        "y": "136",
+        "width": "440",
+        "height": "64",
+        "rx": "12",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "comparison-left-body",
+        "x": "56",
+        "y": "216",
+        "width": "440",
+        "height": "496",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "comparison-right-body",
+        "x": "528",
+        "y": "216",
+        "width": "440",
+        "height": "496",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_only",
+     "name": "Title Only",
+     "file": "06_title_only.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "title-only-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "2",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "blank",
+     "name": "Blank",
+     "file": "07_blank.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "content_caption",
+     "name": "Content with Caption",
+     "file": "08_content_caption.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        160.0,
+        576.0,
+        528.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        728.0,
+        160.0,
+        216.0,
+        528.0
+       ],
+       "size": 17.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "content-caption-main-panel",
+        "x": "56",
+        "y": "136",
+        "width": "624",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "content-caption-rail-panel",
+        "x": "704",
+        "y": "136",
+        "width": "264",
+        "height": "576",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "picture_caption",
+     "name": "Picture with Caption",
+     "file": "09_picture_caption.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        720.0,
+        104.0,
+        224.0,
+        88.0
+       ],
+       "size": 30.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        720.0,
+        224.0,
+        224.0,
+        344.0
+       ],
+       "size": 19.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        56.0,
+        56.0,
+        616.0,
+        656.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "picture-caption-image-panel",
+        "x": "56",
+        "y": "56",
+        "width": "616",
+        "height": "656",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "picture-caption-rail-panel",
+        "x": "696",
+        "y": "56",
+        "width": "272",
+        "height": "656",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "hero_statement",
+     "name": "Hero Statement",
+     "file": "10_hero_statement.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        292.0,
+        912.0,
+        168.0
+       ],
+       "size": 48.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        56.0,
+        484.0,
+        720.0,
+        56.0
+       ],
+       "size": 22.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "hero-statement-accent",
+        "x": "56",
+        "y": "240",
+        "width": "88",
+        "height": "6",
+        "rx": "3",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "three_card",
+     "name": "Three-Card Synthesis",
+     "file": "11_three_card.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        80.0,
+        160.0,
+        240.0,
+        528.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        392.0,
+        160.0,
+        240.0,
+        528.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        704.0,
+        160.0,
+        240.0,
+        528.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-card-panel-one",
+        "x": "56",
+        "y": "136",
+        "width": "288",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-card-panel-two",
+        "x": "368",
+        "y": "136",
+        "width": "288",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-card-panel-three",
+        "x": "680",
+        "y": "136",
+        "width": "288",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "kpi_grid",
+     "name": "KPI Grid",
+     "file": "12_kpi_grid.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        80.0,
+        152.0,
+        396.0,
+        88.0
+       ],
+       "size": 26.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        548.0,
+        152.0,
+        396.0,
+        88.0
+       ],
+       "size": 26.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        80.0,
+        296.0,
+        396.0,
+        88.0
+       ],
+       "size": 26.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        548.0,
+        296.0,
+        396.0,
+        88.0
+       ],
+       "size": 26.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        80.0,
+        448.0,
+        864.0,
+        240.0
+       ],
+       "size": 20.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-grid-card-one",
+        "x": "56",
+        "y": "136",
+        "width": "444",
+        "height": "120",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-grid-card-two",
+        "x": "524",
+        "y": "136",
+        "width": "444",
+        "height": "120",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-grid-card-three",
+        "x": "56",
+        "y": "280",
+        "width": "444",
+        "height": "120",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-grid-card-four",
+        "x": "524",
+        "y": "280",
+        "width": "444",
+        "height": "120",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-grid-evidence-panel",
+        "x": "56",
+        "y": "424",
+        "width": "912",
+        "height": "288",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "process_timeline",
+     "name": "Process Timeline",
+     "file": "13_process_timeline.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        68.0,
+        288.0,
+        204.0,
+        320.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        296.0,
+        288.0,
+        204.0,
+        320.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        524.0,
+        288.0,
+        204.0,
+        320.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        752.0,
+        288.0,
+        204.0,
+        320.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        656.0,
+        864.0,
+        32.0
+       ],
+       "size": 18.0,
+       "fill": "#475569",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "process-timeline-takeaway-panel",
+        "x": "56",
+        "y": "640",
+        "width": "912",
+        "height": "64",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "process-timeline-axis",
+        "stroke": "#CBD5E1",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-one",
+        "cx": "170",
+        "cy": "232",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-two",
+        "cx": "398",
+        "cy": "232",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-three",
+        "cx": "626",
+        "cy": "232",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-four",
+        "cx": "854",
+        "cy": "232",
+        "r": "12",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "stacked_split",
+     "name": "Stacked Split",
+     "file": "14_stacked_split.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        160.0,
+        864.0,
+        224.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        464.0,
+        864.0,
+        224.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "stacked-split-top-panel",
+        "x": "56",
+        "y": "136",
+        "width": "912",
+        "height": "272",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "stacked-split-bottom-panel",
+        "x": "56",
+        "y": "440",
+        "width": "912",
+        "height": "272",
+        "rx": "12",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "chart_insight",
+     "name": "Chart and Insight",
+     "file": "15_chart_insight.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "chart",
+       "bounds": [
+        76.0,
+        156.0,
+        576.0,
+        536.0
+       ],
+       "size": 14.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        716.0,
+        156.0,
+        232.0,
+        456.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        716.0,
+        640.0,
+        232.0,
+        32.0
+       ],
+       "size": 13.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "chart-insight-chart-panel",
+        "x": "56",
+        "y": "136",
+        "width": "616",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "chart-insight-message-panel",
+        "x": "696",
+        "y": "136",
+        "width": "272",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "table_summary",
+     "name": "Table and Summary",
+     "file": "16_table_summary.svg",
+     "canvas": [
+      1024.0,
+      768.0
+     ],
+     "viewBox": "0 0 1024 768",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        56.0,
+        36.0,
+        912.0,
+        64.0
+       ],
+       "size": 32.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "table",
+       "bounds": [
+        76.0,
+        156.0,
+        616.0,
+        536.0
+       ],
+       "size": 16.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        756.0,
+        156.0,
+        192.0,
+        456.0
+       ],
+       "size": 22.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        756.0,
+        640.0,
+        192.0,
+        32.0
+       ],
+       "size": 13.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1024",
+        "height": "768",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "table-summary-table-panel",
+        "x": "56",
+        "y": "136",
+        "width": "656",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "table-summary-message-panel",
+        "x": "736",
+        "y": "136",
+        "width": "232",
+        "height": "576",
+        "rx": "12",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "report_core",
+   "summary": "A structure-only 16:9 system with 13 authored PowerPoint Layouts across two Masters, carrying persistent page chrome and page-number placeholders.",
+   "canvas_format": "ppt169",
+   "layouts": [
+    {
+     "id": "cover",
+     "name": "Cover",
+     "file": "01_cover.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        280.0,
+        1184.0,
+        96.0
+       ],
+       "size": 52.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        48.0,
+        400.0,
+        900.0,
+        48.0
+       ],
+       "size": 22.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "date",
+       "bounds": [
+        48.0,
+        600.0,
+        400.0,
+        32.0
+       ],
+       "size": 16.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#1E293B",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "cover-accent",
+        "x": "48",
+        "y": "232",
+        "width": "88",
+        "height": "6",
+        "rx": "3",
+        "fill": "#64748B",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "section_divider",
+     "name": "Section Divider",
+     "file": "02_section_divider.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "body",
+       "bounds": [
+        48.0,
+        200.0,
+        200.0,
+        72.0
+       ],
+       "size": 56.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        336.0,
+        1184.0,
+        80.0
+       ],
+       "size": 44.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        48.0,
+        440.0,
+        900.0,
+        56.0
+       ],
+       "size": 20.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#1E293B",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "section-divider-rule",
+        "stroke": "#475569",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "agenda",
+     "name": "Agenda",
+     "file": "03_agenda.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        176.0,
+        1112.0,
+        84.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        271.0,
+        1112.0,
+        84.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        366.0,
+        1112.0,
+        84.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        461.0,
+        1112.0,
+        84.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        556.0,
+        1112.0,
+        84.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "agenda-rule-one",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "agenda-rule-two",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "agenda-rule-three",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "agenda-rule-four",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "agenda-rule-five",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_content",
+     "name": "Title and Content",
+     "file": "04_title_content.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        48.0,
+        176.0,
+        1184.0,
+        464.0
+       ],
+       "size": 20.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "two_content",
+     "name": "Two Content",
+     "file": "05_two_content.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        72.0,
+        200.0,
+        528.0,
+        416.0
+       ],
+       "size": 19.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        680.0,
+        200.0,
+        528.0,
+        416.0
+       ],
+       "size": 19.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-content-left-panel",
+        "x": "48",
+        "y": "176",
+        "width": "576",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-content-right-panel",
+        "x": "656",
+        "y": "176",
+        "width": "576",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "three_block",
+     "name": "Three Block",
+     "file": "06_three_block.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        72.0,
+        200.0,
+        328.0,
+        416.0
+       ],
+       "size": 19.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        476.0,
+        200.0,
+        328.0,
+        416.0
+       ],
+       "size": 19.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        880.0,
+        200.0,
+        328.0,
+        416.0
+       ],
+       "size": 19.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-block-one-panel",
+        "x": "48",
+        "y": "176",
+        "width": "376",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-block-two-panel",
+        "x": "452",
+        "y": "176",
+        "width": "376",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "three-block-three-panel",
+        "x": "856",
+        "y": "176",
+        "width": "376",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "kpi_row",
+     "name": "KPI Row",
+     "file": "07_kpi_row.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        72.0,
+        192.0,
+        230.0,
+        88.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        374.0,
+        192.0,
+        230.0,
+        88.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        676.0,
+        192.0,
+        230.0,
+        88.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        978.0,
+        192.0,
+        230.0,
+        88.0
+       ],
+       "size": 24.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        72.0,
+        344.0,
+        1136.0,
+        272.0
+       ],
+       "size": 18.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-row-card-one",
+        "x": "48",
+        "y": "176",
+        "width": "278",
+        "height": "120",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-row-card-two",
+        "x": "350",
+        "y": "176",
+        "width": "278",
+        "height": "120",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-row-card-three",
+        "x": "652",
+        "y": "176",
+        "width": "278",
+        "height": "120",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-row-card-four",
+        "x": "954",
+        "y": "176",
+        "width": "278",
+        "height": "120",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "kpi-row-evidence-panel",
+        "x": "48",
+        "y": "320",
+        "width": "1184",
+        "height": "320",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "chart_insight",
+     "name": "Chart and Insight",
+     "file": "08_chart_insight.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "chart",
+       "bounds": [
+        68.0,
+        196.0,
+        760.0,
+        424.0
+       ],
+       "size": 12.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        896.0,
+        200.0,
+        312.0,
+        336.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        896.0,
+        580.0,
+        312.0,
+        32.0
+       ],
+       "size": 13.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "chart-insight-chart-panel",
+        "x": "48",
+        "y": "176",
+        "width": "800",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "chart-insight-insight-panel",
+        "x": "872",
+        "y": "176",
+        "width": "360",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "table_summary",
+     "name": "Table and Summary",
+     "file": "09_table_summary.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "table",
+       "bounds": [
+        68.0,
+        196.0,
+        816.0,
+        424.0
+       ],
+       "size": 14.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        952.0,
+        200.0,
+        256.0,
+        336.0
+       ],
+       "size": 20.0,
+       "fill": "#334155",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        952.0,
+        580.0,
+        256.0,
+        32.0
+       ],
+       "size": 13.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "table-summary-table-panel",
+        "x": "48",
+        "y": "176",
+        "width": "856",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "table-summary-summary-panel",
+        "x": "928",
+        "y": "176",
+        "width": "304",
+        "height": "464",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "process_timeline",
+     "name": "Process Timeline",
+     "file": "10_process_timeline.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        60.0,
+        320.0,
+        272.0,
+        200.0
+       ],
+       "size": 18.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        356.0,
+        320.0,
+        272.0,
+        200.0
+       ],
+       "size": 18.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        652.0,
+        320.0,
+        272.0,
+        200.0
+       ],
+       "size": 18.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        948.0,
+        320.0,
+        272.0,
+        200.0
+       ],
+       "size": 18.0,
+       "fill": "#334155",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        72.0,
+        584.0,
+        1136.0,
+        32.0
+       ],
+       "size": 17.0,
+       "fill": "#475569",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "process-timeline-takeaway-panel",
+        "x": "48",
+        "y": "568",
+        "width": "1184",
+        "height": "64",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "process-timeline-axis",
+        "stroke": "#CBD5E1",
+        "stroke-width": "3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-one",
+        "cx": "196",
+        "cy": "280",
+        "r": "10",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-two",
+        "cx": "492",
+        "cy": "280",
+        "r": "10",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-three",
+        "cx": "788",
+        "cy": "280",
+        "r": "10",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "process-timeline-node-four",
+        "cx": "1084",
+        "cy": "280",
+        "r": "10",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "matrix_2x2",
+     "name": "Two-by-Two Matrix",
+     "file": "11_matrix_2x2.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        48.0,
+        176.0,
+        144.0,
+        56.0
+       ],
+       "size": 15.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        1016.0,
+        584.0,
+        216.0,
+        56.0
+       ],
+       "size": 15.0,
+       "fill": "#64748B",
+       "align": "end",
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        224.0,
+        200.0,
+        344.0,
+        176.0
+       ],
+       "size": 18.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        632.0,
+        200.0,
+        344.0,
+        176.0
+       ],
+       "size": 18.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        224.0,
+        440.0,
+        344.0,
+        176.0
+       ],
+       "size": 18.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        632.0,
+        440.0,
+        344.0,
+        176.0
+       ],
+       "size": 18.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "matrix-quadrant-one",
+        "x": "200",
+        "y": "176",
+        "width": "392",
+        "height": "224",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "matrix-quadrant-two",
+        "x": "608",
+        "y": "176",
+        "width": "392",
+        "height": "224",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "matrix-quadrant-three",
+        "x": "200",
+        "y": "416",
+        "width": "392",
+        "height": "224",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "matrix-quadrant-four",
+        "x": "608",
+        "y": "416",
+        "width": "392",
+        "height": "224",
+        "rx": "8",
+        "fill": "#F8FAFC",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "appendix",
+     "name": "Appendix",
+     "file": "12_appendix.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        88.0,
+        1184.0,
+        56.0
+       ],
+       "size": 28.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        48.0,
+        176.0,
+        576.0,
+        464.0
+       ],
+       "size": 15.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        656.0,
+        176.0,
+        576.0,
+        464.0
+       ],
+       "size": 15.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        48.0,
+        676.0,
+        900.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "slide-number",
+       "bounds": [
+        1112.0,
+        676.0,
+        120.0,
+        32.0
+       ],
+       "size": 12.0,
+       "fill": "#94A3B8",
+       "align": "end",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-header-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "master-footer-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "appendix-column-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "closing",
+     "name": "Closing",
+     "file": "13_closing.svg",
+     "canvas": [
+      1280.0,
+      720.0
+     ],
+     "viewBox": "0 0 1280 720",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        48.0,
+        330.0,
+        1184.0,
+        96.0
+       ],
+       "size": 44.0,
+       "fill": "#F8FAFC",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        48.0,
+        452.0,
+        900.0,
+        48.0
+       ],
+       "size": 20.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1280",
+        "height": "720",
+        "fill": "#1E293B",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "closing-accent",
+        "x": "48",
+        "y": "280",
+        "width": "88",
+        "height": "6",
+        "rx": "3",
+        "fill": "#64748B",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "story_vertical",
+   "summary": "A structure-only 9:16 system with 9 authored PowerPoint Layouts whose text geometry respects the top and bottom story safe zones.",
+   "canvas_format": "story",
+   "layouts": [
+    {
+     "id": "cover",
+     "name": "Cover",
+     "file": "01_cover.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        620.0,
+        920.0,
+        320.0
+       ],
+       "size": 76.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        80.0,
+        990.0,
+        920.0,
+        120.0
+       ],
+       "size": 34.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1610.0,
+        920.0,
+        60.0
+       ],
+       "size": 28.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "cover-accent",
+        "x": "80",
+        "y": "560",
+        "width": "120",
+        "height": "10",
+        "rx": "5",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "cover-brand-band",
+        "x": "0",
+        "y": "1560",
+        "width": "1080",
+        "height": "180",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "statement",
+     "name": "Statement",
+     "file": "02_statement.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        880.0,
+        920.0,
+        400.0
+       ],
+       "size": 64.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        120.0,
+        1340.0,
+        840.0,
+        120.0
+       ],
+       "size": 32.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "statement-accent",
+        "x": "490",
+        "y": "800",
+        "width": "100",
+        "height": "8",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_content",
+     "name": "Title and Content",
+     "file": "03_title_content.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        200.0,
+        920.0,
+        180.0
+       ],
+       "size": 56.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        440.0,
+        920.0,
+        1180.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1660.0,
+        920.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "title-content-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "numbered_list",
+     "name": "Numbered List",
+     "file": "04_numbered_list.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        200.0,
+        920.0,
+        180.0
+       ],
+       "size": 56.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        240.0,
+        464.0,
+        760.0,
+        312.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        240.0,
+        874.0,
+        760.0,
+        312.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        240.0,
+        1284.0,
+        760.0,
+        312.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1660.0,
+        920.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "numbered-list-row-one",
+        "x": "80",
+        "y": "440",
+        "width": "920",
+        "height": "360",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "numbered-list-row-two",
+        "x": "80",
+        "y": "850",
+        "width": "920",
+        "height": "360",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "numbered-list-row-three",
+        "x": "80",
+        "y": "1260",
+        "width": "920",
+        "height": "360",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "numbered-list-marker-one",
+        "cx": "168",
+        "cy": "520",
+        "r": "40",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "numbered-list-marker-two",
+        "cx": "168",
+        "cy": "930",
+        "r": "40",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "numbered-list-marker-three",
+        "cx": "168",
+        "cy": "1340",
+        "r": "40",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "image_full",
+     "name": "Full-Bleed Image",
+     "file": "05_image_full.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1080.0,
+        1440.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        1490.0,
+        920.0,
+        90.0
+       ],
+       "size": 48.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1600.0,
+        920.0,
+        80.0
+       ],
+       "size": 28.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "image-full-caption-band",
+        "x": "0",
+        "y": "1440",
+        "width": "1080",
+        "height": "300",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "image_top_text",
+     "name": "Image over Text",
+     "file": "06_image_top_text.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        200.0,
+        920.0,
+        180.0
+       ],
+       "size": 56.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        80.0,
+        440.0,
+        920.0,
+        760.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1260.0,
+        920.0,
+        360.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1660.0,
+        920.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "image-top-text-image-panel",
+        "x": "80",
+        "y": "440",
+        "width": "920",
+        "height": "760",
+        "rx": "24",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "two_block",
+     "name": "Two Block",
+     "file": "07_two_block.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        200.0,
+        920.0,
+        180.0
+       ],
+       "size": 56.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        480.0,
+        840.0,
+        480.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        1100.0,
+        840.0,
+        480.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1660.0,
+        920.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-block-top",
+        "x": "80",
+        "y": "440",
+        "width": "920",
+        "height": "560",
+        "rx": "24",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-block-bottom",
+        "x": "80",
+        "y": "1060",
+        "width": "920",
+        "height": "560",
+        "rx": "24",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "step_flow",
+     "name": "Vertical Step Flow",
+     "file": "08_step_flow.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        200.0,
+        920.0,
+        180.0
+       ],
+       "size": 56.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        240.0,
+        440.0,
+        760.0,
+        380.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        240.0,
+        840.0,
+        760.0,
+        380.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        240.0,
+        1240.0,
+        760.0,
+        380.0
+       ],
+       "size": 32.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1660.0,
+        920.0,
+        56.0
+       ],
+       "size": 24.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "step-flow-axis",
+        "stroke": "#CBD5E1",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "step-flow-node-one",
+        "cx": "168",
+        "cy": "480",
+        "r": "20",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "step-flow-node-two",
+        "cx": "168",
+        "cy": "880",
+        "r": "20",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "step-flow-node-three",
+        "cx": "168",
+        "cy": "1280",
+        "r": "20",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "ending",
+     "name": "Ending",
+     "file": "09_ending.svg",
+     "canvas": [
+      1080.0,
+      1920.0
+     ],
+     "viewBox": "0 0 1080 1920",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        880.0,
+        920.0,
+        320.0
+       ],
+       "size": 64.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        120.0,
+        1260.0,
+        840.0,
+        120.0
+       ],
+       "size": 32.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1610.0,
+        920.0,
+        60.0
+       ],
+       "size": 28.0,
+       "fill": "#475569",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1080",
+        "height": "1920",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "ending-accent",
+        "x": "490",
+        "y": "800",
+        "width": "100",
+        "height": "8",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "ending-brand-band",
+        "x": "0",
+        "y": "1560",
+        "width": "1080",
+        "height": "180",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "xiaohongshu_post",
+   "summary": "A structure-only 3:4 vertical system with 10 authored PowerPoint Layouts for single-column image-text posts on tall social canvases.",
+   "canvas_format": "xiaohongshu",
+   "layouts": [
+    {
+     "id": "cover",
+     "name": "Cover",
+     "file": "01_cover.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        420.0,
+        1082.0,
+        300.0
+       ],
+       "size": 86.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "subtitle",
+       "bounds": [
+        80.0,
+        760.0,
+        1002.0,
+        120.0
+       ],
+       "size": 36.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1550.0,
+        1082.0,
+        60.0
+       ],
+       "size": 30.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "cover-accent",
+        "x": "80",
+        "y": "360",
+        "width": "120",
+        "height": "10",
+        "rx": "5",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "cover-brand-band",
+        "x": "0",
+        "y": "1500",
+        "width": "1242",
+        "height": "160",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "statement",
+     "name": "Statement",
+     "file": "02_statement.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        640.0,
+        1082.0,
+        380.0
+       ],
+       "size": 72.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        120.0,
+        1080.0,
+        1002.0,
+        120.0
+       ],
+       "size": 34.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "statement-accent",
+        "x": "571",
+        "y": "560",
+        "width": "100",
+        "height": "8",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "title_content",
+     "name": "Title and Content",
+     "file": "03_title_content.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        112.0,
+        1082.0,
+        200.0
+       ],
+       "size": 64.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        376.0,
+        1082.0,
+        1064.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1500.0,
+        1082.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "title-content-rule",
+        "stroke": "#E2E8F0",
+        "stroke-width": "3",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "numbered_list",
+     "name": "Numbered List",
+     "file": "04_numbered_list.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        112.0,
+        1082.0,
+        200.0
+       ],
+       "size": 64.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        256.0,
+        400.0,
+        906.0,
+        272.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        256.0,
+        772.0,
+        906.0,
+        272.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        256.0,
+        1144.0,
+        906.0,
+        272.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1500.0,
+        1082.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "numbered-list-row-one",
+        "x": "80",
+        "y": "376",
+        "width": "1082",
+        "height": "320",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "numbered-list-row-two",
+        "x": "80",
+        "y": "748",
+        "width": "1082",
+        "height": "320",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "numbered-list-row-three",
+        "x": "80",
+        "y": "1120",
+        "width": "1082",
+        "height": "320",
+        "rx": "20",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "numbered-list-marker-one",
+        "cx": "176",
+        "cy": "456",
+        "r": "44",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "numbered-list-marker-two",
+        "cx": "176",
+        "cy": "828",
+        "r": "44",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "numbered-list-marker-three",
+        "cx": "176",
+        "cy": "1200",
+        "r": "44",
+        "fill": "#E2E8F0",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "two_card_stack",
+     "name": "Two-Card Stack",
+     "file": "05_two_card_stack.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        112.0,
+        1082.0,
+        200.0
+       ],
+       "size": 64.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        416.0,
+        1002.0,
+        424.0
+       ],
+       "size": 36.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        120.0,
+        976.0,
+        1002.0,
+        424.0
+       ],
+       "size": 36.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1500.0,
+        1082.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-card-stack-top-card",
+        "x": "80",
+        "y": "376",
+        "width": "1082",
+        "height": "504",
+        "rx": "24",
+        "fill": "#F4F6F8",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "two-card-stack-bottom-card",
+        "x": "80",
+        "y": "936",
+        "width": "1082",
+        "height": "504",
+        "rx": "24",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "image_top_text",
+     "name": "Image over Text",
+     "file": "06_image_top_text.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        112.0,
+        1082.0,
+        200.0
+       ],
+       "size": 64.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "picture",
+       "bounds": [
+        80.0,
+        376.0,
+        1082.0,
+        620.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1056.0,
+        1082.0,
+        384.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1500.0,
+        1082.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "image-top-text-image-panel",
+        "x": "80",
+        "y": "376",
+        "width": "1082",
+        "height": "620",
+        "rx": "24",
+        "fill": "#EEF2F6",
+        "stroke": "#D6DCE3",
+        "stroke-width": "1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "image_full_caption",
+     "name": "Full-Bleed Image with Caption",
+     "file": "07_image_full_caption.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "picture",
+       "bounds": [
+        0.0,
+        0.0,
+        1242.0,
+        1400.0
+       ],
+       "size": null,
+       "fill": null,
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        1440.0,
+        1082.0,
+        80.0
+       ],
+       "size": 48.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1540.0,
+        1082.0,
+        80.0
+       ],
+       "size": 30.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "image-full-caption-band",
+        "x": "0",
+        "y": "1400",
+        "width": "1242",
+        "height": "260",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "quote",
+     "name": "Quote",
+     "file": "08_quote.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        560.0,
+        1082.0,
+        480.0
+       ],
+       "size": 56.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1100.0,
+        1082.0,
+        80.0
+       ],
+       "size": 32.0,
+       "fill": "#64748B",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1500.0,
+        1082.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "quote-rule",
+        "stroke": "#CBD5E1",
+        "stroke-width": "4",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "step_flow",
+     "name": "Vertical Step Flow",
+     "file": "09_step_flow.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        112.0,
+        1082.0,
+        200.0
+       ],
+       "size": 64.0,
+       "fill": "#1E293B",
+       "align": null,
+       "weight": "700"
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        256.0,
+        376.0,
+        906.0,
+        340.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        256.0,
+        738.0,
+        906.0,
+        340.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "object",
+       "bounds": [
+        256.0,
+        1100.0,
+        906.0,
+        340.0
+       ],
+       "size": 34.0,
+       "fill": "#475569",
+       "align": null,
+       "weight": null
+      },
+      {
+       "placeholder": "footer",
+       "bounds": [
+        80.0,
+        1500.0,
+        1082.0,
+        60.0
+       ],
+       "size": 26.0,
+       "fill": "#94A3B8",
+       "align": null,
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "line",
+       "attrs": {
+        "id": "step-flow-axis",
+        "stroke": "#CBD5E1",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "step-flow-node-one",
+        "cx": "176",
+        "cy": "416",
+        "r": "20",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "step-flow-node-two",
+        "cx": "176",
+        "cy": "778",
+        "r": "20",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "circle",
+       "attrs": {
+        "id": "step-flow-node-three",
+        "cx": "176",
+        "cy": "1140",
+        "r": "20",
+        "fill": "#FFFFFF",
+        "stroke": "#94A3B8",
+        "stroke-width": "6",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    },
+    {
+     "id": "ending",
+     "name": "Ending",
+     "file": "10_ending.svg",
+     "canvas": [
+      1242.0,
+      1660.0
+     ],
+     "viewBox": "0 0 1242 1660",
+     "slots": [
+      {
+       "placeholder": "title",
+       "bounds": [
+        80.0,
+        700.0,
+        1082.0,
+        300.0
+       ],
+       "size": 68.0,
+       "fill": "#1E293B",
+       "align": "middle",
+       "weight": "700"
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        120.0,
+        1060.0,
+        1002.0,
+        120.0
+       ],
+       "size": 34.0,
+       "fill": "#64748B",
+       "align": "middle",
+       "weight": null
+      },
+      {
+       "placeholder": "body",
+       "bounds": [
+        80.0,
+        1470.0,
+        1082.0,
+        80.0
+       ],
+       "size": 30.0,
+       "fill": "#475569",
+       "align": "middle",
+       "weight": null
+      }
+     ],
+     "decorations": [
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "master-background",
+        "x": "0",
+        "y": "0",
+        "width": "1242",
+        "height": "1660",
+        "fill": "#FFFFFF",
+        "data-pptx-layer": "master",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "ending-accent",
+        "x": "571",
+        "y": "620",
+        "width": "100",
+        "height": "8",
+        "rx": "4",
+        "fill": "#CBD5E1",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      },
+      {
+       "tag": "rect",
+       "attrs": {
+        "id": "ending-brand-band",
+        "x": "0",
+        "y": "1400",
+        "width": "1242",
+        "height": "260",
+        "fill": "#F4F6F8",
+        "data-pptx-layer": "layout",
+        "data-pptx-editable": "false"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "layout_total": 86
+}

@@ -1,0 +1,345 @@
+{
+ "brands": [
+  {
+   "id": "accenture",
+   "name": "accenture",
+   "summary": "Accenture-style consulting and technology-services identity — violet accent on black for transformation, technology, and delivery decks",
+   "primary_color": "#A100FF",
+   "tone": "Formal, forward-looking, delivery-focused, evidence-led",
+   "palette": {
+    "primary": "#A100FF",
+    "accent": "#000000",
+    "bg": "#FFFFFF",
+    "surface": "#F5F3F7",
+    "border": "#DCD8E0",
+    "muted-text": "#5B5560"
+   },
+   "source": "ppt-master templates/brands/accenture/templates/design_spec.md"
+  },
+  {
+   "id": "alibaba",
+   "name": "alibaba",
+   "summary": "Alibaba-style commerce and cloud identity — signature orange on black for platform, merchant, and cloud solution decks",
+   "primary_color": "#FF6A00",
+   "tone": "Professional, commercially direct, outcome-focused",
+   "palette": {
+    "primary": "#FF6A00",
+    "accent": "#000000",
+    "bg": "#FFFFFF",
+    "surface": "#F7F5F3",
+    "border": "#E3DEDA",
+    "muted-text": "#5F5A55"
+   },
+   "source": "ppt-master templates/brands/alibaba/templates/design_spec.md"
+  },
+  {
+   "id": "anthropic",
+   "name": "anthropic",
+   "summary": "Anthropic / Claude brand family — AI research, product talks, developer conferences, technical training, and launches",
+   "primary_color": "#D97757",
+   "tone": "Tech-forward, professional, modern, conclusion-first, restrained",
+   "palette": {
+    "primary": "#D97757",
+    "neutral-dark": "#191919",
+    "bg": "#FFFFFF",
+    "surface": "#F8FAFC",
+    "border": "#E2E8F0",
+    "muted-text": "#64748B"
+   },
+   "source": "ppt-master templates/brands/anthropic/templates/design_spec.md"
+  },
+  {
+   "id": "aws",
+   "name": "aws",
+   "summary": "AWS-style cloud identity — signature orange on deep navy for cloud architecture, migration, and well-architected review decks",
+   "primary_color": "#FF9900",
+   "tone": "Technical, pragmatic, architecture-focused, evidence-led",
+   "palette": {
+    "primary": "#FF9900",
+    "accent": "#252F3E",
+    "bg": "#FFFFFF",
+    "surface": "#F2F3F3",
+    "border": "#D5DBDB",
+    "muted-text": "#545B64"
+   },
+   "source": "ppt-master templates/brands/aws/templates/design_spec.md"
+  },
+  {
+   "id": "bain",
+   "name": "bain",
+   "summary": "Bain-style consulting identity — scarlet red on restrained neutrals for results-oriented strategy and performance decks",
+   "primary_color": "#EE3224",
+   "tone": "Formal, direct, results-focused, evidence-led",
+   "palette": {
+    "primary": "#EE3224",
+    "accent": "#8C1B12",
+    "bg": "#FFFFFF",
+    "surface": "#F5F5F5",
+    "border": "#DCDCDC",
+    "muted-text": "#5C5C5C"
+   },
+   "source": "ppt-master templates/brands/bain/templates/design_spec.md"
+  },
+  {
+   "id": "bcg",
+   "name": "bcg",
+   "summary": "BCG-style consulting identity — forest green and warm neutrals for growth strategy, transformation, and advantage decks",
+   "primary_color": "#147B58",
+   "tone": "Formal, analytical, forward-looking, evidence-led",
+   "palette": {
+    "primary": "#147B58",
+    "accent": "#0A3D2C",
+    "bg": "#FFFFFF",
+    "surface": "#F4F6F4",
+    "border": "#D8DED9",
+    "muted-text": "#5B6660"
+   },
+   "source": "ppt-master templates/brands/bcg/templates/design_spec.md"
+  },
+  {
+   "id": "deloitte",
+   "name": "deloitte",
+   "summary": "Deloitte-style professional-services identity — signature green on black and neutrals for audit, tax, risk, and advisory decks",
+   "primary_color": "#86BC25",
+   "tone": "Formal, precise, measured, evidence-led",
+   "palette": {
+    "primary": "#86BC25",
+    "accent": "#000000",
+    "bg": "#FFFFFF",
+    "surface": "#F5F6F5",
+    "border": "#DBDEDB",
+    "muted-text": "#63666A"
+   },
+   "source": "ppt-master templates/brands/deloitte/templates/design_spec.md"
+  },
+  {
+   "id": "google",
+   "name": "google",
+   "summary": "Google brand identity — multi-product corporate decks, developer events (Google I/O style), education and training in the Google ecosystem",
+   "primary_color": "#4285F4",
+   "tone": "Modern, friendly, optimistic, clear, multi-color expressive",
+   "palette": {
+    "primary": "#4285F4",
+    "secondary": "#34A853",
+    "accent (warm)": "#FBBC05",
+    "accent (alert)": "#EA4335",
+    "text": "#202124",
+    "bg": "#FFFFFF"
+   },
+   "source": "ppt-master templates/brands/google/templates/design_spec.md"
+  },
+  {
+   "id": "huawei",
+   "name": "huawei",
+   "summary": "Huawei-style enterprise identity — restrained red accent on near-black and gray for ICT solution, product, and partner decks",
+   "primary_color": "#CF0A2C",
+   "tone": "Formal, technical, capability-focused, evidence-led",
+   "palette": {
+    "primary": "#CF0A2C",
+    "accent": "#232527",
+    "bg": "#FFFFFF",
+    "surface": "#F5F5F6",
+    "border": "#DEDEE0",
+    "muted-text": "#5A5C5E"
+   },
+   "source": "ppt-master templates/brands/huawei/templates/design_spec.md"
+  },
+  {
+   "id": "ibm",
+   "name": "ibm",
+   "summary": "IBM-style enterprise identity — Carbon blue on a disciplined gray scale for hybrid cloud, AI, and enterprise consulting decks",
+   "primary_color": "#0F62FE",
+   "tone": "Formal, engineered, systematic, evidence-led",
+   "palette": {
+    "primary": "#0F62FE",
+    "accent": "#002D9C",
+    "bg": "#FFFFFF",
+    "surface": "#F4F4F4",
+    "border": "#E0E0E0",
+    "muted-text": "#525252"
+   },
+   "source": "ppt-master templates/brands/ibm/templates/design_spec.md"
+  },
+  {
+   "id": "jpmorgan",
+   "name": "jpmorgan",
+   "summary": "JPMorgan Chase-style financial-institution identity — corporate blue on navy and neutrals for research, banking, and internal governance decks",
+   "primary_color": "#117ACA",
+   "tone": "Formal, conservative, precise, evidence-led",
+   "palette": {
+    "primary": "#117ACA",
+    "accent": "#004B87",
+    "bg": "#FFFFFF",
+    "surface": "#F4F6F8",
+    "border": "#DDE2E7",
+    "muted-text": "#54606C"
+   },
+   "source": "ppt-master templates/brands/jpmorgan/templates/design_spec.md"
+  },
+  {
+   "id": "mckinsey",
+   "name": "mckinsey",
+   "summary": "McKinsey-style consulting identity — deep navy and electric blue for strategy, diagnostic, and executive decision decks",
+   "primary_color": "#051C2C",
+   "tone": "Formal, restrained, answer-first, evidence-led",
+   "palette": {
+    "primary": "#051C2C",
+    "accent": "#2251FF",
+    "bg": "#FFFFFF",
+    "surface": "#F2F4F6",
+    "border": "#D9DEE3",
+    "muted-text": "#5A6872"
+   },
+   "source": "ppt-master templates/brands/mckinsey/templates/design_spec.md"
+  },
+  {
+   "id": "microsoft",
+   "name": "microsoft",
+   "summary": "Microsoft-style enterprise technology identity — four-square product spectrum on neutral grays for Microsoft 365, Azure, and IT program decks",
+   "primary_color": "#00A4EF",
+   "tone": "Professional, accessible, capability-focused, plainly worded",
+   "palette": {
+    "primary": "#00A4EF",
+    "accent-warm": "#F25022",
+    "accent-green": "#7FBA00",
+    "accent-yellow": "#FFB900",
+    "bg": "#FFFFFF",
+    "surface": "#F3F2F1",
+    "border": "#E1DFDD",
+    "muted-text": "#605E5C"
+   },
+   "source": "ppt-master templates/brands/microsoft/templates/design_spec.md"
+  },
+  {
+   "id": "nvidia",
+   "name": "nvidia",
+   "summary": "NVIDIA-style accelerated-computing identity — signature green on near-black for AI, GPU, and data-center technical decks",
+   "primary_color": "#76B900",
+   "tone": "Technical, precise, performance-focused, evidence-led",
+   "palette": {
+    "primary": "#76B900",
+    "accent": "#1A1A1A",
+    "bg": "#FFFFFF",
+    "surface": "#F4F6F1",
+    "border": "#DCE0D6",
+    "muted-text": "#5A5F55"
+   },
+   "source": "ppt-master templates/brands/nvidia/templates/design_spec.md"
+  },
+  {
+   "id": "pwc",
+   "name": "pwc",
+   "summary": "PwC-style professional-services identity — warm orange-to-rose spectrum on black for assurance, tax, and advisory decks",
+   "primary_color": "#DB4E18",
+   "tone": "Formal, measured, precise, evidence-led",
+   "palette": {
+    "primary": "#DB4E18",
+    "accent": "#E88D14",
+    "accent-warm": "#F3BE26",
+    "accent-rose": "#E669A2",
+    "accent-deep": "#AD1B02",
+    "bg": "#FFFFFF",
+    "surface": "#F6F5F4",
+    "border": "#DEDBD8",
+    "muted-text": "#5C5754"
+   },
+   "source": "ppt-master templates/brands/pwc/templates/design_spec.md"
+  },
+  {
+   "id": "tencent",
+   "name": "tencent",
+   "summary": "Tencent-style internet and cloud identity — measured blue on light neutrals for platform, cloud, and ecosystem decks",
+   "primary_color": "#3458B0",
+   "tone": "Professional, measured, platform-oriented",
+   "palette": {
+    "primary": "#3458B0",
+    "accent": "#1F3A78",
+    "bg": "#FFFFFF",
+    "surface": "#F4F6FA",
+    "border": "#DCE1EA",
+    "muted-text": "#59606E"
+   },
+   "source": "ppt-master templates/brands/tencent/templates/design_spec.md"
+  },
+  {
+   "id": "xiaomi",
+   "name": "xiaomi",
+   "summary": "Xiaomi-style consumer-technology identity — signature orange on clean white for product launches, ecosystem, and retail decks",
+   "primary_color": "#FF6900",
+   "tone": "Accessible, product-forward, plainly worded, specification-honest",
+   "palette": {
+    "primary": "#FF6900",
+    "accent": "#1F1F1F",
+    "bg": "#FFFFFF",
+    "surface": "#F7F7F7",
+    "border": "#E5E5E5",
+    "muted-text": "#666666"
+   },
+   "source": "ppt-master templates/brands/xiaomi/templates/design_spec.md"
+  },
+  {
+   "id": "zcare-rescue",
+   "name": "zcare-rescue",
+   "summary": "子鹊救援（Z-CARE）水域应急救援队的身份预设，用于队内技术材料、训练课件与对外科普协作材料",
+   "primary_color": "#081830",
+   "tone": "冷静、精确、可复核；讲代价不讲豪情",
+   "palette": {
+    "primary": "#081830",
+    "secondary": "#8890A0",
+    "accent": "#D8F04A",
+    "secondary_accent": "#E85D2B",
+    "text_on_primary": "#FFFFFF"
+   },
+   "source": "ppt-master templates/brands/zcare-rescue/templates/design_spec.md"
+  },
+  {
+   "id": "中国电信",
+   "name": "中国电信",
+   "summary": "China Telecom brand identity for digital infrastructure, government-enterprise solutions, transformation planning, and corporate reporting",
+   "primary_color": "#004EA2",
+   "tone": "Formal, trusted, service-oriented, technically credible",
+   "palette": {
+    "primary": "#004EA2",
+    "text": "#1F2937",
+    "muted-text": "#6B7280",
+    "bg": "#FFFFFF",
+    "surface": "#F8FAFC",
+    "border": "#E5E7EB"
+   },
+   "source": "ppt-master templates/brands/中国电信/templates/design_spec.md"
+  },
+  {
+   "id": "中国电建",
+   "name": "中国电建",
+   "summary": "POWERCHINA brand identity for engineering project reports, technical proposals, business negotiations, and corporate promotion",
+   "primary_color": "#004EA1",
+   "tone": "Professional, composed, international, state-owned enterprise style",
+   "palette": {
+    "primary": "#004EA1",
+    "secondary": "#C90A4F",
+    "text": "#1A1A1A",
+    "muted-text": "#4A5568",
+    "bg": "#FFFFFF",
+    "surface": "#F4F6F8"
+   },
+   "source": "ppt-master templates/brands/中国电建/templates/design_spec.md"
+  },
+  {
+   "id": "中汽研",
+   "name": "中汽研",
+   "summary": "CATARC brand identity for product certification, evaluation reports, automotive technology promotion, and business visits",
+   "primary_color": "#004098",
+   "tone": "Professional, authoritative, trustworthy, technical-consulting style",
+   "palette": {
+    "primary": "#004098",
+    "secondary": "#003B82",
+    "text": "#333333",
+    "muted-text": "#666666",
+    "bg": "#FFFFFF",
+    "surface": "#F8FAFC",
+    "border": "#E0E0E0"
+   },
+   "source": "ppt-master templates/brands/中汽研/templates/design_spec.md"
+  }
+ ]
+}

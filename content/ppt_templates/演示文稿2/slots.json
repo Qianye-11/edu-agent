@@ -1,0 +1,3572 @@
+{
+  "slides": [
+    {
+      "index": 0,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 2356,
+          "design_capacity": 1166,
+          "size_px": 0.0,
+          "geo": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 1280.0,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 1344,
+          "design_capacity": 646,
+          "size_px": 0.0,
+          "geo": {
+            "x": 404.3,
+            "y": -236.8,
+            "w": 471.5,
+            "h": 1105.7
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 2,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 88.0,
+          "geo": {
+            "x": 191.0,
+            "y": 197.5,
+            "w": 898.0,
+            "h": 83.9
+          },
+          "sample": "高端行业报告",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 25,
+          "design_capacity": 17,
+          "size_px": 48.0,
+          "geo": {
+            "x": 219.4,
+            "y": 295.1,
+            "w": 850.1,
+            "h": 67.9
+          },
+          "sample": "POWERPOINT TEMPLATE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 18.7,
+          "geo": {
+            "x": 538.9,
+            "y": 390.9,
+            "w": 202.3,
+            "h": 32.3
+          },
+          "sample": "Created by 深度视觉",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 840,
+          "design_capacity": 390,
+          "size_px": 0.0,
+          "geo": {
+            "x": 515.2,
+            "y": -69.5,
+            "w": 258.5,
+            "h": 1288.8
+          },
+          "sample": "",
+          "placeholder": ""
+        }
+      ],
+      "signature": "4360044324"
+    },
+    {
+      "index": 1,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "title",
+          "shape_index": 0,
+          "capacity": 2356,
+          "design_capacity": 1166,
+          "size_px": 0.0,
+          "geo": {
+            "x": -36.1,
+            "y": 0.0,
+            "w": 1280.0,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 56,
+          "design_capacity": 36,
+          "size_px": 16.0,
+          "geo": {
+            "x": 135.0,
+            "y": 560.2,
+            "w": 203.5,
+            "h": 82.8
+          },
+          "sample": "此处添加详细文本描述，建议与标题相关并符合整体语言风格",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 56,
+          "design_capacity": 36,
+          "size_px": 16.0,
+          "geo": {
+            "x": 442.3,
+            "y": 455.7,
+            "w": 203.5,
+            "h": 82.8
+          },
+          "sample": "此处添加详细文本描述，建议与标题相关并符合整体语言风格",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 56,
+          "design_capacity": 36,
+          "size_px": 16.0,
+          "geo": {
+            "x": 740.7,
+            "y": 560.2,
+            "w": 203.5,
+            "h": 82.8
+          },
+          "sample": "此处添加详细文本描述，建议与标题相关并符合整体语言风格",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 56,
+          "design_capacity": 36,
+          "size_px": 16.0,
+          "geo": {
+            "x": 1040.5,
+            "y": 455.3,
+            "w": 203.5,
+            "h": 82.8
+          },
+          "sample": "此处添加详细文本描述，建议与标题相关并符合整体语言风格",
+          "placeholder": ""
+        }
+      ],
+      "signature": "9d758a4eaa"
+    },
+    {
+      "index": 2,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "title",
+          "shape_index": 4,
+          "capacity": 48,
+          "design_capacity": 24,
+          "size_px": 0.0,
+          "geo": {
+            "x": 321.6,
+            "y": 323.3,
+            "w": 207.9,
+            "h": 104.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 48,
+          "design_capacity": 24,
+          "size_px": 0.0,
+          "geo": {
+            "x": 536.4,
+            "y": 323.3,
+            "w": 207.9,
+            "h": 104.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 48,
+          "design_capacity": 24,
+          "size_px": 0.0,
+          "geo": {
+            "x": 750.9,
+            "y": 323.3,
+            "w": 207.9,
+            "h": 104.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 7,
+          "capacity": 0,
+          "design_capacity": 0,
+          "size_px": 0.0,
+          "geo": {
+            "x": 228.9,
+            "y": 494.3,
+            "w": 823.6,
+            "h": 5.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 11,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 505.9,
+            "y": 245.0,
+            "w": 55.6,
+            "h": 56.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 16,
+          "capacity": 8,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 260.4,
+            "y": 510.6,
+            "w": 122.0,
+            "h": 35.5
+          },
+          "sample": "Text Here",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 17,
+          "capacity": 8,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 473.3,
+            "y": 510.6,
+            "w": 122.0,
+            "h": 35.5
+          },
+          "sample": "Text Here",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 18,
+          "capacity": 8,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 686.1,
+            "y": 510.6,
+            "w": 122.0,
+            "h": 35.5
+          },
+          "sample": "Text Here",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 19,
+          "capacity": 8,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 899.1,
+            "y": 510.6,
+            "w": 122.0,
+            "h": 35.5
+          },
+          "sample": "Text Here",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 20,
+          "capacity": 52,
+          "design_capacity": 48,
+          "size_px": 14.7,
+          "geo": {
+            "x": 222.9,
+            "y": 553.7,
+            "w": 190.3,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 21,
+          "capacity": 52,
+          "design_capacity": 48,
+          "size_px": 14.7,
+          "geo": {
+            "x": 433.7,
+            "y": 553.7,
+            "w": 190.3,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 22,
+          "capacity": 52,
+          "design_capacity": 48,
+          "size_px": 14.7,
+          "geo": {
+            "x": 649.2,
+            "y": 553.7,
+            "w": 190.3,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 23,
+          "capacity": 52,
+          "design_capacity": 48,
+          "size_px": 14.7,
+          "geo": {
+            "x": 860.0,
+            "y": 553.7,
+            "w": 190.3,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        }
+      ],
+      "signature": "952727d54f"
+    },
+    {
+      "index": 3,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 868,
+          "design_capacity": 418,
+          "size_px": 0.0,
+          "geo": {
+            "x": 0.2,
+            "y": 0.0,
+            "w": 471.0,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 1,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 681.2,
+            "y": 277.5,
+            "w": 51.4,
+            "h": 51.4
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 2,
+          "capacity": 28,
+          "design_capacity": 10,
+          "size_px": 20.0,
+          "geo": {
+            "x": 598.4,
+            "y": 197.5,
+            "w": 205.1,
+            "h": 39.9
+          },
+          "sample": "TITLE TWO",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 3,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 982.8,
+            "y": 268.5,
+            "w": 55.6,
+            "h": 56.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 4,
+          "capacity": 28,
+          "design_capacity": 10,
+          "size_px": 20.0,
+          "geo": {
+            "x": 909.7,
+            "y": 197.6,
+            "w": 205.1,
+            "h": 39.9
+          },
+          "sample": "TITLE THREE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 90,
+          "design_capacity": 65,
+          "size_px": 16.0,
+          "geo": {
+            "x": 598.4,
+            "y": 404.5,
+            "w": 211.0,
+            "h": 117.3
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 6,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 646.5,
+            "y": 369.1,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 90,
+          "design_capacity": 65,
+          "size_px": 16.0,
+          "geo": {
+            "x": 903.8,
+            "y": 404.5,
+            "w": 211.0,
+            "h": 117.3
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 8,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 951.9,
+            "y": 369.1,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 9,
+          "capacity": 2,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 385.6,
+            "y": 296.9,
+            "w": 37.0,
+            "h": 37.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 10,
+          "capacity": 18,
+          "design_capacity": 6,
+          "size_px": 42.7,
+          "geo": {
+            "x": 69.9,
+            "y": 328.9,
+            "w": 277.9,
+            "h": 113.1
+          },
+          "sample": "在这添加\n页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 11,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 69.9,
+            "y": 286.8,
+            "w": 334.2,
+            "h": 32.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        }
+      ],
+      "signature": "cb5b418163"
+    },
+    {
+      "index": 4,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 1488,
+          "design_capacity": 748,
+          "size_px": 0.0,
+          "geo": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 816.6,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 12,
+          "design_capacity": 4,
+          "size_px": 0.0,
+          "geo": {
+            "x": 885.4,
+            "y": 364.2,
+            "w": 69.5,
+            "h": 69.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 2,
+          "capacity": 2,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 900.8,
+            "y": 379.9,
+            "w": 38.7,
+            "h": 38.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 12,
+          "design_capacity": 4,
+          "size_px": 0.0,
+          "geo": {
+            "x": 1084.2,
+            "y": 362.0,
+            "w": 69.5,
+            "h": 69.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 4,
+          "capacity": 2,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 1099.6,
+            "y": 377.7,
+            "w": 38.7,
+            "h": 38.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 195,
+          "design_capacity": 99,
+          "size_px": 0.0,
+          "geo": {
+            "x": 108.9,
+            "y": 67.0,
+            "w": 264.4,
+            "h": 297.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 195,
+          "design_capacity": 99,
+          "size_px": 0.0,
+          "geo": {
+            "x": 213.6,
+            "y": 215.6,
+            "w": 264.4,
+            "h": 297.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 195,
+          "design_capacity": 99,
+          "size_px": 0.0,
+          "geo": {
+            "x": 318.4,
+            "y": 364.2,
+            "w": 264.4,
+            "h": 297.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 8,
+          "capacity": 66,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 838.7,
+            "y": 489.7,
+            "w": 165.3,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 9,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 864.0,
+            "y": 454.3,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 10,
+          "capacity": 66,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 1038.3,
+            "y": 489.7,
+            "w": 165.3,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 11,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 1063.6,
+            "y": 454.3,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 12,
+          "capacity": 18,
+          "design_capacity": 6,
+          "size_px": 37.3,
+          "geo": {
+            "x": 683.2,
+            "y": 149.5,
+            "w": 245.6,
+            "h": 100.2
+          },
+          "sample": "在这添加\n页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 13,
+          "capacity": 17,
+          "design_capacity": 12,
+          "size_px": 26.7,
+          "geo": {
+            "x": 683.2,
+            "y": 107.4,
+            "w": 334.2,
+            "h": 32.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        }
+      ],
+      "signature": "dd982f077e"
+    },
+    {
+      "index": 5,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 589,
+          "design_capacity": 286,
+          "size_px": 0.0,
+          "geo": {
+            "x": 949.0,
+            "y": 0.0,
+            "w": 331.0,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 266,
+          "design_capacity": 130,
+          "size_px": 0.0,
+          "geo": {
+            "x": 782.0,
+            "y": 193.0,
+            "w": 334.0,
+            "h": 334.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 2,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 42.7,
+          "geo": {
+            "x": 145.7,
+            "y": 210.7,
+            "w": 364.1,
+            "h": 61.4
+          },
+          "sample": "添加页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 145.7,
+            "y": 165.1,
+            "w": 334.2,
+            "h": 45.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 156,
+          "design_capacity": 87,
+          "size_px": 18.7,
+          "geo": {
+            "x": 145.7,
+            "y": 294.4,
+            "w": 550.7,
+            "h": 88.6
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 5,
+          "capacity": 4,
+          "design_capacity": 3,
+          "size_px": 72.0,
+          "geo": {
+            "x": 448.2,
+            "y": 441.0,
+            "w": 238.2,
+            "h": 96.9
+          },
+          "sample": "48.",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 13,
+          "design_capacity": 9,
+          "size_px": 0.0,
+          "geo": {
+            "x": 448.2,
+            "y": 540.0,
+            "w": 222.9,
+            "h": 38.8
+          },
+          "sample": "Short Text Here",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 13,
+          "design_capacity": 9,
+          "size_px": 0.0,
+          "geo": {
+            "x": 145.7,
+            "y": 540.0,
+            "w": 222.9,
+            "h": 38.8
+          },
+          "sample": "Short Text Here",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 8,
+          "capacity": 4,
+          "design_capacity": 3,
+          "size_px": 72.0,
+          "geo": {
+            "x": 145.7,
+            "y": 441.0,
+            "w": 238.2,
+            "h": 96.9
+          },
+          "sample": "36.",
+          "placeholder": ""
+        }
+      ],
+      "signature": "3565ffda6e"
+    },
+    {
+      "index": 6,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "title",
+          "shape_index": 1,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 141.1,
+            "y": 484.9,
+            "w": 60.2,
+            "h": 60.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 2,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 140.3,
+            "y": 373.4,
+            "w": 60.2,
+            "h": 60.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 3,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 155.0,
+            "y": 391.6,
+            "w": 32.0,
+            "h": 25.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 5,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 141.1,
+            "y": 268.8,
+            "w": 60.2,
+            "h": 60.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 6,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 155.7,
+            "y": 287.0,
+            "w": 32.0,
+            "h": 25.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 84,
+          "design_capacity": 48,
+          "size_px": 16.0,
+          "geo": {
+            "x": 215.9,
+            "y": 268.8,
+            "w": 397.0,
+            "h": 59.1
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 8,
+          "capacity": 84,
+          "design_capacity": 48,
+          "size_px": 16.0,
+          "geo": {
+            "x": 215.9,
+            "y": 373.4,
+            "w": 397.0,
+            "h": 59.1
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 9,
+          "capacity": 84,
+          "design_capacity": 48,
+          "size_px": 16.0,
+          "geo": {
+            "x": 215.9,
+            "y": 486.9,
+            "w": 397.0,
+            "h": 59.1
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        }
+      ],
+      "signature": "1d6d00fa06"
+    },
+    {
+      "index": 7,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "decoration",
+          "shape_index": 0,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 19.5,
+          "geo": {
+            "x": 297.2,
+            "y": 367.4,
+            "w": 171.4,
+            "h": 34.7
+          },
+          "sample": "2013",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 1,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 19.5,
+          "geo": {
+            "x": 468.6,
+            "y": 367.4,
+            "w": 171.4,
+            "h": 34.7
+          },
+          "sample": "2014",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 2,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 19.5,
+          "geo": {
+            "x": 640.0,
+            "y": 367.4,
+            "w": 171.4,
+            "h": 34.7
+          },
+          "sample": "2015",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 3,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 19.5,
+          "geo": {
+            "x": 811.4,
+            "y": 367.4,
+            "w": 171.4,
+            "h": 34.7
+          },
+          "sample": "2016",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 4,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 19.5,
+          "geo": {
+            "x": 982.8,
+            "y": 367.4,
+            "w": 171.4,
+            "h": 34.7
+          },
+          "sample": "2017",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 5,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 19.5,
+          "geo": {
+            "x": 125.9,
+            "y": 367.4,
+            "w": 171.4,
+            "h": 34.7
+          },
+          "sample": "2012",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 18,
+          "capacity": 72,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 279.7,
+            "y": 179.2,
+            "w": 171.4,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 19,
+          "capacity": 72,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 628.8,
+            "y": 175.3,
+            "w": 171.4,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 20,
+          "capacity": 72,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 970.4,
+            "y": 175.3,
+            "w": 171.4,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 21,
+          "capacity": 72,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 811.4,
+            "y": 468.9,
+            "w": 171.4,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 22,
+          "capacity": 72,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 472.0,
+            "y": 468.9,
+            "w": 171.4,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 23,
+          "capacity": 72,
+          "design_capacity": 50,
+          "size_px": 16.0,
+          "geo": {
+            "x": 129.3,
+            "y": 468.9,
+            "w": 171.4,
+            "h": 114.5
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐。",
+          "placeholder": ""
+        }
+      ],
+      "signature": "ea8ad13659"
+    },
+    {
+      "index": 8,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 60,
+          "design_capacity": 56,
+          "size_px": 14.7,
+          "geo": {
+            "x": 892.2,
+            "y": 252.2,
+            "w": 211.0,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 2,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 21.3,
+          "geo": {
+            "x": 892.2,
+            "y": 217.6,
+            "w": 183.6,
+            "h": 35.5
+          },
+          "sample": "02.添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 60,
+          "design_capacity": 56,
+          "size_px": 14.7,
+          "geo": {
+            "x": 892.2,
+            "y": 485.3,
+            "w": 211.0,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 13,
+          "design_capacity": 9,
+          "size_px": 21.3,
+          "geo": {
+            "x": 892.2,
+            "y": 450.7,
+            "w": 198.8,
+            "h": 35.5
+          },
+          "sample": "04.添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 60,
+          "design_capacity": 56,
+          "size_px": 14.7,
+          "geo": {
+            "x": 167.7,
+            "y": 247.1,
+            "w": 211.0,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 6,
+          "capacity": 11,
+          "design_capacity": 8,
+          "size_px": 21.3,
+          "geo": {
+            "x": 204.2,
+            "y": 212.5,
+            "w": 174.5,
+            "h": 35.5
+          },
+          "sample": "01.添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 60,
+          "design_capacity": 56,
+          "size_px": 14.7,
+          "geo": {
+            "x": 167.7,
+            "y": 480.2,
+            "w": 211.0,
+            "h": 85.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 8,
+          "capacity": 11,
+          "design_capacity": 8,
+          "size_px": 21.3,
+          "geo": {
+            "x": 204.2,
+            "y": 445.6,
+            "w": 174.5,
+            "h": 35.5
+          },
+          "sample": "03.添加标题",
+          "placeholder": ""
+        }
+      ],
+      "signature": "64fae27a18"
+    },
+    {
+      "index": 9,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 676,
+          "design_capacity": 324,
+          "size_px": 0.0,
+          "geo": {
+            "x": 771.9,
+            "y": 62.0,
+            "w": 444.0,
+            "h": 596.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 171,
+          "design_capacity": 78,
+          "size_px": 0.0,
+          "geo": {
+            "x": 882.3,
+            "y": -2.0,
+            "w": 333.7,
+            "h": 217.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 2,
+          "capacity": 171,
+          "design_capacity": 78,
+          "size_px": 0.0,
+          "geo": {
+            "x": 773.1,
+            "y": 502.2,
+            "w": 333.7,
+            "h": 217.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 3,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 42.7,
+          "geo": {
+            "x": 153.2,
+            "y": 234.9,
+            "w": 364.1,
+            "h": 61.4
+          },
+          "sample": "添加页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 153.2,
+            "y": 189.3,
+            "w": 334.2,
+            "h": 45.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 352,
+          "design_capacity": 192,
+          "size_px": 18.7,
+          "geo": {
+            "x": 152.6,
+            "y": 322.9,
+            "w": 449.6,
+            "h": 209.7
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        }
+      ],
+      "signature": "7e03aa8363"
+    },
+    {
+      "index": 10,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 588,
+          "design_capacity": 266,
+          "size_px": 0.0,
+          "geo": {
+            "x": 225.4,
+            "y": 121.7,
+            "w": 476.5,
+            "h": 476.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 24,
+          "design_capacity": 10,
+          "size_px": 0.0,
+          "geo": {
+            "x": -36.4,
+            "y": 36.4,
+            "w": 142.5,
+            "h": 69.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 3,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 541.8,
+            "y": 103.4,
+            "w": 26.2,
+            "h": 26.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 529,
+          "design_capacity": 256,
+          "size_px": 0.0,
+          "geo": {
+            "x": 441.6,
+            "y": 242.6,
+            "w": 401.6,
+            "h": 529.7
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 5,
+          "capacity": 18,
+          "design_capacity": 6,
+          "size_px": 37.3,
+          "geo": {
+            "x": 69.1,
+            "y": 246.9,
+            "w": 245.6,
+            "h": 100.2
+          },
+          "sample": "在这添加\n页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 17,
+          "design_capacity": 12,
+          "size_px": 26.7,
+          "geo": {
+            "x": 69.1,
+            "y": 204.8,
+            "w": 334.2,
+            "h": 32.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 231,
+          "design_capacity": 120,
+          "size_px": 18.7,
+          "geo": {
+            "x": 926.6,
+            "y": 411.6,
+            "w": 297.0,
+            "h": 209.3
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        }
+      ],
+      "signature": "633e6ff41d"
+    },
+    {
+      "index": 11,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 1550,
+          "design_capacity": 731,
+          "size_px": 0.0,
+          "geo": {
+            "x": 234.0,
+            "y": 0.0,
+            "w": 1046.0,
+            "h": 579.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 1550,
+          "design_capacity": 731,
+          "size_px": 0.0,
+          "geo": {
+            "x": 234.0,
+            "y": 0.0,
+            "w": 1046.0,
+            "h": 579.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 2,
+          "capacity": 6,
+          "design_capacity": 4,
+          "size_px": 37.3,
+          "geo": {
+            "x": 1084.6,
+            "y": 233.3,
+            "w": 161.0,
+            "h": 54.9
+          },
+          "sample": "1024k",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 30,
+          "design_capacity": 12,
+          "size_px": 0.0,
+          "geo": {
+            "x": 1121.4,
+            "y": 71.9,
+            "w": 87.4,
+            "h": 137.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 96,
+          "design_capacity": 32,
+          "size_px": 0.0,
+          "geo": {
+            "x": 829.8,
+            "y": 279.5,
+            "w": 403.9,
+            "h": 91.7
+          },
+          "sample": "describe what you want in this minimal l",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 6,
+          "capacity": 18,
+          "design_capacity": 6,
+          "size_px": 42.7,
+          "geo": {
+            "x": 84.2,
+            "y": 281.3,
+            "w": 277.9,
+            "h": 113.1
+          },
+          "sample": "在这添加\n页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 84.2,
+            "y": 239.2,
+            "w": 334.2,
+            "h": 32.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 8,
+          "capacity": 252,
+          "design_capacity": 135,
+          "size_px": 18.7,
+          "geo": {
+            "x": 84.2,
+            "y": 416.1,
+            "w": 509.6,
+            "h": 141.4
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        }
+      ],
+      "signature": "62203e3dcd"
+    },
+    {
+      "index": 12,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 24,
+          "design_capacity": 12,
+          "size_px": 0.0,
+          "geo": {
+            "x": 149.6,
+            "y": 463.1,
+            "w": 104.9,
+            "h": 104.9
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 1,
+          "capacity": 5,
+          "design_capacity": 3,
+          "size_px": 32.0,
+          "geo": {
+            "x": 138.2,
+            "y": 491.3,
+            "w": 127.6,
+            "h": 48.5
+          },
+          "sample": "46%",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 2,
+          "capacity": 0,
+          "design_capacity": 0,
+          "size_px": 0.0,
+          "geo": {
+            "x": 289.2,
+            "y": 562.6,
+            "w": 341.6,
+            "h": 4.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 3,
+          "capacity": 0,
+          "design_capacity": 0,
+          "size_px": 0.0,
+          "geo": {
+            "x": 289.2,
+            "y": 562.6,
+            "w": 327.3,
+            "h": 4.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 4,
+          "capacity": 10,
+          "design_capacity": 3,
+          "size_px": 21.3,
+          "geo": {
+            "x": 576.6,
+            "y": 491.6,
+            "w": 75.8,
+            "h": 44.4
+          },
+          "sample": "90%",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 57,
+          "design_capacity": 54,
+          "size_px": 14.7,
+          "geo": {
+            "x": 289.2,
+            "y": 485.2,
+            "w": 277.1,
+            "h": 60.7
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 6,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 289.2,
+            "y": 456.9,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 7,
+          "capacity": 18,
+          "design_capacity": 6,
+          "size_px": 42.7,
+          "geo": {
+            "x": 150.3,
+            "y": 175.5,
+            "w": 277.9,
+            "h": 113.1
+          },
+          "sample": "在这添加\n页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 8,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 150.3,
+            "y": 133.4,
+            "w": 334.2,
+            "h": 32.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 9,
+          "capacity": 210,
+          "design_capacity": 104,
+          "size_px": 18.7,
+          "geo": {
+            "x": 149.6,
+            "y": 306.4,
+            "w": 502.8,
+            "h": 115.6
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 10,
+          "capacity": 27,
+          "design_capacity": 12,
+          "size_px": 0.0,
+          "geo": {
+            "x": 924.7,
+            "y": 348.5,
+            "w": 52.5,
+            "h": 204.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 11,
+          "capacity": 42,
+          "design_capacity": 20,
+          "size_px": 0.0,
+          "geo": {
+            "x": 987.2,
+            "y": 221.2,
+            "w": 52.7,
+            "h": 330.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 12,
+          "capacity": 36,
+          "design_capacity": 16,
+          "size_px": 0.0,
+          "geo": {
+            "x": 961.9,
+            "y": 182.0,
+            "w": 52.5,
+            "h": 279.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 13,
+          "capacity": 18,
+          "design_capacity": 8,
+          "size_px": 0.0,
+          "geo": {
+            "x": 895.7,
+            "y": 183.5,
+            "w": 52.7,
+            "h": 147.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 14,
+          "capacity": 15,
+          "design_capacity": 6,
+          "size_px": 0.0,
+          "geo": {
+            "x": 887.0,
+            "y": 450.7,
+            "w": 52.5,
+            "h": 129.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 15,
+          "capacity": 4,
+          "design_capacity": 3,
+          "size_px": 16.0,
+          "geo": {
+            "x": 759.5,
+            "y": 242.4,
+            "w": 60.6,
+            "h": 29.1
+          },
+          "sample": "Sun",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 16,
+          "capacity": 4,
+          "design_capacity": 3,
+          "size_px": 16.0,
+          "geo": {
+            "x": 759.5,
+            "y": 307.1,
+            "w": 60.6,
+            "h": 29.1
+          },
+          "sample": "Mon",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 17,
+          "capacity": 4,
+          "design_capacity": 3,
+          "size_px": 16.0,
+          "geo": {
+            "x": 759.5,
+            "y": 371.7,
+            "w": 60.6,
+            "h": 29.1
+          },
+          "sample": "Tue",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 18,
+          "capacity": 4,
+          "design_capacity": 3,
+          "size_px": 16.0,
+          "geo": {
+            "x": 759.5,
+            "y": 436.3,
+            "w": 60.6,
+            "h": 29.1
+          },
+          "sample": "Thu",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 19,
+          "capacity": 4,
+          "design_capacity": 3,
+          "size_px": 16.0,
+          "geo": {
+            "x": 759.5,
+            "y": 501.0,
+            "w": 60.6,
+            "h": 29.1
+          },
+          "sample": "Fri",
+          "placeholder": ""
+        }
+      ],
+      "signature": "f951b82aed"
+    },
+    {
+      "index": 13,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "decoration",
+          "shape_index": 0,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 33.3,
+          "geo": {
+            "x": 744.6,
+            "y": 275.6,
+            "w": 182.4,
+            "h": 50.1
+          },
+          "sample": "#02",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 1,
+          "capacity": 32,
+          "design_capacity": 11,
+          "size_px": 20.0,
+          "geo": {
+            "x": 218.4,
+            "y": 191.5,
+            "w": 227.4,
+            "h": 42.0
+          },
+          "sample": "Web Design",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 4,
+          "capacity": 12,
+          "design_capacity": 6,
+          "size_px": 0.0,
+          "geo": {
+            "x": 449.1,
+            "y": 320.9,
+            "w": 76.6,
+            "h": 77.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 5,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 473.0,
+            "y": 342.7,
+            "w": 28.9,
+            "h": 30.7
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 11,
+          "design_capacity": 7,
+          "size_px": 0.0,
+          "geo": {
+            "x": 751.2,
+            "y": 356.1,
+            "w": 187.1,
+            "h": 9.4
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 9,
+          "design_capacity": 6,
+          "size_px": 0.0,
+          "geo": {
+            "x": 751.2,
+            "y": 356.1,
+            "w": 151.2,
+            "h": 9.4
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 8,
+          "capacity": 7,
+          "design_capacity": 8,
+          "size_px": 12.0,
+          "geo": {
+            "x": 952.7,
+            "y": 353.2,
+            "w": 106.0,
+            "h": 19.4
+          },
+          "sample": "Wordpress",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 9,
+          "capacity": 32,
+          "design_capacity": 11,
+          "size_px": 20.0,
+          "geo": {
+            "x": 218.4,
+            "y": 482.1,
+            "w": 227.4,
+            "h": 42.0
+          },
+          "sample": "Web Design",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 10,
+          "capacity": 2,
+          "design_capacity": 1,
+          "size_px": 40.0,
+          "geo": {
+            "x": 535.0,
+            "y": 140.2,
+            "w": 79.9,
+            "h": 58.2
+          },
+          "sample": "02",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 11,
+          "capacity": 2,
+          "design_capacity": 1,
+          "size_px": 40.0,
+          "geo": {
+            "x": 366.0,
+            "y": 526.9,
+            "w": 79.9,
+            "h": 58.2
+          },
+          "sample": "03",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 12,
+          "capacity": 2,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 466.9,
+            "y": 483.7,
+            "w": 43.6,
+            "h": 43.6
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 13,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 479.8,
+            "y": 494.9,
+            "w": 14.7,
+            "h": 18.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 14,
+          "capacity": 2,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 466.9,
+            "y": 194.6,
+            "w": 43.6,
+            "h": 43.6
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 15,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 478.8,
+            "y": 208.0,
+            "w": 18.3,
+            "h": 18.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 16,
+          "capacity": 9,
+          "design_capacity": 6,
+          "size_px": 24.0,
+          "geo": {
+            "x": 835.8,
+            "y": 281.9,
+            "w": 151.6,
+            "h": 38.8
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 17,
+          "capacity": 72,
+          "design_capacity": 64,
+          "size_px": 16.0,
+          "geo": {
+            "x": 744.6,
+            "y": 395.9,
+            "w": 259.1,
+            "h": 92.0
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 18,
+          "capacity": 48,
+          "design_capacity": 30,
+          "size_px": 16.0,
+          "geo": {
+            "x": 538.8,
+            "y": 196.4,
+            "w": 172.8,
+            "h": 86.1
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 19,
+          "capacity": 48,
+          "design_capacity": 30,
+          "size_px": 16.0,
+          "geo": {
+            "x": 538.8,
+            "y": 494.6,
+            "w": 172.8,
+            "h": 86.1
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可",
+          "placeholder": ""
+        }
+      ],
+      "signature": "aa0ad32479"
+    },
+    {
+      "index": 14,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 70,
+          "design_capacity": 35,
+          "size_px": 0.0,
+          "geo": {
+            "x": 1001.0,
+            "y": 356.0,
+            "w": 169.0,
+            "h": 169.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 130,
+          "design_capacity": 63,
+          "size_px": 0.0,
+          "geo": {
+            "x": 345.8,
+            "y": 356.0,
+            "w": 231.8,
+            "h": 231.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 2,
+          "capacity": 165,
+          "design_capacity": 70,
+          "size_px": 0.0,
+          "geo": {
+            "x": 957.4,
+            "y": 397.9,
+            "w": 256.1,
+            "h": 256.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 540,
+          "design_capacity": 266,
+          "size_px": 0.0,
+          "geo": {
+            "x": 63.3,
+            "y": 132.2,
+            "w": 463.9,
+            "h": 463.9
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 4,
+          "capacity": 18,
+          "design_capacity": 6,
+          "size_px": 42.7,
+          "geo": {
+            "x": 549.0,
+            "y": 242.9,
+            "w": 277.9,
+            "h": 113.1
+          },
+          "sample": "在这添加\n页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 549.0,
+            "y": 200.8,
+            "w": 334.2,
+            "h": 32.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 161,
+          "design_capacity": 120,
+          "size_px": 16.0,
+          "geo": {
+            "x": 610.8,
+            "y": 429.1,
+            "w": 334.2,
+            "h": 139.9
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        }
+      ],
+      "signature": "465fcc98a3"
+    },
+    {
+      "index": 15,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "title",
+          "shape_index": 0,
+          "capacity": 552,
+          "design_capacity": 272,
+          "size_px": 0.0,
+          "geo": {
+            "x": 133.3,
+            "y": 66.7,
+            "w": 386.7,
+            "h": 553.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 88,
+          "design_capacity": 40,
+          "size_px": 0.0,
+          "geo": {
+            "x": 66.7,
+            "y": -0.0,
+            "w": 193.2,
+            "h": 191.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 2,
+          "capacity": 35,
+          "design_capacity": 20,
+          "size_px": 0.0,
+          "geo": {
+            "x": 620.0,
+            "y": 486.7,
+            "w": 133.3,
+            "h": 133.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 35,
+          "design_capacity": 20,
+          "size_px": 0.0,
+          "geo": {
+            "x": 620.0,
+            "y": 293.3,
+            "w": 133.3,
+            "h": 133.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 35,
+          "design_capacity": 20,
+          "size_px": 0.0,
+          "geo": {
+            "x": 620.0,
+            "y": 100.3,
+            "w": 133.3,
+            "h": 133.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 81,
+          "design_capacity": 46,
+          "size_px": 16.0,
+          "geo": {
+            "x": 800.7,
+            "y": 146.5,
+            "w": 381.3,
+            "h": 60.7
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 6,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 800.7,
+            "y": 114.6,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 7,
+          "capacity": 81,
+          "design_capacity": 46,
+          "size_px": 16.0,
+          "geo": {
+            "x": 800.7,
+            "y": 341.7,
+            "w": 381.3,
+            "h": 60.7
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 8,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 800.7,
+            "y": 309.9,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 9,
+          "capacity": 81,
+          "design_capacity": 46,
+          "size_px": 16.0,
+          "geo": {
+            "x": 800.7,
+            "y": 537.0,
+            "w": 381.3,
+            "h": 60.7
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 10,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 800.7,
+            "y": 505.1,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        }
+      ],
+      "signature": "424c0175be"
+    },
+    {
+      "index": 16,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 323,
+          "design_capacity": 156,
+          "size_px": 0.0,
+          "geo": {
+            "x": 875.5,
+            "y": 251.5,
+            "w": 334.5,
+            "h": 405.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 1,
+          "capacity": 224,
+          "design_capacity": 110,
+          "size_px": 0.0,
+          "geo": {
+            "x": 717.5,
+            "y": 49.0,
+            "w": 269.5,
+            "h": 326.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 2,
+          "capacity": 132,
+          "design_capacity": 56,
+          "size_px": 0.0,
+          "geo": {
+            "x": 585.0,
+            "y": 251.5,
+            "w": 208.2,
+            "h": 252.1
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 35,
+          "design_capacity": 15,
+          "size_px": 0.0,
+          "geo": {
+            "x": 788.9,
+            "y": -29.7,
+            "w": 126.8,
+            "h": 126.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 4,
+          "capacity": 13,
+          "design_capacity": 9,
+          "size_px": 48.0,
+          "geo": {
+            "x": 129.6,
+            "y": 233.9,
+            "w": 436.9,
+            "h": 58.2
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 182,
+          "design_capacity": 95,
+          "size_px": 18.7,
+          "geo": {
+            "x": 129.6,
+            "y": 365.3,
+            "w": 364.9,
+            "h": 142.1
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 129.6,
+            "y": 292.1,
+            "w": 334.2,
+            "h": 49.9
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        }
+      ],
+      "signature": "f5700292e3"
+    },
+    {
+      "index": 17,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 1240,
+          "design_capacity": 616,
+          "size_px": 0.0,
+          "geo": {
+            "x": 603.0,
+            "y": -0.0,
+            "w": 677.0,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 2,
+          "capacity": 1147,
+          "design_capacity": 572,
+          "size_px": 0.0,
+          "geo": {
+            "x": 645.8,
+            "y": -0.0,
+            "w": 634.2,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 4,
+          "capacity": 18,
+          "design_capacity": 6,
+          "size_px": 42.7,
+          "geo": {
+            "x": 131.3,
+            "y": 230.9,
+            "w": 277.9,
+            "h": 113.1
+          },
+          "sample": "在这添加\n页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 32.0,
+          "geo": {
+            "x": 131.3,
+            "y": 188.8,
+            "w": 334.2,
+            "h": 32.6
+          },
+          "sample": "YOUR TITLE HERE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 6,
+          "capacity": 217,
+          "design_capacity": 115,
+          "size_px": 18.7,
+          "geo": {
+            "x": 131.3,
+            "y": 415.8,
+            "w": 440.4,
+            "h": 141.4
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        }
+      ],
+      "signature": "9694c95591"
+    },
+    {
+      "index": 18,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "decoration",
+          "shape_index": 0,
+          "capacity": 0,
+          "design_capacity": 0,
+          "size_px": 0.0,
+          "geo": {
+            "x": 635.8,
+            "y": 417.7,
+            "w": 7.3,
+            "h": 29.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 1,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 612.7,
+            "y": 265.3,
+            "w": 55.8,
+            "h": 55.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 2,
+          "capacity": 288,
+          "design_capacity": 132,
+          "size_px": 0.0,
+          "geo": {
+            "x": 503.2,
+            "y": 174.7,
+            "w": 272.7,
+            "h": 420.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 3,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 624.2,
+            "y": 279.2,
+            "w": 33.5,
+            "h": 37.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 4,
+          "capacity": 6,
+          "design_capacity": 2,
+          "size_px": 0.0,
+          "geo": {
+            "x": 612.7,
+            "y": 343.7,
+            "w": 55.8,
+            "h": 55.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 5,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 624.2,
+            "y": 357.5,
+            "w": 33.5,
+            "h": 37.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 6,
+          "capacity": 0,
+          "design_capacity": 0,
+          "size_px": 0.0,
+          "geo": {
+            "x": 722.2,
+            "y": 410.5,
+            "w": 0.2,
+            "h": 23.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 7,
+          "capacity": 0,
+          "design_capacity": 0,
+          "size_px": 0.0,
+          "geo": {
+            "x": 718.5,
+            "y": 410.5,
+            "w": 3.7,
+            "h": 31.8
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 8,
+          "capacity": 20,
+          "design_capacity": 14,
+          "size_px": 0.0,
+          "geo": {
+            "x": 580.0,
+            "y": 203.7,
+            "w": 48.5,
+            "h": 230.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 9,
+          "capacity": 30,
+          "design_capacity": 14,
+          "size_px": 0.0,
+          "geo": {
+            "x": 576.3,
+            "y": 203.7,
+            "w": 52.2,
+            "h": 238.7
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 10,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 708.3,
+            "y": 533.8,
+            "w": 9.5,
+            "h": 20.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 11,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 662.7,
+            "y": 539.5,
+            "w": 27.5,
+            "h": 10.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 12,
+          "capacity": 0,
+          "design_capacity": 0,
+          "size_px": 0.0,
+          "geo": {
+            "x": 690.2,
+            "y": 567.2,
+            "w": 4.5,
+            "h": 9.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 13,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 688.0,
+            "y": 567.2,
+            "w": 8.8,
+            "h": 22.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 14,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 540.8,
+            "y": 369.2,
+            "w": 14.5,
+            "h": 14.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 15,
+          "capacity": 135,
+          "design_capacity": 60,
+          "size_px": 0.0,
+          "geo": {
+            "x": 611.2,
+            "y": 174.7,
+            "w": 164.7,
+            "h": 353.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 16,
+          "capacity": 35,
+          "design_capacity": 15,
+          "size_px": 0.0,
+          "geo": {
+            "x": 527.8,
+            "y": 410.5,
+            "w": 89.8,
+            "h": 175.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 17,
+          "capacity": 35,
+          "design_capacity": 15,
+          "size_px": 0.0,
+          "geo": {
+            "x": 525.5,
+            "y": 410.5,
+            "w": 92.2,
+            "h": 179.2
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 18,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 701.2,
+            "y": 425.7,
+            "w": 17.3,
+            "h": 17.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 19,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 702.5,
+            "y": 425.0,
+            "w": 17.5,
+            "h": 17.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 20,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 559.0,
+            "y": 425.7,
+            "w": 17.3,
+            "h": 17.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 21,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 560.3,
+            "y": 425.0,
+            "w": 17.5,
+            "h": 17.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 22,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 567.0,
+            "y": 536.7,
+            "w": 17.3,
+            "h": 17.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 23,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 568.3,
+            "y": 535.2,
+            "w": 17.5,
+            "h": 17.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 24,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 691.0,
+            "y": 536.7,
+            "w": 17.3,
+            "h": 17.3
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 25,
+          "capacity": 1,
+          "design_capacity": 1,
+          "size_px": 0.0,
+          "geo": {
+            "x": 692.3,
+            "y": 535.2,
+            "w": 17.5,
+            "h": 17.5
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 26,
+          "capacity": 6,
+          "design_capacity": 4,
+          "size_px": 18.7,
+          "geo": {
+            "x": 662.7,
+            "y": 625.4,
+            "w": 90.2,
+            "h": 22.6
+          },
+          "sample": "CREATIVE",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 27,
+          "capacity": 6,
+          "design_capacity": 4,
+          "size_px": 18.7,
+          "geo": {
+            "x": 523.9,
+            "y": 628.4,
+            "w": 90.2,
+            "h": 22.6
+          },
+          "sample": "CREATIVE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 28,
+          "capacity": 72,
+          "design_capacity": 64,
+          "size_px": 16.0,
+          "geo": {
+            "x": 859.2,
+            "y": 244.1,
+            "w": 259.1,
+            "h": 87.6
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 29,
+          "capacity": 11,
+          "design_capacity": 8,
+          "size_px": 24.8,
+          "geo": {
+            "x": 859.2,
+            "y": 207.3,
+            "w": 203.1,
+            "h": 39.5
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 30,
+          "capacity": 72,
+          "design_capacity": 64,
+          "size_px": 16.0,
+          "geo": {
+            "x": 859.2,
+            "y": 473.3,
+            "w": 259.1,
+            "h": 87.6
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 31,
+          "capacity": 11,
+          "design_capacity": 8,
+          "size_px": 24.8,
+          "geo": {
+            "x": 859.2,
+            "y": 436.6,
+            "w": 203.1,
+            "h": 39.5
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 32,
+          "capacity": 72,
+          "design_capacity": 64,
+          "size_px": 16.0,
+          "geo": {
+            "x": 160.0,
+            "y": 473.3,
+            "w": 259.1,
+            "h": 87.6
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 33,
+          "capacity": 11,
+          "design_capacity": 8,
+          "size_px": 24.8,
+          "geo": {
+            "x": 216.7,
+            "y": 436.6,
+            "w": 203.1,
+            "h": 39.5
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 34,
+          "capacity": 72,
+          "design_capacity": 64,
+          "size_px": 16.0,
+          "geo": {
+            "x": 160.0,
+            "y": 244.1,
+            "w": 259.1,
+            "h": 87.6
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐，注意板面美观",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 35,
+          "capacity": 11,
+          "design_capacity": 8,
+          "size_px": 24.8,
+          "geo": {
+            "x": 216.7,
+            "y": 207.3,
+            "w": 203.1,
+            "h": 39.5
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        }
+      ],
+      "signature": "48519f120d"
+    },
+    {
+      "index": 19,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 8,
+          "capacity": 18,
+          "design_capacity": 12,
+          "size_px": 0.0,
+          "geo": {
+            "x": 52.5,
+            "y": 103.7,
+            "w": 304.3,
+            "h": 14.6
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 9,
+          "capacity": 12,
+          "design_capacity": 8,
+          "size_px": 37.3,
+          "geo": {
+            "x": 35.8,
+            "y": 41.9,
+            "w": 321.0,
+            "h": 54.9
+          },
+          "sample": "添加页面标题内容",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 10,
+          "capacity": 72,
+          "design_capacity": 69,
+          "size_px": 14.7,
+          "geo": {
+            "x": 82.2,
+            "y": 193.9,
+            "w": 340.2,
+            "h": 60.4
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 11,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 82.2,
+            "y": 160.2,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 12,
+          "capacity": 72,
+          "design_capacity": 69,
+          "size_px": 14.7,
+          "geo": {
+            "x": 82.2,
+            "y": 312.6,
+            "w": 340.2,
+            "h": 60.4
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 13,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 82.2,
+            "y": 278.9,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 14,
+          "capacity": 72,
+          "design_capacity": 69,
+          "size_px": 14.7,
+          "geo": {
+            "x": 82.2,
+            "y": 440.5,
+            "w": 340.2,
+            "h": 60.4
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 15,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 82.2,
+            "y": 406.7,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 16,
+          "capacity": 72,
+          "design_capacity": 69,
+          "size_px": 14.7,
+          "geo": {
+            "x": 82.2,
+            "y": 555.9,
+            "w": 340.2,
+            "h": 60.4
+          },
+          "sample": "请在此处添加具体内容，文字尽量言简意赅，简单说明即可，不必过于繁琐",
+          "placeholder": ""
+        },
+        {
+          "role": "decoration",
+          "shape_index": 17,
+          "capacity": 7,
+          "design_capacity": 5,
+          "size_px": 21.3,
+          "geo": {
+            "x": 82.2,
+            "y": 522.2,
+            "w": 114.7,
+            "h": 35.4
+          },
+          "sample": "添加标题",
+          "placeholder": ""
+        }
+      ],
+      "signature": "7d0b0444b4"
+    },
+    {
+      "index": 20,
+      "layout": "空白",
+      "slots": [
+        {
+          "role": "body",
+          "shape_index": 0,
+          "capacity": 2356,
+          "design_capacity": 1166,
+          "size_px": 0.0,
+          "geo": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 1280.0,
+            "h": 720.0
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 1,
+          "capacity": 1344,
+          "design_capacity": 646,
+          "size_px": 0.0,
+          "geo": {
+            "x": 404.3,
+            "y": -242.4,
+            "w": 471.5,
+            "h": 1105.7
+          },
+          "sample": "",
+          "placeholder": ""
+        },
+        {
+          "role": "title",
+          "shape_index": 2,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 88.0,
+          "geo": {
+            "x": 191.0,
+            "y": 191.9,
+            "w": 898.0,
+            "h": 83.9
+          },
+          "sample": "谢谢观看",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 3,
+          "capacity": 25,
+          "design_capacity": 17,
+          "size_px": 48.0,
+          "geo": {
+            "x": 219.4,
+            "y": 289.5,
+            "w": 850.1,
+            "h": 67.9
+          },
+          "sample": "POWERPOINT TEMPLATE",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 4,
+          "capacity": 14,
+          "design_capacity": 10,
+          "size_px": 18.7,
+          "geo": {
+            "x": 538.9,
+            "y": 385.2,
+            "w": 202.3,
+            "h": 32.3
+          },
+          "sample": "Created by 深度视觉",
+          "placeholder": ""
+        },
+        {
+          "role": "body",
+          "shape_index": 5,
+          "capacity": 840,
+          "design_capacity": 390,
+          "size_px": 0.0,
+          "geo": {
+            "x": 515.2,
+            "y": -75.1,
+            "w": 258.5,
+            "h": 1288.8
+          },
+          "sample": "",
+          "placeholder": ""
+        }
+      ],
+      "signature": "4360044324"
+    }
+  ],
+  "pages": 21
+}
