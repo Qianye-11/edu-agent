@@ -1,0 +1,1352 @@
+/* ============================================================================
+   启思 · QISI  —  UI 设计层
+   设计语言：Apple 官网的排版节奏 ｜ examcrafts.com 的材质体系 ｜ 方舟青品牌色
+   ----------------------------------------------------------------------------
+   这一层是「只追加」的纯视觉层：不改 DOM、不改脚本、不改任何功能与按钮位置。
+   删除本 <style> 块即可完整回到原版界面。
+
+   设计取舍：
+     · 材质    —— 参照 examcrafts.com（DaisyUI cupcake / forest 主题）的结构：
+                  盒子圆角 16px、输入/按钮药丸化、深而软的投影、描边加重到 2px
+     · 日间配色—— **纯白中性**。初版照参考站搬了暖米底（#EFEAE6）与深紫墨（#291334），
+                  用户看过之后明确否定（「这个日间的米色太丑了给我换成纯白的」）。
+                  现在画布纯白 #FFFFFF、灰阶只带一丝冷（hue≈245），
+                  读作"纯灰"而不是"米"；卡片靠 --line-card 深描边 + --shadow-card 立住。
+     · 夜间配色—— 保留参考站的 forest 暖近黑（#161212 / 卡面 #1B1717），
+                  用户只说了"日间"，夜间没动。
+     · 配色    —— 品牌方舟青 #18D1FF 保留为**唯一强调色**（对话界面与全站共用）。
+                  参考站的主色是薄荷青 #44EBD3，与方舟青同族，所以衔接是自然的；
+                  语义色（info/success/warning/error）取 cupcake 的定义。
+                  参考站的第二层色彩是「粉彩点缀」（薄荷 / 粉 / 桃），
+                  这里只落到**非交互的小色块**上（卡片图标砖、分类页签），
+                  按钮与导航一律不碰粉彩 —— 否则强调层级会糊掉。
+     · 版式    —— Apple 官网的显示级排版：大字号、紧字距(-.02~-.03em)、600 字重
+     · 对话界面—— 版式一字未动（刚重排过），只随全局令牌一起换色
+     · 动效    —— 苹果式克制：短距升起 + 缓出，尊重 prefers-reduced-motion
+
+   ⚠️ 几何约束：整层不得移动任何交互元素。描边从 1px 加到 2px 只在
+      「尺寸由外部决定」的元素上做（卡片/弹层/输入框，box-sizing:border-box 吸收）；
+      宽度自适应的药丸按钮一律维持 1px，只把描边色提亮到 --line-strong。
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   ① 设计令牌
+   --------------------------------------------------------------------------- */
+:root{
+  /* —— 日间：纯白中性 ——
+     用户看过暖米底之后明确否定（原文「这个日间的米色太丑了给我换成纯白的」），
+     于是把整套暖色阶换成**中性无彩**：画布纯白 #FFFFFF，灰阶只带一丝冷
+     （hue ~245，肉眼读作"纯灰"而不是"米")。
+     参考站那套暖米/紫墨只保留在夜间主题里 —— 日间以"干净"优先。
+     品牌方舟青与三色粉彩不动，它们本来就是强调层。 */
+  --paper:#FFFFFF; --card:#FFFFFF;
+  /* 中性墨阶：hue 245、极低彩度，读作纯灰而非任何色相 */
+  --ink-900:#111114; --ink-800:#242429; --ink-700:#3C3C43;
+  --ink-600:#585861; --ink-500:#75757E; --ink-400:#9A9AA3;
+  --line:#ECECEF; --line-strong:#DEDEE3;
+  /* 卡片描边：比 --line-strong 再深一档。
+     参考站的盒子（card / modal）用的是 --color-base-content 级别的深边，
+     而 --line-strong 只服务于「药丸按钮」这种小控件 —— 两者混用会让
+     大卡片看起来"缺边"，这是第一轮换肤后最明显的欠缺。
+     纯白画布上卡片没有底色差可比，全靠这条边 + 投影立住，所以它必须够深。 */
+  --line-card:#C7C7CF;
+  /* 粉彩点缀（cupcake 的 primary / secondary / accent），只用于非交互色块 */
+  --p-mint:#44EBD3;  --p-mint-ink:#0A534B;
+  --p-pink:#F9CBE5;  --p-pink-ink:#78214A;
+  --p-peach:#FFD6A7; --p-peach-ink:#7A4412;
+  --bg:#FFFFFF; --bg-soft:#F7F7F8; --bg-hover:#F3F3F5; --bg-active:#E8E8EC;
+  --blue:#18D1FF; --blue-soft:#DFF6FD; --blue-deep:#0B93BE; --blue-ink:#04171D;
+  --blue-line:rgba(24,209,255,.45); --accent-glow:rgba(24,209,255,.30);
+  /* 语义色：cupcake 定义（success #00BA7B / info #00A4F2 / warning #EEAF00 / error #FE1C55）*/
+  --green:#00A96E; --green-soft:#D8F6E9; --green-500:#00BA7B;
+  --red:#D92A4E; --orange:#C2410C; --amber:#A16207;
+  --dark:#111114;
+
+  /* hero 大背景板：被撤下标徽位置的那枚几何图形。
+     造形 mask 是按 24 单位的 viewBox 缩放到整个盒子的，所以**线宽会同比放大**
+     （原来 54px 盒子里 1 单位的线 ≈ 2.2px；放大到 660px 就是 ≈27px）。
+     这决定了它读起来是"一块淡色板"而不是"一幅细线图"。
+
+     ⚠️ 两档透明度别照抄夜间那组的思路，两套主题的**基线不一样**：
+        · 夜间主形 rgba(255,255,255,.072) 落在 #161212 上是 #272727 —— 抬了 17 级，
+          本身就已经看得见，不用动。
+        · 日间主形 rgba(15,16,20,.062) 落在 #FFFFFF 上只剩 #F0F0F0 —— 只压了 15 级，
+          再叠上下面那条一直衰减到 transparent 的曝光曲线，实际有效区只有 .02~.03，
+          于是一整块东西等于没画（用户原话：「背景看不清」）。
+        所以日间这一档是**独立定标**的：正文页要的是"看得清的背景"，
+        不是"看不见的雾"，峰值落在 #E0E0E0 一档 —— 一眼认出是幅几何图，
+        又始终比任何正文色浅 200 级以上，压不住文字。
+     北极点那颗青点同理：放大后是个 66px 的实心圆，透明度必须单独一档。 */
+  --wm-fill:rgba(15,16,20,.13);
+  --wm-acc:rgba(24,209,255,.22);
+
+  --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:16px; --r-xl:22px; --r-pill:999px;
+  /* ⚠️ 不要把 border-width 从 1px 加到 2px。
+     高度自适应的元素会因此长高 2px，把下面的东西全部推下去；
+     宽度自适应的药丸按钮会变宽 4px，把右对齐的按钮组整体顶开。
+     参考站那种「2px 描边」的观感改用「1px 边框 + 1px inset 阴影环」复刻：
+     box-shadow 不参与布局，画出 2px 的边，几何一分不动。 */
+  --ring:1px;
+
+  --shadow-xs:0 1px 2px rgba(15,16,20,.05);
+  --shadow-sm:0 1px 3px rgba(15,16,20,.07), 0 1px 1px rgba(15,16,20,.03);
+  /* 卡片专用投影：比 --shadow-sm 明显重一档，逼近参考站盒子的「浮起」量级。
+     投影与 inset 环都不参与布局，加重不会移动任何元素。 */
+  --shadow-card:0 6px 18px -10px rgba(15,16,20,.30), 0 1px 2px rgba(15,16,20,.05);
+  --shadow-card-hi:0 16px 34px -14px rgba(15,16,20,.40), 0 3px 8px rgba(15,16,20,.08);
+  --shadow-md:0 12px 28px -12px rgba(15,16,20,.22), 0 2px 6px rgba(15,16,20,.05);
+  --shadow-lg:0 25px 50px -12px rgba(15,16,20,.28), 0 4px 12px rgba(15,16,20,.06);
+
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",
+         "Segoe UI","Inter","Helvetica Neue","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+
+  --ease:cubic-bezier(.22,.8,.28,1);
+  --ease-out:cubic-bezier(.25,.1,.25,1);
+}
+
+html.dark{
+  --paper:#161212; --card:#1B1717;
+  /* forest 的暖近黑（hue 17.9）*/
+  --ink-900:#E5E4E4; --ink-800:#CAC9C9; --ink-700:#A09E9E;
+  --ink-600:#747070; --ink-500:#5E5A5A; --ink-400:#4C4646;
+  --line:#2A2424; --line-strong:#3A3333; --line-card:#473C3C;
+  /* 夜间的粉彩：参考站 forest 主题没有粉彩，直接降饱和压暗成"深彩"，
+     亮度仍高于卡面（#1B1717）一档，所以色相读得出来但不刺眼。 */
+  --p-mint:#11403A;  --p-mint-ink:#6FDCCB;
+  --p-pink:#3A1D2C;  --p-pink-ink:#EFB4D3;
+  --p-peach:#392816; --p-peach-ink:#F0C288;
+  /* hero 大背景板：夜间主形走亮色低透明度（和 --ink-900 的翻转逻辑一致） */
+  --wm-fill:rgba(255,255,255,.072);
+  --wm-acc:rgba(24,209,255,.18);
+  --bg:#161212; --bg-soft:#110D0D; --bg-hover:#231E1E; --bg-active:#322C2C;
+  --blue:#18D1FF; --blue-soft:#0A2730; --blue-deep:#18D1FF; --blue-ink:#04171D;
+  --blue-line:rgba(24,209,255,.42); --accent-glow:rgba(24,209,255,.30);
+  --green:#00A96E; --green-soft:#0B2A1E; --green-500:#00BA7B;
+  --red:#FF5861; --orange:#FB923C; --amber:#FFBE00;
+  --dark:#E5E4E4;
+  --ring:0px;                       /* 深色主题参考站是 1px 描边，不再叠环 */
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.5);
+  --shadow-card:0 8px 22px -12px rgba(0,0,0,.78), 0 1px 2px rgba(0,0,0,.5);
+  --shadow-card-hi:0 18px 38px -16px rgba(0,0,0,.88), 0 3px 8px rgba(0,0,0,.55);
+  --shadow-md:0 12px 28px -12px rgba(0,0,0,.62), 0 2px 6px rgba(0,0,0,.3);
+  --shadow-lg:0 25px 50px -12px rgba(0,0,0,.72);
+}
+
+/* ---------------------------------------------------------------------------
+   ② 基底与表面分层 —— 暖米画布 → 暖白卡面（参考站 base-200 / base-100）
+   --------------------------------------------------------------------------- */
+html,body{height:100%}
+body{
+  font-family:var(--font); font-size:14.5px;
+  color:var(--ink-900); background:var(--paper) !important;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
+.win{background:var(--paper)}
+.shell{background:var(--paper)}
+
+/* 画布氛围层：顶部青晕 + 亚像素网格（纯静态，不动画，零渲染负担）。
+   纯白底上青色只能"点到为止" —— 原来 13% 在暖米底上不显，
+   挪到 #FFFFFF 上就是一层可见的蓝雾，会把"纯白"读成"淡蓝"。
+   网格同理：3.2% 在米底上是质感，在白底上就是描图纸。都往下压了一档。 */
+.main{isolation:isolate}
+.main::before{
+  content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    radial-gradient(1100px 380px at 76% -10%, rgba(24,209,255,.085), transparent 68%),
+    radial-gradient(760px 300px at 4% 106%, rgba(24,209,255,.04), transparent 72%),
+    linear-gradient(to right, rgba(15,16,20,.026) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15,16,20,.026) 1px, transparent 1px);
+  background-size:auto,auto,32px 32px,32px 32px;
+}
+html.dark .main::before{
+  background-image:
+    radial-gradient(1100px 380px at 76% -10%, rgba(24,209,255,.12), transparent 68%),
+    radial-gradient(760px 300px at 4% 106%, rgba(24,209,255,.055), transparent 72%),
+    linear-gradient(to right, rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.03) 1px, transparent 1px);
+}
+.main > *{position:relative; z-index:1}
+
+/* 侧栏 / 侧边面板：比画布深一档的暖色「窗口侧栏」 */
+.sidebar{background:var(--bg-soft) !important; border-right:1px solid var(--line)}
+html.dark .sidebar{background:var(--bg-soft) !important}
+
+/* ---------------------------------------------------------------------------
+   ③ 排版层级 —— Apple 官网的显示级字型
+   --------------------------------------------------------------------------- */
+.home-greet{
+  font-size:32px; font-weight:600; letter-spacing:-.028em; line-height:1.25;
+  color:var(--ink-900);
+}
+.home-sub{font-size:14.5px; line-height:1.35; color:var(--ink-500); letter-spacing:-.005em}
+
+.mk-title,.view-h1,.set-h{font-size:28px; font-weight:600; letter-spacing:-.026em; line-height:1.25}
+.sd-title{font-size:32px; font-weight:600; letter-spacing:-.028em; line-height:1.25}
+.mk-sub,.view-sub{font-size:13.5px; line-height:1.22; color:var(--ink-500); letter-spacing:-.003em}
+
+.mk-cat-name,.sd-sec-title{font-size:17px; font-weight:600; letter-spacing:-.015em; line-height:1.32}
+.sec-h h3{font-size:15px; font-weight:600; letter-spacing:-.012em}
+.skill-card .sc-title{font-weight:600; letter-spacing:-.008em}
+.lrow .lm .t,.set-row .sl .t{font-weight:500; letter-spacing:-.006em}
+.pop-head .ttl{letter-spacing:-.01em}
+.modal .m-title{font-size:17px; font-weight:600; letter-spacing:-.018em}
+
+/* 微标签：保留方舟式等宽 HUD 细节（大写 + 宽字距） */
+.sec-label{
+  font-family:var(--mono); font-size:10.5px; font-weight:500; line-height:15px;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-400);
+}
+/* 品牌名：改成两个字（启思）之后要撑得住这块地方，15.5 → 17px。
+   ⚠️ 但行高**必须钉成 20px**（原来是 15.5×1.32≈20.5）：
+      品牌区的高度直接决定下面「新建任务」和整列导航的起点，
+      多 1px 就是全列位移。**字号可以动，行高不能动。**
+   两个字的中文标识给一点字距（.04em），像一枚 logotype 而不是正文。 */
+.side-brand .name{font-size:17px; line-height:20px; font-weight:600; letter-spacing:.04em}
+/* 副行：左端是标语（伪元素），右端是版本号（真实文本）。行高同样钉死 15px。 */
+.side-brand .ver{font-family:var(--mono); font-size:10px; line-height:15px; letter-spacing:.08em; color:var(--ink-400)}
+.mono{font-family:var(--mono)}
+
+/* ---------------------------------------------------------------------------
+   ④ 结构线 / 分隔 —— 保持 1px（加粗会挤压壳层内容的宽度，反而制造位移）
+   --------------------------------------------------------------------------- */
+.main-head{border-bottom:1px solid var(--line-card)}
+.titlebar{background:var(--paper)}
+.home-toolbar{border-top:1px solid var(--line)}
+.pop-head{border-bottom:1px solid var(--line)}
+.set-row,.lrow,.sd-row,.sp-kv{border-bottom-color:var(--line)}
+.proj-leaf.active{border-radius:var(--r-sm)}
+
+/* ---------------------------------------------------------------------------
+   ⑤ 卡片 / 材质 —— 暖白卡面 + 深描边 + 深而软的紫墨投影
+   描边的「2px」观感 = 1px 边框 + 1px inset 环（box-shadow 不参与布局）
+   第二轮：边框色从 --line-strong 换成更深的 --line-card，
+           投影从 --shadow-sm 换成 --shadow-card。两者都不参与布局。
+   --------------------------------------------------------------------------- */
+.skill-card,.row-card,.set-card,.api-card,.sd-list,.dz-slide,.sp-card,
+.tpl-blk,.tpl-el,.drop-pill,.icon-pill,.pop,.modal{
+  background:var(--card);
+}
+.skill-card{
+  border:1px solid var(--line-card); border-radius:var(--r-lg);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-card);
+  transition:transform .32s var(--ease), box-shadow .32s var(--ease),
+             border-color .32s var(--ease);
+}
+.skill-card:hover{
+  transform:translateY(-3px); border-color:var(--ink-400);
+  box-shadow:inset 0 0 0 var(--ring) var(--ink-400), var(--shadow-card-hi);
+}
+.row-card,.set-card,.sd-list,.api-card{
+  border:1px solid var(--line-card); border-radius:var(--r-lg);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-card);
+}
+.modal{
+  border:1px solid var(--line-card); border-radius:var(--r-xl);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-lg);
+}
+.pop{
+  border:1px solid var(--line-card); border-radius:var(--r-lg);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-md);
+}
+.overlay{background:rgba(15,16,20,.34)}
+
+/* ---------------------------------------------------------------------------
+   ⑥ 按钮 —— 药丸化 + 深描边 + 方舟青强调
+   药丸是这个应用里最容易「一改就位移」的东西（宽度自适应），
+   所以描边一律走 inset 环，padding 一分不动。
+   第二轮：描边色抬到 --line-card；实心按钮补一层 DaisyUI 的 --depth
+           内高光（inset 不参与布局），让药丸有"按得下去"的厚度。
+   --------------------------------------------------------------------------- */
+.pill-btn{
+  height:30px; padding:0 14px; border-radius:var(--r-pill);
+  border:1px solid var(--line-card); background:var(--card); color:var(--ink-700);
+  font-size:12.5px; font-weight:500; letter-spacing:-.004em;
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card),
+             inset 0 1px 0 rgba(255,255,255,.7), var(--shadow-xs);
+  transition:background .22s var(--ease), border-color .22s var(--ease),
+             box-shadow .22s var(--ease), transform .22s var(--ease);
+}
+.pill-btn:hover{
+  background:var(--card); border-color:var(--ink-400);
+  box-shadow:inset 0 0 0 var(--ring) var(--ink-400),
+             inset 0 1px 0 rgba(255,255,255,.7), var(--shadow-sm);
+  transform:translateY(-1px);
+}
+.pill-btn.dark,.pill-btn.primary{
+  background:var(--ink-900); border-color:var(--ink-900); color:var(--paper);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), var(--shadow-sm);
+}
+.pill-btn.blue{background:var(--blue); border-color:var(--blue); color:var(--blue-ink); font-weight:600;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 4px 14px -6px var(--accent-glow)}
+.pill-btn.blue:hover{background:var(--blue-deep); border-color:var(--blue-deep); color:#fff}
+.pill-btn.ghost{border-color:transparent; background:var(--bg-hover); box-shadow:none}
+.pill-btn.orange{color:var(--orange); border-color:transparent; background:var(--card); box-shadow:none}
+.pill-btn.danger{color:var(--red); border-color:transparent; background:var(--card); box-shadow:none}
+html.dark .pill-btn:not(.dark):not(.blue){background:var(--card); border-color:var(--line-card);
+  box-shadow:var(--shadow-xs)}
+
+.ghost-btn{
+  height:32px; border-radius:var(--r-sm); background:var(--bg-hover);
+  border:1px solid transparent; color:var(--ink-700);
+  transition:background .22s var(--ease), border-color .22s var(--ease);
+}
+.ghost-btn:hover{background:var(--bg-active); border-color:var(--line)}
+
+.icon-ghost{border-radius:var(--r-sm)}
+.branch-pill{
+  height:28px; background:var(--card); border:1px solid var(--line-card);
+  color:var(--ink-600);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-xs);
+}
+.branch-pill:hover{border-color:var(--ink-400)}
+.drop-pill,.icon-pill{
+  height:38px; border:1px solid var(--line-card);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-xs);
+}
+.drop-pill:hover,.icon-pill:hover{border-color:var(--ink-400); background:var(--card)}
+
+/* 状态胶囊 */
+.st-pill{border:1px solid var(--line-card); background:var(--card); color:var(--ink-600)}
+.st-pill.green{background:var(--green-soft); color:var(--green); border-color:transparent}
+.st-pill.amber{background:#FBEEDA; color:var(--amber); border-color:transparent}
+html.dark .st-pill.amber{background:#2A1E0B}
+
+/* 开关：方舟青轨道 + 纯白滑块（两种主题下都保持一致） */
+.switch{background:var(--line-strong)}
+.switch::after,html.dark .switch::after{background:#fff; box-shadow:0 1px 3px rgba(15,16,20,.28)}
+.switch.on{background:var(--blue)}
+.switch.blue.on{background:var(--blue)}
+.switch.on::after,html.dark .switch.on::after{background:#fff}
+
+/* 新增 / 勾选圆钮 */
+.newapi .plus-orb,.plus-orb{background:var(--card); border:1px solid var(--line-card); color:var(--ink-600); box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-xs)}
+.newapi .plus-orb:hover,.plus-orb:hover{border-color:var(--ink-400); background:var(--card)}
+.check-orb{background:var(--green-500)}
+.gdot{background:var(--card); border:2px solid var(--blue)}
+
+/* ---------------------------------------------------------------------------
+   ⑦ 标题栏 / 顶栏 —— 参考站的 navbar 是「悬浮胶囊 + 毛玻璃」，
+      但我们的顶栏是通栏结构，不能悬浮（会动版式）。
+      所以只移植它的材质：半透明底 + 背景模糊 + 深一档的发丝线。
+      backdrop-filter 与边框色都不参与布局。
+   --------------------------------------------------------------------------- */
+.main-head{
+  border-bottom:1px solid var(--line-card);
+  background:rgba(255,255,255,.74) !important;
+  -webkit-backdrop-filter:saturate(1.5) blur(14px);
+  backdrop-filter:saturate(1.5) blur(14px);
+}
+html.dark .main-head{background:rgba(22,18,18,.82) !important}
+.wtab{
+  border-radius:var(--r-sm) var(--r-sm) 0 0; color:var(--ink-500);
+  transition:background .2s var(--ease), color .2s var(--ease);
+}
+.wtab.active{
+  background:var(--card); border:.5px solid var(--line-card); border-bottom:none;
+  color:var(--ink-900); font-weight:500; letter-spacing:-.006em;
+}
+.wtab .win-dot{background:var(--bg-soft); border-radius:var(--r-xs)}
+.wctl{width:36px; height:32px; border-radius:var(--r-sm); color:var(--ink-600)}
+.wctl:hover{background:var(--bg-hover)}
+.wctl.close:hover{background:var(--red); color:#fff}
+.main-head .crumb{color:var(--ink-500)}
+.main-head .crumb b{color:var(--ink-900); font-weight:600; letter-spacing:-.01em}
+
+/* 身份分段控件 —— 暖色轨道 + 暖白滑块（参考站的 selector/field 规格）*/
+.role-seg,.seg{background:var(--bg-soft); border:1px solid var(--line); border-radius:var(--r-pill)}
+.role-seg button,.seg button{color:var(--ink-600); border-radius:var(--r-pill)}
+.role-seg button.active{background:var(--ink-900); color:var(--paper)}
+.seg button.active{background:var(--card); color:var(--ink-900); box-shadow:var(--shadow-xs)}
+.avt{background:var(--blue); color:var(--blue-ink); font-weight:600}
+html.dark .avt{color:var(--blue-ink)}
+.ai-chip{border:1px solid var(--line-card); background:var(--card); color:var(--ink-600);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-xs)}
+
+/* ---------------------------------------------------------------------------
+   ⑧ 侧栏导航（任务栏）—— 参考站「悬浮药丸」结构的竖向移植
+   参考站的导航是 navbar 里的胶囊：药丸圆角 + 深墨实心主按钮 + 深描边。
+   竖排侧栏不能悬浮（会动版式），于是移植三件事：
+     · 行形状   10px 圆角 → 完全药丸（radius 不参与布局）
+     · 主操作   「新建任务」改成参考站那颗深墨药丸（只换底色与字色）
+     · 选中态   暖白药丸 + --line-card 深环 + 圆头方舟青指示条
+   悬停底色统一用紫墨低透明度，压在暖米侧栏上不发灰。
+   --------------------------------------------------------------------------- */
+.newtask,.snav,.proj-row,.proj-leaf,.proj-add-sess,.sb-btn{
+  border-radius:var(--r-pill);
+  transition:background .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease);
+}
+/* 主操作：深墨实心药丸（对应参考站 navbar 右上那颗「登录」） */
+.newtask{
+  color:var(--paper); font-weight:600;
+  background:var(--ink-900);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), var(--shadow-sm);
+}
+.newtask:hover{background:var(--ink-800); color:var(--paper)}
+html.dark .newtask{background:var(--ink-900); color:var(--paper)}
+html.dark .newtask:hover{background:#F2F1F1; color:var(--paper)}
+
+.snav{color:var(--ink-600); position:relative}
+.snav:hover{background:rgba(15,16,20,.055); color:var(--ink-900)}
+.snav.active{
+  background:var(--card); color:var(--ink-900); font-weight:600;
+  /* ⚠️ 必须显式再写一次圆角：原版里有 .snav.active{border-radius:8px}
+     （0,2,0），会盖掉上面那条（0,1,0）的分组规则。 */
+  border-radius:var(--r-pill);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-card);
+}
+.snav.active::before{
+  content:''; position:absolute; left:0; top:24%; bottom:24%; width:3px;
+  border-radius:var(--r-pill); background:var(--blue);
+  box-shadow:0 0 10px 1px var(--accent-glow);
+  transform-origin:top center; animation:qkBarIn .46s var(--ease) both;
+}
+@keyframes qkBarIn{
+  0%{transform:scaleY(0); opacity:0}
+  60%{opacity:1}
+  100%{transform:scaleY(1); opacity:1}
+}
+.snav.active svg{color:var(--blue-deep)}
+html.dark .snav.active svg{color:var(--blue)}
+.proj-row:hover,.proj-leaf:hover,.proj-add-sess:hover{background:rgba(15,16,20,.055)}
+.proj-leaf.active{background:var(--bg-active); color:var(--ink-900); font-weight:600;
+  border-radius:var(--r-pill)}
+html.dark .snav:hover,.newtask:hover,html.dark .proj-row:hover,
+html.dark .proj-leaf:hover,html.dark .proj-add-sess:hover{background:rgba(255,255,255,.06)}
+.sb-btn{color:var(--ink-500)}
+.sb-btn:hover{background:rgba(15,16,20,.055); color:var(--ink-900)}
+.side-bottom{border-top:1px solid var(--line-card)}
+.expand-btn{
+  border:1px solid var(--line-card); border-radius:var(--r-sm); background:var(--card);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card), var(--shadow-sm); color:var(--ink-600);
+}
+
+/* ---------------------------------------------------------------------------
+   ⑧c 侧栏装饰层 —— 品牌标记 + 英文微标签 + 分区引线
+   用户要求（原文）：「旁边的那个任务栏再修修可以加一些英文和图标来装饰一下，简约，高级点」
+
+   ★ 硬约束：这一整节**不许改变任何元素的盒模型**。
+     侧栏是 `flex-direction:column` 的定高容器：往里塞任何占位内容，
+     下面的导航行会被整体推下去，回归脚本立刻就会报出来。
+     所以只有三种手法，且全部零布局：
+       1) 装饰图形 → 绝对定位的伪元素（脱离文档流，不参与任何计算）
+       2) 行内英文 → flex 子项 + `margin-left/right:auto`（宿主是 width:100% 的按钮，
+          文案本身不挪；伪元素的行盒又矮于原有内容行高，撑不起高度）
+       3) 分区引线 → `flex:1` 的 ::after（1px 高，同样撑不起行高）
+     ⚠️ 伪元素 content 不进 DOM —— 应用自带的文档导出 walk() 只扫 <p>/<h1>/<h2>，
+        这里一个字都不会被卷进去。
+
+   英文语汇与 hero 那处「QISI · TEACHER」同一套：
+   等宽字体 / 全大写 / 宽字距 / 低对比。**它是纹理，不是内容** ——
+   中文始终是主标签，英文只是右上角那点签字。
+   --------------------------------------------------------------------------- */
+:root{
+  /* 品牌标记：一枚 24 单位的线描地球（外圆 + 一条经线 + 一条赤道），
+     外加北极点那枚青点（单独一层，走 --blue）。
+     做法与 hero 大背景板一致：mask 只取 alpha，颜色交给 background-color，
+     所以同一份 data-URI 同时服务日/夜两套主题（夜间 --ink-900 翻成近白）。 */
+  --mk-badge:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.2' stroke-width='1.7'/%3E%3Cellipse cx='12' cy='12' rx='3.5' ry='8.2' stroke-width='1.7'/%3E%3Cpath d='M3.8 12h16.4' stroke-width='1.45'/%3E%3C/svg%3E");
+  /* ⚠️ 这颗点的位置调过两次：`cy=3.6 / r=2.3` 时它的圆心落在球轮廓**之上**，
+     12× 特写看是一只球顶在球上（像雪人），而且下缘正好啃住轮廓的弧顶。
+     现在压到 `cy=4.9 / r=2.05` —— 圆心落进球内，只露出 0.8px 的小尖，
+     读起来是「北极点坐标点」，而不是「一只球」。 */
+  --mk-badge-dot:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='4.9' r='2.05' fill='%23000'/%3E%3C/svg%3E");
+}
+
+/* —— 品牌区：一枚标记 + 双语标识 ——
+   左内距 47px 是**对齐意图**，不是随手写的数：
+   导航行里图标从 x22 起、宽 15px、再隔 10px 到文案 —— 文案正好落在 x47。
+   品牌名与导航文案共用同一条竖基线，整栏读起来是一张网格。
+   只改左内距，高度由上下内距 + 两行行高决定 → 61px 一分不动。 */
+.side-brand{position:relative; padding-left:47px}
+.side-brand::before,
+.side-brand::after{
+  content:""; position:absolute; left:14px; top:14px;
+  width:20px; height:20px; margin:0;
+  -webkit-mask-size:100% 100%;  mask-size:100% 100%;
+  -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+  pointer-events:none;
+}
+.side-brand::before{
+  background-color:var(--ink-900);
+  -webkit-mask-image:var(--mk-badge);       mask-image:var(--mk-badge);
+}
+/* 北极点：单独一层的青点。和主形分开是为了让它能用自己的颜色，
+   否则整个标记只能是一个单色 —— 这一「点青」是这个品牌的记号。 */
+.side-brand::after{
+  background-color:var(--blue);
+  -webkit-mask-image:var(--mk-badge-dot);   mask-image:var(--mk-badge-dot);
+}
+
+/* 副行：左端是品牌标语，右端是版本号。
+   标语挂在 `.ver::before` 上而不是另起元素 —— 它是个 flex 子项，
+   与同一行末尾那个真实的 `v1.4.0` 共处一行（版本靠右，标语靠左）。
+   ⚠️ 不新增 DOM：应用作者明确禁止注入节点（导出 walk() + 焦点陷阱），
+      所以文案一律走伪元素；行高钉 15px，跟 `.ver` 自身那行齐平。
+   标语用正文字体而不是等宽 —— 它是中文，等宽字体对中文只是回退，
+   而且 11px 的正文比 9px 的等宽更经得起读。 */
+.side-brand .ver{display:flex; align-items:center; gap:12px}
+.side-brand .ver::before{
+  content:"启学，让思考发生"; margin-right:auto;
+  font-family:var(--font); font-size:11px; line-height:15px;
+  letter-spacing:.06em; white-space:nowrap;
+  color:var(--ink-500);
+}
+html.dark .side-brand .ver::before{color:var(--ink-600)}
+
+/* —— 导航行右端的英文微标签 ——
+   宿主 `.snav` 是 `display:flex; width:100%`，加一个 `margin-left:auto` 的伪元素
+   只是把右侧空白吃掉，图标与中文标签的位置一个像素都不动。
+   没有 data-view 的导航行不会生成这个盒子（没写 content）。 */
+.snav::after{
+  margin-left:auto;
+  font-family:var(--mono); font-size:9px; font-weight:400;
+  line-height:1; letter-spacing:.12em; text-transform:uppercase;
+  white-space:nowrap; pointer-events:none;
+  color:var(--ink-400);
+}
+html.dark .snav::after{color:var(--ink-500)}
+.snav[data-view="market"]::after  {content:"MARKET"}
+.snav[data-view="services"]::after{content:"SERVERS"}
+.snav[data-view="chat"]::after    {content:"LESSON"}
+.snav[data-view="library"]::after {content:"LIBRARY"}
+.snav[data-view="lesson"]::after  {content:"COURSES"}
+.snav[data-view="question"]::after{content:"BANK"}
+.snav[data-view="kg"]::after      {content:"GRAPH"}
+/* 跟着身份走的两条 —— 中文标签本身就会换，英文不能落下 */
+body:has(#roleSeg button[data-role="student"].active) .snav[data-view="chat"]::after{content:"TUTOR"}
+body:has(#roleSeg button[data-role="student"].active) .snav[data-view="question"]::after{content:"DRILL"}
+/* 选中态：让那行英文跟着青起来，作为「你在这里」的第二重提示 */
+.snav.active::after{color:var(--blue-deep)}
+html.dark .snav.active::after{color:var(--blue)}
+
+/* —— 主操作那颗深墨药丸：右端补一个 NEW ——
+   用 `--paper` + 半透明而不是写死白色：夜间主题里这颗药丸会翻成
+   「近白底 + 深字」，写死白色会直接消失。 */
+.newtask::after{
+  content:"NEW"; margin-left:auto;
+  font-family:var(--mono); font-size:9px; font-weight:400;
+  line-height:1; letter-spacing:.14em;
+  color:var(--paper); opacity:.5; pointer-events:none;
+}
+
+/* —— 分区标题：标题与操作钮之间夹一条渐隐引线 ——
+   `.sec-label` 原本是块级（里面只有一个文本节点）。改成 flex 后，
+   那个文本节点变成匿名 flex 项，行盒高度仍是 15px，容器高度不变；
+   「项目」那条本来就是 flex，它的高度一直由那个 22px 的 + 号决定，也不受影响。
+   引线 `flex:1` 吃掉剩余宽度。
+
+   ⚠️⚠️ 必须用 `order` 把它排到**文本之后、按钮之前**。
+   `::after` 是最后的子节点 —— 直接用它会让引线跑到 `+` 号右边，
+   顺手把 `#projAdd` 从右端（x215）挤到左端（x48）：
+   那是个真 <button>，在几何回归里会立刻报出 Δ167 的位移。
+   改用 `::before` + `order:1`，按钮 `order:2`（文本是匿名项，默认 0），
+   视觉次序就是 文本 → 引线 → 按钮，按钮依旧贴着右内距。 */
+.sec-label{display:flex; align-items:center; gap:10px}
+.sec-label::before{
+  content:""; order:1; flex:1 1 auto; min-width:14px; height:1px;
+  background:linear-gradient(90deg, var(--line-strong), rgba(0,0,0,0) 78%);
+}
+.sec-label > button{order:2}
+html.dark .sec-label::before{
+  background:linear-gradient(90deg, var(--line-card), rgba(0,0,0,0) 92%);
+}
+
+/* ---------------------------------------------------------------------------
+   ⑧b 粉彩点缀 —— cupcake 主题的第二层色彩（薄荷 / 粉 / 桃）
+   参考站把粉彩用在「小色块」上（badge / chip / icon tile），而不是主按钮。
+   这里严格照此办理：只落在**非交互的小色块**上 ——
+     · 技能卡左上那枚方形图标砖（原先是清一色深墨）
+     · 分类标题左侧的一枚小竖条（绝对定位在容器留白里）
+     · 服务卡的新增圆钮
+   按钮 / 导航 / 状态胶囊一律不碰粉彩，强调层级才不会被稀释。
+   --------------------------------------------------------------------------- */
+.skill-card:nth-child(3n+1) .skill-icon{background:var(--p-mint);  color:var(--p-mint-ink)}
+.skill-card:nth-child(3n+2) .skill-icon{background:var(--p-pink);  color:var(--p-pink-ink)}
+.skill-card:nth-child(3n)   .skill-icon{background:var(--p-peach); color:var(--p-peach-ink)}
+
+/* 分类小竖条：left:-16px 落在 .view-sec 的 34px 内边距里，
+   绝对定位，不占位、不推动任何兄弟节点。 */
+.mk-cat{position:relative}
+.mk-cat::before{
+  content:''; position:absolute; left:-16px; top:4px; width:4px; height:16px;
+  border-radius:var(--r-pill); background:var(--p-mint);
+}
+.mk-cat:nth-child(3n+2)::before{background:var(--p-pink)}
+.mk-cat:nth-child(3n)::before{background:var(--p-peach)}
+
+.newapi .plus-orb,.plus-orb{background:var(--p-mint); color:var(--p-mint-ink)}
+.newapi .plus-orb:hover,.plus-orb:hover{background:var(--p-mint); color:var(--p-mint-ink)}
+
+/* 侧边面板 */
+.sidepanel{background:var(--bg-soft); border-left:1px solid var(--line)}
+html.dark .sidepanel{background:var(--bg-soft)}
+
+/* ---------------------------------------------------------------------------
+   ⑨ 对话界面 —— 与桌面改造版对齐
+      消息列 padding 24/48、行距 16、气泡间距 12、头像 30、
+      用户气泡 12px 圆角 + 纸面填充、输入区 6px 圆角 + 纸面填充
+   --------------------------------------------------------------------------- */
+#chatMsgBox{gap:16px; padding:24px 48px 12px}
+#chatMsgBox > div{gap:12px}
+#chatMsgBox .avt{box-shadow:0 1px 2px rgba(15,16,20,.08)}
+/* 正文行距：苹果式正文呼吸感 */
+#chatMsgBox > div > div:last-child{font-size:14.5px; line-height:1.72; letter-spacing:-.002em}
+#chatMsgBox > div > div[style*="border-radius"]{padding:13px 17px; line-height:1.68}
+
+.home-mark{filter:saturate(1.05)}
+/* 品牌标记内的硬编码色接入方舟青（SVG 表现属性可被 CSS fill 覆盖） */
+.home-mark svg circle{fill:var(--blue)}
+.home-mark svg path{stroke:var(--ink-900)}
+#view-kg{background:transparent; --kg-bg:transparent}
+html.dark #view-kg{background:transparent; --kg-bg:transparent}
+/* 输入框：原版规则保留（--bg 填充 + --line-strong 边框），只把 .5px 加粗到 1px。
+   注：--paper 在两套模式下都等于 --bg，所以夜间不需要额外覆写填充 ——
+   之前给夜间加的 --bg-soft 抬升已撤销，与桌面改造版实测值对齐
+   （浅色 #F2F4F6/#C8D0D5，夜间 #07090B/#323B42）。 */
+.home-input{
+  background:var(--paper); border:1px solid var(--line-strong);
+  border-radius:6px; box-shadow:var(--shadow-md);
+  transition:border-color .22s var(--ease), box-shadow .22s var(--ease);
+}
+.home-input:focus-within{
+  border-color:var(--blue);
+  box-shadow:0 0 0 3px rgba(24,209,255,.22), 0 12px 36px -14px var(--accent-glow);
+}
+.home-input textarea{font-size:15px; line-height:1.62; letter-spacing:-.004em}
+.home-input textarea::placeholder{color:var(--ink-400)}
+.htool{border-radius:var(--r-sm); color:var(--ink-500)}
+.htool:hover{background:rgba(15,16,20,.055); color:var(--ink-900)}
+.access-tag{background:var(--bg-soft); border:1px solid var(--line); color:var(--amber); font-weight:500}
+.model-pill{border:1px solid var(--line); color:var(--ink-600); background:transparent}
+.model-pill:hover{background:rgba(15,16,20,.055); border-color:var(--line-strong)}
+.send-orb{background:var(--bg-active); color:var(--ink-700); transition:all .22s var(--ease)}
+.send-orb:hover{background:var(--blue); color:var(--blue-ink); box-shadow:0 4px 14px -4px var(--accent-glow)}
+.send-orb:disabled{opacity:.5; cursor:default}
+
+/* 推荐词：方舟式等宽微标签（与改造版一致） */
+.home-chips{margin-top:22px}
+.hchip{
+  height:auto; padding:7px 13px; border-radius:var(--r-xs);
+  background:transparent; border:1px solid var(--line-strong);
+  font-family:var(--mono); font-size:11px; letter-spacing:.9px; text-transform:none;
+  color:var(--ink-600);
+  transition:border-color .22s var(--ease), color .22s var(--ease),
+             background .22s var(--ease), transform .22s var(--ease);
+}
+.hchip:hover{background:var(--card); border-color:var(--blue); color:var(--ink-900); transform:translateY(-1px)}
+
+/* 思考中 / 错误 提示条 */
+.thinkInner .st-pill{background:#FDF0DF; border-color:transparent; color:var(--amber)}
+.thinkInner .st-pill.amber .dot{animation:qisi-vision-pulse 1.1s ease-in-out infinite}
+@keyframes qisi-vision-pulse{0%,100%{transform:scale(.72);opacity:.48}50%{transform:scale(1.18);opacity:1}}
+
+/* ---------------------------------------------------------------------------
+   ⑩ 知识星图视图 —— 令牌接入方舟青
+   --------------------------------------------------------------------------- */
+#view-kg{
+  --kg-ink:#111114; --kg-ink2:#585861; --kg-ink3:#9A9AA3;
+  --kg-bar-bg:rgba(15,16,20,.08); --kg-fill:linear-gradient(90deg,#18D1FF,#0B93BE);
+  --kg-panel:rgba(255,255,255,.98); --kg-panel-line:rgba(15,16,20,.18);
+  --kg-panel-shadow:0 25px 50px -12px rgba(15,16,20,.26);
+  --kg-chip:rgba(24,209,255,.10); --kg-chip-hover:rgba(24,209,255,.18);
+  --kg-success:#0B93BE; --kg-accent:#111114;
+  --kg-head-line:rgba(15,16,20,.12); --kg-head-bg:rgba(255,255,255,.9);
+  --kg-input-bg:#FFFFFF; --kg-input-bd:rgba(15,16,20,.22); --kg-input-ph:#9A9AA3;
+}
+html.dark #view-kg{
+  --kg-ink:#E5E4E4; --kg-ink2:#747070; --kg-ink3:#4C4646;
+  --kg-bar-bg:rgba(255,255,255,.12); --kg-fill:linear-gradient(90deg,#18D1FF,#0B93BE);
+  --kg-panel:rgba(27,23,23,.96); --kg-panel-line:rgba(255,255,255,.12);
+  --kg-chip:rgba(24,209,255,.10); --kg-chip-hover:rgba(24,209,255,.20);
+  --kg-success:#18D1FF; --kg-accent:#E5E4E4;
+  --kg-head-line:rgba(255,255,255,.08); --kg-head-bg:rgba(22,18,18,.9);
+  --kg-input-bg:#1B1717; --kg-input-bd:rgba(255,255,255,.16); --kg-input-ph:#4C4646;
+}
+#view-kg .kg-header{background:var(--kg-head-bg)}
+#view-kg .kg-search{background:var(--kg-head-bg)}
+#view-kg .kg-search input{border-radius:var(--r-sm); border:1px solid var(--kg-input-bd)}
+#view-kg .kg-search input:focus{border-color:var(--blue); box-shadow:0 0 0 3px rgba(24,209,255,.2)}
+#view-kg .kg-progress .kg-bar{border-radius:var(--r-pill)}
+#view-kg .kg-progress .kg-fill{transition:width .5s var(--ease)}
+#view-kg .kg-mark-btn{border-radius:var(--r-pill); background:var(--ink-900); color:var(--paper)}
+#view-kg .kg-mark-btn:hover{background:#242429}
+#view-kg .kg-mark-btn.learned{background:var(--card); color:var(--ink-900)}
+html.dark #view-kg .kg-mark-btn.learned{background:var(--card)}
+#view-kg .kg-info-panel{border-radius:var(--r-lg); border:1px solid var(--kg-panel-line)}
+#view-kg .kg-title{font-weight:600; letter-spacing:-.015em}
+
+/* Keep the current Agent's persistent inspector usable on narrow windows. */
+@media (max-width:1000px){
+  .shell{position:relative;min-width:0;overflow:hidden}
+  .main{min-width:0;flex:1 1 auto}
+  .sidepanel{position:absolute;inset:0 0 0 auto;z-index:50;width:min(360px,calc(100vw - 44px));box-shadow:-18px 0 36px rgba(15,16,20,.16)}
+}
+@media (max-width:720px){
+  .sidebar{width:226px}
+  .sidepanel{width:min(340px,calc(100vw - 26px))}
+}
+/* 星点层在方舟配色下不可见，停掉其常驻动画（零视觉差异，回收合成器开销） */
+#view-kg .kg-stars::before,#view-kg .kg-stars::after{animation:none}
+
+/* ---------------------------------------------------------------------------
+   ⑩b 资料库 —— 残留硬编码色归一
+   改造版把整站接进了令牌体系，唯独「总学习进度」这一块是 JS 里拼的
+   inline style，颜色全是写死的 Ant Design 蓝（#1890ff / #e6f7ff / #91d5ff /
+   #52c41a）。它是全站最后一块冷色，压在暖米底上非常跳。
+   这些元素没有 class，只有 inline style，所以只能用属性子串选择器 + !important
+   覆盖。子串都是源码里的固定字面量（已用 grep 逐一核对），
+   万一日后源码改了颜色，覆盖会**安静失效**、退回应用自己的蓝色，不会出错。
+   注意：这些节点是「有数据时才渲染」的，静态只读副本上通常看不到 ——
+   验证靠的是往页面里注入等价节点后量计算样式，不是靠截图。
+   --------------------------------------------------------------------------- */
+/* 外层渐变卡 → 暖米→暖白 + 卡片同款圆角与描边 */
+#view-library [style*="linear-gradient(135deg,#f0f5ff,#e6f7ff)"]{
+  background:linear-gradient(135deg,#FBFBFC 0%,#F2F7F8 100%) !important;
+  border-color:var(--line-card) !important;
+  border-radius:var(--r-lg) !important;
+}
+/* 标题 / 正文里的冷色字 */
+#view-library [style*="color:#1890ff"]{color:var(--ink-900) !important}
+#view-library [style*="color:#666"]{color:var(--ink-600) !important}
+/* 进度条轨道：改成紫墨 8%（= --kg-bar-bg 同款），比 --bg 在暖卡上有对比 */
+#view-library [style*="background:#e6f7ff"]{background:rgba(15,16,20,.08) !important}
+/* 主按钮（蓝底白字）→ 深墨药丸，与全站主操作一致
+   边框色必须跟着底色走：.pill-btn 的 --line-card 边在这颗实心药丸上会
+   显出一圈浅灰描边（浅色底深药丸时尤其明显）。 */
+#view-library button[style*="background:#1890ff"]{
+  background:var(--ink-900) !important; color:var(--paper) !important;
+  border-color:var(--ink-900) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), var(--shadow-sm) !important;
+}
+/* 次级按钮（浅蓝底蓝字）→ 方舟青浅底 */
+#view-library button[style*="background:#e6f7ff"]{
+  background:var(--blue-soft) !important; color:var(--blue-deep) !important;
+  border-color:transparent !important;
+}
+/* 进度条填充（蓝→绿渐变 / 纯蓝填充）→ 方舟青→品牌绿 */
+#view-library [style*="linear-gradient(90deg,#1890ff,#52c41a)"]{
+  background:linear-gradient(90deg,var(--blue),var(--green-500)) !important;
+}
+#view-library [style*="background:#1890ff"]{background:var(--blue) !important}
+
+/* 夜间：上面几条里带固定浅色的需要单独压暗 */
+html.dark #view-library [style*="linear-gradient(135deg,#f0f5ff,#e6f7ff)"]{
+  background:linear-gradient(135deg,#1F1A1A 0%,#17201E 100%) !important;
+}
+html.dark #view-library [style*="background:#e6f7ff"]{background:rgba(255,255,255,.10) !important}
+html.dark #view-library [style*="color:#666"]{color:var(--ink-700) !important}
+
+/* ---------------------------------------------------------------------------
+   ⑪ 动效 —— 苹果式克制：短距升起 + 缓出，全线尊重 prefers-reduced-motion
+   --------------------------------------------------------------------------- */
+@keyframes qsViewIn{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
+@keyframes qsNavIn{from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:none}}
+
+.view.active:not(#view-kg) > *{animation:qsViewIn .5s var(--ease) both}
+.side-nav .snav,.side-actions .newtask,.side-bottom .sb-btn{animation:qsNavIn .42s var(--ease) both}
+.side-nav:nth-of-type(1) .snav:nth-child(1){animation-delay:.01s}
+.side-nav .snav:nth-child(2){animation-delay:.035s}
+.side-nav .snav:nth-child(3){animation-delay:.06s}
+.side-nav .snav:nth-child(4){animation-delay:.085s}
+.side-nav .snav:nth-child(5){animation-delay:.11s}
+.side-nav .snav:nth-child(6){animation-delay:.135s}
+.side-nav .snav:nth-child(7){animation-delay:.16s}
+
+@media (prefers-reduced-motion: reduce){
+  .view.active:not(#view-kg) > *,
+  .side-nav .snav,.side-actions .newtask,.side-bottom .sb-btn,
+  .snav.active::before{animation:none !important}
+  .skill-card,.pill-btn,.hchip,.send-orb{transition:none !important}
+}
+
+/* ---------------------------------------------------------------------------
+   ⑫ 滚动条 / 焦点环 / 选中
+   --------------------------------------------------------------------------- */
+*::-webkit-scrollbar{width:10px; height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{
+  background:rgba(15,16,20,.17); border-radius:var(--r-pill);
+  border:3px solid transparent; background-clip:content-box;
+}
+*::-webkit-scrollbar-thumb:hover{background:rgba(15,16,20,.32); background-clip:content-box}
+html.dark *::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16); background-clip:content-box}
+*{scrollbar-width:thin; scrollbar-color:rgba(15,16,20,.19) transparent}
+html.dark *{scrollbar-color:rgba(255,255,255,.18) transparent}
+
+:focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:var(--r-xs)}
+::selection{background:rgba(24,209,255,.3); color:var(--ink-900)}
+
+/* 空态 */
+.sp-empty{color:var(--ink-400); letter-spacing:-.003em}
+
+/* ===========================================================================
+   ⑬ Hero 首页版式 —— 移植自桌面改造版（启思·改造版）的「编辑式 hero」
+   ===========================================================================
+   移植来源全部是实测取值，不是目测：
+     · 版式      居中竖堆 → 左对齐单列，内容列 740px，容器 padding 5vh 72px 88px 76px
+     · 版面记号  左侧装订线（1px 竖线）+ 顶端 78px 青色起始段
+     · 标徽      老师端 T6 陀螺球 / 学生端 T-C 四维正方体 —— **第三版起改为大背景板**
+     · 文字层级  等宽微标签 → 大标题 → 青色短下划线 → 描述行（左描述 + 右规格小字）
+     · 结构细节  右侧导轨、快捷片青色「+」前缀、巨型残影字
+
+   —— 第二版重排：把「左窄柱」撑成「满版心」——
+   第一版的问题（用户反馈"挤、奇怪"）是量出来的，不是感觉：
+     a) 描述行右端那条规格小字被 `max-width:100%` 锁死在描述自己的 263px 里，
+        被迫折成两行；而下面的输入框有 740px → 上半窄、下半宽。
+     b) 「QISI · TEACHING」微标签占 y 417–429，青色下划线占 409–415，
+        只差 2px —— 两个装饰件叠在同一条带上。
+     c) 眉标占 mark.bottom−7 ~ +4，压在标徽下沿上。
+   重排动作：
+     · 删掉第二处微标签（角色信息在眉标一处即可）
+     · .home-sub 撑满 100%，flex + margin-left:auto：描述在左、规格行贴右端，
+       右端落在 1068px = 输入框右缘 = 眉标尾线终点 —— 三行共用一条右边界
+     · 竖向间距重分配，**总高严格守恒**：mark mb 18→40、greet mb 33→34、sub mb 78→54
+       （18+33+78 = 40+34+54 = 129），所以标徽、输入框、发送键、模型键、快捷片
+       全部零位移（回归实测 211 个交互元素位移分布 {"0":211}）
+
+   —— 第三版：标徽下版，改成大背景板（用户：「图标给我删了，移动到背景当大背景板」）——
+     · .home-mark 脱离文档流 → 绝对定位在右侧、放大到 660px、只留两层淡图形
+     · 它原来的 136px 占位搬进 #home.home 的 padding-top（推导见标徽那段注释）
+       → 下面所有元素仍然零位移
+     · 顺带：日间整套配色由暖米改为**纯白中性**（见文件头）
+
+   ⚠️ 全部用伪元素实现，不新增任何 DOM 节点。
+      改造版作者在原注释里明确写过两条硬约束：
+        · 绝不注入 <button> —— 模态的焦点陷阱会 querySelectorAll('button…')
+          把它卷进 Tab 循环，破坏键盘可达性；
+        · 不注入裸 <p>/<h1>/<h2> —— 文档导出的 walk() 会扫这些标签。
+      伪元素 content 不进 DOM，两条都绕开了。
+   --------------------------------------------------------------------------- */
+
+:root{
+  --ghost-c:rgba(15,16,20,.14);
+  /* 微标签灰阶：夜间 --ink-400 在黑底上几乎看不见，抬到 --ink-600 一档 */
+  --hero-eyebrow:var(--ink-400);
+  /* 主标字体：教材扉页感的宋体（改造版 hero 的标志性记号）。
+     本机装有 NotoSerifSC-VF（可变字体，粗体是真粗体，不是合成）。 */
+  --serif:"Songti SC","Noto Serif SC","Source Han Serif SC","STSong",
+          "SimSun",Georgia,serif;
+
+  /* ---- hero 标徽：两枚静态图标（老师端 T6 陀螺球 / 学生端 T-C 四维正方体）----
+     两枚图形都是**用真投影算出来**的，不是手描：
+       T6  = 三条真大圆按等轴测投影落在同一个球上（球轮廓在等轴测下仍是正圆）
+       T-C = 16 顶点四维正方体 → 4D 方向透视除法 → 等轴测（外轮廓落在正六边形上）
+     为什么存成 mask 而不是把颜色烤进 background：
+     mask 只取 alpha 通道，颜色交给 background-color —— 于是**同一份 data-URI
+     同时服务日间/夜间两套主题**（T6 的折线数据就有 3.3KB，存两份太蠢）。
+     形状里唯一随主题变的是主形色，见下面 ::before 的 --ink-900。
+     青色那「一处」单独放 ::after，它的 alpha 由这份 SVG 自带的 opacity 决定。
+
+     ★ stroke-width 是**为 660px 这一档重新定标**的，不是当初那个小徽记的值。
+       小徽记时代：T6 不写 stroke-width（=1 单位），T-C 写 1.45/1.1/1.05
+       —— 在 96px 盒子里分别是 4px / 5.8px，作为图标正合适
+       （图形越小，线要相对越粗，否则小尺寸下会糊成一团）。
+       放大到 660px 后同一份数据变成 27.5px / 40px，T-C 的 1.45 直接读成"灰色实心块"，
+       和 T6 的球体明显不是一个笔重。
+       所以把 T-C 的三条边按 1.45→1、1.1→0.76、1.05→0.72 等比缩到与 T6 同档，
+       两枚标记才像一套；T6 保持 1 单位不动。
+       ⚠️ 以后若要改水印尺寸，这三个数要跟着一起换算，别只改盒子。 */
+  --mk-t6:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9.4'/%3E%3Cpolyline points='18.65,15.84 18.2,16.08 17.72,16.31 17.22,16.51 16.7,16.7 16.16,16.87 15.6,17.01 15.02,17.14 14.43,17.24 13.83,17.32 13.23,17.38 12.61,17.42 12,17.43 11.39,17.42 10.77,17.38 10.17,17.32 9.57,17.24 8.98,17.14 8.4,17.01 7.84,16.87 7.3,16.7 6.78,16.51 6.28,16.31 5.8,16.08 5.35,15.84 4.93,15.58 4.54,15.3 4.18,15.02 3.86,14.71 3.57,14.4 3.32,14.08 3.1,13.74 2.92,13.4 2.78,13.06 2.68,12.71 2.62,12.35 2.6,12 2.62,11.65 2.68,11.29 2.78,10.94 2.92,10.6 3.1,10.26 3.32,9.92 3.57,9.6 3.86,9.29 4.18,8.98 4.54,8.7 4.93,8.42 5.35,8.16 5.8,7.92 6.28,7.69 6.78,7.49 7.3,7.3 7.84,7.13 8.4,6.99 8.98,6.86 9.57,6.76 10.17,6.68 10.77,6.62 11.39,6.58 12,6.57 12.61,6.58 13.23,6.62 13.83,6.68 14.43,6.76 15.02,6.86 15.6,6.99 16.16,7.13 16.7,7.3 17.22,7.49 17.72,7.69 18.2,7.92 18.65,8.16 19.07,8.42 19.46,8.7 19.82,8.98 20.14,9.29 20.43,9.6 20.68,9.92 20.9,10.26 21.08,10.6 21.22,10.94 21.32,11.29 21.38,11.65 21.4,12 21.38,12.35 21.32,12.71 21.22,13.06 21.08,13.4 20.9,13.74 20.68,14.08 20.43,14.4 20.14,14.71 19.82,15.02 19.46,15.3 19.07,15.58 18.65,15.84'/%3E%3Cpolyline points='5.35,15.84 5.37,15.33 5.41,14.8 5.48,14.27 5.58,13.72 5.71,13.17 5.86,12.61 6.04,12.05 6.24,11.49 6.47,10.93 6.73,10.37 7,9.82 7.3,9.29 7.62,8.76 7.95,8.25 8.31,7.75 8.68,7.27 9.06,6.81 9.46,6.38 9.86,5.97 10.28,5.58 10.7,5.22 11.13,4.89 11.57,4.59 12,4.32 12.43,4.09 12.87,3.89 13.3,3.72 13.72,3.59 14.14,3.5 14.54,3.44 14.94,3.42 15.32,3.43 15.69,3.49 16.05,3.57 16.38,3.7 16.7,3.86 17,4.05 17.27,4.28 17.53,4.55 17.76,4.84 17.96,5.16 18.14,5.52 18.29,5.9 18.42,6.31 18.52,6.74 18.59,7.19 18.63,7.67 18.65,8.16 18.63,8.67 18.59,9.2 18.52,9.73 18.42,10.28 18.29,10.83 18.14,11.39 17.96,11.95 17.76,12.51 17.53,13.07 17.27,13.63 17,14.18 16.7,14.71 16.38,15.24 16.05,15.75 15.69,16.25 15.32,16.73 14.94,17.19 14.54,17.62 14.14,18.03 13.72,18.42 13.3,18.78 12.87,19.11 12.43,19.41 12,19.68 11.57,19.91 11.13,20.11 10.7,20.28 10.28,20.41 9.86,20.5 9.46,20.56 9.06,20.58 8.68,20.57 8.31,20.51 7.95,20.43 7.62,20.3 7.3,20.14 7,19.95 6.73,19.72 6.47,19.45 6.24,19.16 6.04,18.84 5.86,18.48 5.71,18.1 5.58,17.69 5.48,17.26 5.41,16.81 5.37,16.33 5.35,15.84'/%3E%3Cpolyline points='18.65,15.84 18.63,15.33 18.59,14.8 18.52,14.27 18.42,13.72 18.29,13.17 18.14,12.61 17.96,12.05 17.76,11.49 17.53,10.93 17.27,10.37 17,9.82 16.7,9.29 16.38,8.76 16.05,8.25 15.69,7.75 15.32,7.27 14.94,6.81 14.54,6.38 14.14,5.97 13.72,5.58 13.3,5.22 12.87,4.89 12.43,4.59 12,4.32 11.57,4.09 11.13,3.89 10.7,3.72 10.28,3.59 9.86,3.5 9.46,3.44 9.06,3.42 8.68,3.43 8.31,3.49 7.95,3.57 7.62,3.7 7.3,3.86 7,4.05 6.73,4.28 6.47,4.55 6.24,4.84 6.04,5.16 5.86,5.52 5.71,5.9 5.58,6.31 5.48,6.74 5.41,7.19 5.37,7.67 5.35,8.16 5.37,8.67 5.41,9.2 5.48,9.73 5.58,10.28 5.71,10.83 5.86,11.39 6.04,11.95 6.24,12.51 6.47,13.07 6.73,13.63 7,14.18 7.3,14.71 7.62,15.24 7.95,15.75 8.31,16.25 8.68,16.73 9.06,17.19 9.46,17.62 9.86,18.03 10.28,18.42 10.7,18.78 11.13,19.11 11.57,19.41 12,19.68 12.43,19.91 12.87,20.11 13.3,20.28 13.72,20.41 14.14,20.5 14.54,20.56 14.94,20.58 15.32,20.57 15.69,20.51 16.05,20.43 16.38,20.3 16.7,20.14 17,19.95 17.27,19.72 17.53,19.45 17.76,19.16 17.96,18.84 18.14,18.48 18.29,18.1 18.42,17.69 18.52,17.26 18.59,16.81 18.63,16.33 18.65,15.84'/%3E%3C/svg%3E");
+  --mk-t6-acc:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='4.32' r='1.2' fill='%23000'/%3E%3C/svg%3E");
+  --mk-tc:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 12L12 2.7M12 12L3.95 16.65M12 12L20.05 16.65M12 2.7L3.95 7.35M12 2.7L20.05 7.35M3.95 16.65L3.95 7.35M3.95 16.65L12 21.3M3.95 7.35L12 12M20.05 16.65L20.05 7.35M20.05 16.65L12 21.3M20.05 7.35L12 12M12 21.3L12 12' stroke-width='1'/%3E%3Cpath d='M12 12L12 8.14M12 12L8.66 13.93M12 12L15.34 13.93M12 8.14L8.66 10.07M12 8.14L15.34 10.07M8.66 13.93L8.66 10.07M8.66 13.93L12 15.86M8.66 10.07L12 12M15.34 13.93L15.34 10.07M15.34 13.93L12 15.86M15.34 10.07L12 12M12 15.86L12 12' stroke-width='0.76' stroke-opacity='0.62' stroke-dasharray='1.6 2.1'/%3E%3Cpath d='M12 12L12 12M12 8.14L12 2.7M8.66 13.93L3.95 16.65M8.66 10.07L3.95 7.35M15.34 13.93L20.05 16.65M15.34 10.07L20.05 7.35M12 15.86L12 21.3M12 12L12 12' stroke-width='0.72' stroke-opacity='0.3'/%3E%3C/svg%3E");
+}
+html.dark{
+  --ghost-c:rgba(255,255,255,.13);
+  --hero-eyebrow:var(--ink-600);
+}
+
+/* —— 容器：左对齐单列 ——
+   ⚠️ padding-top 里那 136px 是**标徽留下的占位**，不是随便加的：
+   标徽撤出文档流去当背景板之后，这 136px 就是「让下面一字不动」的全部成本。
+   改它等于把所有 hero 元素整体上移/下移（见上面那段恒等式的推导）。 */
+#home.home{
+  position:relative;
+  align-items:flex-start;
+  justify-content:center;
+  text-align:left;
+  padding:calc(5vh + 136px) 72px 88px 76px;
+  overflow:hidden;                       /* 巨型残影 / 大背景板的出血都在这里裁切 */
+}
+
+/* —— 装订线：1px 竖线贯穿内容列 —— */
+#home.home::before{
+  content:""; position:absolute; z-index:0;
+  left:38px; top:6vh; bottom:88px; width:1px;
+  background:linear-gradient(180deg, var(--line-strong),
+             var(--line) 24%, transparent 94%);
+  pointer-events:none;
+}
+/* —— 装订线顶端的青色起始段（重音）—— */
+#home.home::after{
+  content:""; position:absolute; z-index:0;
+  left:38px; top:6vh; width:1px; height:78px;
+  background:var(--blue);
+  box-shadow:0 0 14px 0 var(--accent-glow);
+  pointer-events:none;
+}
+
+/* —— 标徽 → hero 大背景板 ——
+   用户要求（原文）：「聊天 hero 界面上的这个图标给我删了，移动到背景当大背景板」。
+   于是同一枚图形**不换内容、只换角色**：从内容列的首个 flex 子项，
+   变成一张绝对定位、压在全部内容之下的巨型水印，锚在右侧并向右出血。
+
+   ★ 零位移的关键：把它的原占位搬进容器顶内距。
+     它原来占 96px 高 + 40px 下边距 = 136px；而 #home.home 是
+     `justify-content:center` 的竖向 flex —— 内容总高一变，整列就会重新居中，
+     于是"删掉一个块"会顺带把下面所有元素推走。把 136px 加进 padding-top：
+       原 greet.y = padTop  + (H − padTop  − padBottom − C)/2 + 136
+       新 greet.y = padTop' + (H − padTop' − padBottom − (C−136))/2
+     代入 padTop' = padTop + 136，两式**恒等** —— 对任意视口高度都成立。
+
+   ⚠️ 这四类坑都踩过了，别再犯：
+   1) 盘面别铺 conic-gradient —— 角度渐变在圆形容器里必然切出一道硬边楔形。
+   2) 盘面别用「单个偏移的径向渐变走到 transparent」—— 圆心偏上时下半盘早就
+      衰减光了，会露出近黑页底，看着像一圈暗环。用「实心底 + 顶部高光」两层。
+   3) 光晕别用 box-shadow —— 它的亮度峰值永远落在自己的半径上，会在盘外形成
+      一圈「外环 + 中间暗缝」。光晕必须做成独立的一层径向渐变。
+   4) 上一版照改造版搬来的浮动/自转/扩散环是**循环动画**，用户明确否掉了。
+
+   整块包在 @supports 里：不支持 mask 的浏览器整段失效 → 应用自带的 ≡ 徽记
+   按原样渲染（64×64 + 原配色），是个安全的降级，不会留白也不会留色块。 */
+@supports ((-webkit-mask-image:none) or (mask-image:none)){
+  #home .home-mark{
+    position:absolute; z-index:0;
+    top:2vh; right:-10vw; left:auto; bottom:auto;
+    width:min(56vw,660px); height:min(56vw,660px);
+    margin:0; padding:0;
+    display:block;
+    border-radius:0;
+    background:none; box-shadow:none; filter:none;
+    pointer-events:none;
+    /* 让它"溶"进画布：朝左下渐隐。
+       mask 作用于整棵子树（含 ::before/::after），所以这一层是"整块水印的
+       曝光曲线"，两层造型各自的造型 mask 照常生效，互不干扰。
+
+       ⚠️ 这条曲线是**第二道衰减**，和 --wm-fill 相乘才是最终观感。
+       上一版是 `.40 @54% → transparent @90%`：0% 处虽然满值，但中段就砍掉六成、
+       90% 处已经归零，等于把刚画出来的图形又擦掉大半 —— 用户看到的"看不清"
+       是这一条和上面那个 .062 共同造成的，两处都得抬。
+       现在中段保住六成二、衰减点后移到 96%，melting 还在，但图形主体立得住。 */
+    -webkit-mask-image:linear-gradient(208deg,#000 0%,rgba(0,0,0,.62) 56%,transparent 96%);
+            mask-image:linear-gradient(208deg,#000 0%,rgba(0,0,0,.62) 56%,transparent 96%);
+    -webkit-mask-repeat:no-repeat;  mask-repeat:no-repeat;
+    -webkit-mask-size:100% 100%;    mask-size:100% 100%;
+  }
+  /* 夜间回到上一版那条曲线 —— 夜间的基线本来就看得见（见 --wm-fill 那段），
+     没被投诉过就不动它，免得两边一起变响。只有日间需要这条"长腿"曲线。 */
+  html.dark #home .home-mark{
+    -webkit-mask-image:linear-gradient(208deg,#000 0%,rgba(0,0,0,.40) 54%,transparent 90%);
+            mask-image:linear-gradient(208deg,#000 0%,rgba(0,0,0,.40) 54%,transparent 90%);
+  }
+  /* 应用自带的 ≡ 徽记：整枚撤掉 —— 它只是那 96px 盒子的内容，盒子已经改角色了 */
+  #home .home-mark > svg{display:none}
+
+  /* 两层造型：盒子撑满水印、遮罩按 100% 缩放，
+     于是同一份 data-URI 直接从小图标变成大背景板，一笔矢量数据都不用改。 */
+  #home .home-mark::before,
+  #home .home-mark::after{
+    content:""; position:absolute; inset:0; margin:0;
+    width:100%; height:100%;
+    -webkit-mask-position:center;       mask-position:center;
+    -webkit-mask-size:100% 100%;        mask-size:100% 100%;
+    -webkit-mask-repeat:no-repeat;      mask-repeat:no-repeat;
+    pointer-events:none;
+  }
+  /* ::before = 主形。走 --wm-fill（两套主题各给一个低透明度中性色），
+     不再用 --ink-900 —— 水印要的是"淡"，不是"实心墨"。 */
+  #home .home-mark::before{
+    background-color:var(--wm-fill);
+    -webkit-mask-image:var(--mk-t6);
+            mask-image:var(--mk-t6);
+  }
+  /* ::after = 那「一处青」：T6 的北极点。放大后是一颗大圆点，
+     单独走 --wm-acc —— 套用主形那档透明度会直接看不见。 */
+  #home .home-mark::after{
+    background-color:var(--wm-acc);
+    -webkit-mask-image:var(--mk-t6-acc);
+            mask-image:var(--mk-t6-acc);
+  }
+
+  /* —— 学生端：换成第二枚图形 ——
+     判定钩子用 #roleSeg 里那颗按钮的 .active（应用的 applyRoleTag 只切 [data-ro]
+     的 display 与 #avat 文字，没有 body 级标记，所以只能靠 :has()）。
+     没有 :has() 的浏览器会整块丢弃 → 退回老师端那枚，不会坏。 */
+  body:has(#roleSeg button[data-role="student"].active) #home .home-mark::before{
+    -webkit-mask-image:var(--mk-tc);
+            mask-image:var(--mk-tc);
+  }
+  body:has(#roleSeg button[data-role="student"].active) #home .home-mark::after{
+    background-color:transparent;      /* T-C 本身就是全墨，没有青色元素 */
+  }
+  /* 微标签跟着角色走，否则切到学生端还挂着 TEACHER，
+     与下面那行描述对不上。角色信息**只在标题上方保留这一处**，
+     第二处（原来挂在描述上方）已整条撤掉。 */
+  body:has(#roleSeg button[data-role="student"].active) #home .home-greet::before{
+    content:"QISI · STUDENT";
+  }
+}
+
+/* —— 主标：宋体大字，像教材扉页的标题 —— */
+#home .home-greet{
+  position:relative; z-index:1;
+  font-family:var(--serif);
+  font-size:clamp(31px,3.2vw,44px);
+  font-weight:800; letter-spacing:.01em; line-height:1.16;
+  color:var(--ink-900);
+  margin:0 0 34px;
+  /* 标题盒撑满内容列 —— 唯一目的是让上面那条眉标尾线能顶到内容列右缘。
+     文字本身仍靠左，盒高不变，不影响竖向节奏。 */
+  width:100%;
+}
+/* 等宽微标签：左侧 3px 青条 + 一条一直拉到内容列右缘的尾线。
+   右端锚定是有意的 —— 即使标签文案宽度有偏差，右端永远贴着右缘。
+   尾线长度 = 100% − 154px：文字实测 122.55px，起点 3(青条)+12(内距)=15 → 138，
+   再留 16px 空隙 = 154。 */
+#home .home-greet::before{
+  content:"QISI · TEACHER";
+  position:absolute; left:0; bottom:100%; margin-bottom:14px;
+  width:100%; box-sizing:border-box;
+  padding:0 0 0 12px; white-space:nowrap;
+  border-left:3px solid var(--blue);
+  background:linear-gradient(var(--line-strong), var(--line-strong))
+             no-repeat right center / calc(100% - 154px) 1px;
+  font-family:var(--mono); font-size:10.5px; font-weight:500;
+  letter-spacing:2.6px; text-transform:uppercase; color:var(--hero-eyebrow);
+  line-height:11px;
+}
+/* 青色短下划线：官网标志性结构线，从左向右展开。
+   宽度写死 96px：原来用 min(161px,26%)，26% 是相对标题盒算的，
+   而标题文案由 JS 按时间生成（"晚上好/上午好…"），宽度一变线就变。 */
+#home .home-greet::after{
+  content:""; position:absolute; left:0; top:100%; margin-top:15px;
+  width:96px; height:6px; background:var(--blue);
+  box-shadow:0 0 16px -2px var(--accent-glow);
+  transform:scaleX(0); transform-origin:left center;
+  animation:qkRuleIn .7s var(--ease) .18s forwards;
+}
+
+/* —— 描述行：左侧一句话 + 右侧规格小字，两端顶到内容列的左右缘 ——
+   这一行是「撑开版心」的关键。原来：描述只有 263px，规格行又被
+   `max-width:100%` 锁死在同一个 263px 里折成两行；而下面的输入框是 740px。
+   于是整个 hero 变成一个又窄又密的上左柱，右边和下面全空 —— 这就是「挤 + 奇怪」。
+   现在把 .home-sub 撑满 100%，用 flex 让描述在左、规格行 margin-left:auto 贴右端，
+   右端恰好落在输入框右缘（1068px），上下两块共用一条右边界。
+   ⚠️ 规格行文案必须短到能和最长的描述并存（学生端描述约 386px，
+      加上规格行 236px 共 622px < 740px）。再多一项就会溢出，别加。 */
+#home .home-sub{
+  position:relative; z-index:1;
+  display:flex; flex-wrap:wrap; align-items:center;
+  gap:10px 28px;
+  width:100%; max-width:none;
+  font-size:15px; line-height:25px; letter-spacing:0;
+  color:var(--ink-400);
+  margin-bottom:54px;
+}
+/* 原第二处「QISI · TEACHING」微标签整条撤掉。
+   它占 y 417–429，青色下划线占 409–415 —— 只差 2px，两个装饰件叠在同一条带上，
+   是竖向拥挤最直接的来源。角色信息在标题上方那处已经有一份，不需要两处。 */
+#home .home-sub::before{display:none}
+#home .home-sub::after{
+  content:"REF 教材原文优先  //  CITE 回答附页码";
+  flex:0 0 auto; margin-left:auto; white-space:nowrap;
+  font-family:var(--mono); font-size:10px; letter-spacing:1.4px;
+  text-transform:uppercase; color:var(--ink-400); line-height:12px;
+}
+
+/* —— 输入区：跟着内容列左对齐（原为居中 760px 列）—— */
+#home .home-input-wrap{
+  position:relative; z-index:1;
+  align-items:stretch;
+  width:100%; max-width:880px;
+  margin-top:0;
+}
+/* 右侧导轨：顶端 6px 青色方块 + 向下渐隐的 1px 竖线 */
+#home .home-input-wrap::before{
+  content:""; position:absolute; z-index:0;
+  right:-7px; top:0; bottom:0; width:13px;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 6.5px 3px, var(--accent-glow), transparent 7px)
+      no-repeat 0 0 / 13px 13px,
+    linear-gradient(var(--blue), var(--blue)) no-repeat 3.5px 0 / 6px 6px,
+    linear-gradient(180deg, var(--line-strong) 0, var(--line-strong) 46%,
+      var(--line) 72%, rgba(0,0,0,0) 96%) no-repeat 6px 14px / 1px calc(100% - 14px);
+}
+
+/* —— 快捷片：方舟式锐角等宽标签 + 青色「+」前缀 —— */
+#home .home-chips{
+  position:relative;
+  margin-top:18px;
+  justify-content:flex-start;
+}
+#home .hchip::before{
+  content:"+"; margin-right:7px; color:var(--blue); font-weight:700;
+}
+
+/* —— 巨型残影字：贴左下、超淡、被容器裁切 —— */
+#home .home-chips::after{
+  content:"QISI";
+  position:absolute; z-index:0; pointer-events:none;
+  left:-76px; top:calc(100% + 22px);
+  font-family:var(--mono);
+  font-weight:700; font-size:clamp(76px,13.5vw,176px);
+  letter-spacing:-.02em; line-height:.82;
+  white-space:nowrap; text-transform:uppercase;
+  color:transparent; -webkit-text-stroke:1px var(--ghost-c);
+  -webkit-mask-image:linear-gradient(180deg,#000 6%, rgba(0,0,0,.35) 62%, transparent 96%);
+          mask-image:linear-gradient(180deg,#000 6%, rgba(0,0,0,.35) 62%, transparent 96%);
+}
+
+/* —— Hero 动效 ——
+   标徽已改为静止图标，qkFloat / qkSpin / qkRipple 三条循环动画全部删除。
+   只留这条一次性的下划线展开（页面入场，不循环）。 */
+@keyframes qkRuleIn{ to{transform:scaleX(1)} }
+
+/* —— 窄屏：放不下大件，收一收 —— */
+@media (max-width:900px){
+  /* 22px 顶内距 + 标徽原占位（96 高 + 26 下边距）= 144px，同样是零位移补偿 */
+  #home.home{padding:calc(22px + 122px) 20px 64px 44px}
+  #home.home::before{left:20px; top:20px; bottom:56px}
+  #home.home::after{left:20px; top:20px; height:54px}
+  /* 大背景板在窄屏上按列宽收缩，避免把整列盖住 */
+  #home .home-mark{width:min(88vw,420px); height:min(88vw,420px); right:-14vw; top:1vh}
+  #home .home-greet{font-size:26px; margin-bottom:26px}
+  #home .home-greet::before{letter-spacing:1.8px}
+  /* 窄屏放不下「描述 + 规格行」并排：规格行会自动折到第二行，
+     靠 margin-left:auto 仍然贴右端。多出一行，所以底距要放大。 */
+  #home .home-sub{margin-bottom:92px}
+  #home .home-input-wrap::before{display:none}
+  #home .home-chips::after{font-size:clamp(46px,15vw,96px)}
+}
+
+/* —— 动效门控 —— */
+@media (prefers-reduced-motion: reduce){
+  /* 标徽已经是静止图标，这里只需把下划线直接停在终态 */
+  #home .home-greet::after{animation:none !important; transform:scaleX(1)}
+}
+
+
+
+/* ==========================================================================
+   启思 · 入场动画（开屏 splash）—— B 方舟青流体光晕 × C 中文排版驱动 融合版
+   --------------------------------------------------------------------------
+   一次性的开屏层：只动 transform / opacity（GPU 合成层），
+   不用 backdrop-filter、不引外部字体/图片，别人 fork 下来不会卡。
+   时序（一次性 3.2s，播放完淡出、由 JS 摘除）：
+     0.00 → 0.32s  光团漾开（很轻，只给画面一个底色）
+     0.10 → 0.32s  竖线从上方落下
+     0.32 → 1.02s  六个字逐字翻出（70ms 错峰）
+     0.64 → 1.06s  ★ 光带横掠，在 t≈0.69s 穿过竖线合成十字
+     1.02 → 1.41s  细横线从中心展开
+     1.15 → 1.54s  副题浮出
+     1.54 → 2.00s  端住落定
+     2.00 → 2.35s  整体淡出，露出应用
+   ★ 一条 animation-delay 都不用：错峰全烤进关键帧百分比（见技能记录：
+     它在 infinite 循环上是永久相移；这里虽是一次性，但沿用同一套做法最稳）。
+   ========================================================================== */
+.qisi-splash{
+  --qs-loop:3.2s;
+  position:fixed; inset:0; z-index:2147483000;
+  background:var(--paper);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+  font-size:16px;                     /* 所有 em 尺寸随 viewport 等比，靠下面媒体查询再放大 */
+  will-change:opacity;
+  animation:qisi-splash-fade var(--qs-loop) cubic-bezier(.4,0,.2,1) 1 forwards;
+}
+/* 整体：0→2.0s 满，2.0→2.35s 淡出，2.35s 后彻底透明（JS 会在 ~2.5s 摘除 DOM） */
+@keyframes qisi-splash-fade{
+  0%   {opacity:1}
+  62.5%{opacity:1}
+  73.44%{opacity:0}
+  100% {opacity:0}
+}
+
+/* 居中块：文字 + 装饰都挂在它下面，绝对定位的装饰用相对它定位 */
+.qisi-splash .qs-si{
+  position:relative; display:flex; flex-direction:column; align-items:center;
+  /* 光学居中补偿：竖线是挂在文字块上方的一条细线，把"并集"整体下移一点回到视口中心 */
+  top:1.6em; z-index:1;
+}
+
+/* —— 标题（6 字，逐字翻出）—— */
+.qisi-splash .qs-title{
+  display:flex; font-weight:600; font-size:2.7em;
+  letter-spacing:.1em; line-height:1.3; color:var(--ink-900); white-space:nowrap;
+}
+.qisi-splash .qs-title .qs-w{display:inline-block; overflow:hidden; padding:0 .012em}
+.qisi-splash .qs-title .qs-w i{
+  display:inline-block; font-style:normal;
+  animation-duration:var(--qs-loop);
+  animation-timing-function:cubic-bezier(.2,.72,.22,1);
+  animation-iteration-count:1; animation-fill-mode:forwards;
+}
+/* 末字后的 letter-spacing 空档在 flex 容器上 text-indent 无效，这里显式抹掉 */
+.qisi-splash .qs-title .qs-w:last-child{margin-right:-.1em}
+.qisi-splash .qs-title .qs-w:nth-child(1) i{animation-name:qs-u1}
+.qisi-splash .qs-title .qs-w:nth-child(2) i{animation-name:qs-u2}
+.qisi-splash .qs-title .qs-w:nth-child(3) i{animation-name:qs-u3}
+.qisi-splash .qs-title .qs-w:nth-child(4) i{animation-name:qs-u4}
+.qisi-splash .qs-title .qs-w:nth-child(5) i{animation-name:qs-u5}
+.qisi-splash .qs-title .qs-w:nth-child(6) i{animation-name:qs-u6}
+@keyframes qs-u1{0%,10%  {transform:translateY(112%);opacity:0}22%,100%{transform:translateY(0);opacity:1}}
+@keyframes qs-u2{0%,12%  {transform:translateY(112%);opacity:0}24%,100%{transform:translateY(0);opacity:1}}
+@keyframes qs-u3{0%,14%  {transform:translateY(112%);opacity:0}26%,100%{transform:translateY(0);opacity:1}}
+@keyframes qs-u4{0%,16%  {transform:translateY(112%);opacity:0}28%,100%{transform:translateY(0);opacity:1}}
+@keyframes qs-u5{0%,18%  {transform:translateY(112%);opacity:0}30%,100%{transform:translateY(0);opacity:1}}
+@keyframes qs-u6{0%,20%  {transform:translateY(112%);opacity:0}32%,100%{transform:translateY(0);opacity:1}}
+
+/* —— 细横线：从中心向外展开 —— */
+.qisi-splash .qs-hrule{
+  width:9.6em; height:1px; margin-top:.85em;
+  background:linear-gradient(90deg,transparent,var(--ink-400) 12%,var(--ink-400) 88%,transparent);
+  transform-origin:50% 50%;
+  animation:qs-rule var(--qs-loop) cubic-bezier(.28,.72,.2,1) 1 forwards;
+  will-change:transform,opacity;
+}
+@keyframes qs-rule{0%,32%{transform:scaleX(0);opacity:0}36%{opacity:1}44%,100%{transform:scaleX(1);opacity:1}}
+
+/* —— 副题 —— */
+.qisi-splash .qs-subtitle{
+  font-size:.86em; font-weight:400; letter-spacing:.24em; text-indent:.24em;
+  line-height:1.45; color:var(--ink-500); white-space:nowrap; margin-top:1.15em;
+  animation:qs-sub var(--qs-loop) cubic-bezier(.2,.72,.22,1) 1 forwards;
+}
+@keyframes qs-sub{0%,36%{transform:translateY(.55em);opacity:0}48%,100%{transform:translateY(0);opacity:1}}
+
+/* —— 竖线（十字的竖）—— */
+.qisi-splash .qs-vrule{
+  position:absolute; left:50%; top:-3.6em; width:1px; height:2.9em; margin-left:-.5px;
+  background:linear-gradient(180deg,transparent,var(--blue));
+  transform-origin:50% 0;
+  animation:qs-drop var(--qs-loop) cubic-bezier(.3,.72,.2,1) 1 forwards;
+  will-change:transform,opacity;
+}
+@keyframes qs-drop{0%,3%{transform:scaleY(0);opacity:0}10%{opacity:.9}12%,100%{transform:scaleY(1);opacity:1}}
+
+/* —— 光带（十字的横）：椭圆 radial-gradient，不是细线 —— */
+.qisi-splash .qs-streak{
+  position:absolute; left:50%; top:-2.15em; width:40em; height:1.7em; margin-top:-.85em;
+  background:radial-gradient(ellipse 50% 50% at 50% 50%,
+    var(--blue) 0%, rgba(24,209,255,.34) 26%, rgba(24,209,255,0) 64%);
+  animation:qs-sweep var(--qs-loop) cubic-bezier(.32,.6,.2,1) 1 forwards;
+  will-change:transform,opacity;
+}
+@keyframes qs-sweep{
+  0%,17%  {transform:translate(-50%,0) translateX(-11em) scaleX(.5);opacity:0}
+  21%     {opacity:.62}
+  29%     {opacity:.62}
+  35%,100%{transform:translate(-50%,0) translateX(11em) scaleX(.5);opacity:0}
+}
+
+/* —— 四层流体光晕：静态 radial-gradient + transform 缩放（不 blur），
+     落定后往回收，把对比度让给字 —— */
+.qisi-splash .qs-glow{position:absolute; left:50%; top:50%; width:0; height:0; pointer-events:none}
+.qisi-splash .qs-gb{
+  position:absolute; border-radius:50%; display:block;
+  will-change:transform,opacity;
+  animation-duration:var(--qs-loop);
+  animation-timing-function:cubic-bezier(.2,.7,.25,1);
+  animation-iteration-count:1; animation-fill-mode:forwards;
+}
+.qisi-splash .qs-gb1{width:24em; height:24em; margin:-12em 0 0 -12em;
+  background:radial-gradient(circle at 50% 50%,rgba(24,209,255,.38) 0%,rgba(24,209,255,.10) 40%,transparent 68%)}
+.qisi-splash .qs-gb2{width:34em; height:34em; margin:-17em 0 0 -17em;
+  background:radial-gradient(circle at 50% 50%,rgba(96,226,255,.22) 0%,transparent 62%)}
+.qisi-splash .qs-gb3{width:15em; height:15em; margin:-7.5em 0 0 -7.5em;
+  background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.0) 0%,transparent 60%)}
+.qisi-splash .qs-gb4{width:44em; height:44em; margin:-22em 0 0 -22em;
+  background:radial-gradient(circle at 50% 50%,rgba(24,209,255,.13) 0%,transparent 58%)}
+.qisi-splash .qs-gb1{animation-name:qs-fx1}
+.qisi-splash .qs-gb2{animation-name:qs-fx2}
+.qisi-splash .qs-gb3{animation-name:qs-fx3}
+.qisi-splash .qs-gb4{animation-name:qs-fx4}
+@keyframes qs-fx1{
+  0%,2%  {transform:translate3d(0,1.2em,0) scale(.26,.22);opacity:0}
+  18%    {transform:translate3d(0,.3em,0)  scale(.86,.80);opacity:.70}
+  30%    {transform:translate3d(0,-.3em,0) scale(1.04,1.10);opacity:.60}
+  100%   {transform:translate3d(0,-.5em,0) scale(1.00,1.02);opacity:.42}
+}
+@keyframes qs-fx2{
+  0%,5%  {transform:translate3d(0,.9em,0)  scale(.22,.28);opacity:0}
+  22%    {transform:translate3d(0,.4em,0)  scale(.78,.88);opacity:.66}
+  34%    {transform:translate3d(0,-.2em,0) scale(1.12,1.04);opacity:.54}
+  100%   {transform:translate3d(0,-.3em,0) scale(1.06,1.10);opacity:.36}
+}
+@keyframes qs-fx3{
+  0%     {transform:translate3d(0,1.5em,0) scale(.18,.18);opacity:0}
+  14%    {transform:translate3d(0,.4em,0)  scale(.72,.92);opacity:.70}
+  28%    {transform:translate3d(0,-.5em,0) scale(1.00,1.5);opacity:.44}
+  100%   {transform:translate3d(0,-.6em,0) scale(1.05,1.5);opacity:.32}
+}
+@keyframes qs-fx4{
+  0%,8%  {transform:translate3d(0,1.3em,0) scale(.28,.20);opacity:0}
+  26%    {transform:translate3d(0,.3em,0)  scale(.82,.80);opacity:.60}
+  38%    {transform:translate3d(0,-.1em,0) scale(1.06,1.04);opacity:.44}
+  100%   {transform:translate3d(0,0,0)     scale(1.00,1.02);opacity:.30}
+}
+/* 夜间：光团里那层白热核心亮起来，光才有源头 */
+html.dark .qisi-splash .qs-gb3{
+  background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.40) 0%,transparent 60%)}
+
+/* 窄屏/小窗：字号随宽度收一点，避免副题挤出去 */
+@media (max-width:640px){
+  .qisi-splash{font-size:13px}
+}
+/* 无动画偏好：直接不出现（JS 侧也会跳过挂载） */
+@media (prefers-reduced-motion: reduce){
+  .qisi-splash{display:none !important}
+}
+
+/* ============================================================================
+   主题色（Tint）—— 设置在「外观与语言」卡片里，用户可切换强调色
+   ----------------------------------------------------------------------------
+   只覆盖方舟青的 --blue 系 6 个变量，全站按钮/开关/光晕/开屏动画即时联动。
+   颜色挂在 html[data-tint="..."] 上，默认无属性 == 原方舟青。
+   几何一分不动：色块是行内新元素，只追加、不碰任何既有控件。
+   ============================================================================ */
+:root{
+  --tint-red:#FF3B30;    --tint-red-deep:#C1271F;    --tint-red-soft:#FFE4E2;   --tint-red-ink:#2B0A08;
+  --tint-orange:#FF9500; --tint-orange-deep:#C77500; --tint-orange-soft:#FFF0DC; --tint-orange-ink:#2B1A00;
+  --tint-yellow:#FFCC00; --tint-yellow-deep:#B28A00; --tint-yellow-soft:#FFF7D6; --tint-yellow-ink:#292000;
+  --tint-green:#34C759;  --tint-green-deep:#1E8E3D;  --tint-green-soft:#E2F7E8;  --tint-green-ink:#06240F;
+  --tint-blue:#007AFF;   --tint-blue-deep:#0055C8;   --tint-blue-soft:#E1EFFF;   --tint-blue-ink:#04142E;
+  --tint-cyan:#00B8D9;   --tint-cyan-deep:#00809A;   --tint-cyan-soft:#DDF5FA;   --tint-cyan-ink:#04222A;
+}
+/* 映射到品牌令牌 —— 白天 */
+html[data-tint="red"]    { --blue:var(--tint-red);    --blue-deep:var(--tint-red-deep);    --blue-soft:var(--tint-red-soft);    --blue-ink:var(--tint-red-ink);    --blue-line:rgba(255,59,48,.45);    --accent-glow:rgba(255,59,48,.30); }
+html[data-tint="orange"] { --blue:var(--tint-orange); --blue-deep:var(--tint-orange-deep); --blue-soft:var(--tint-orange-soft); --blue-ink:var(--tint-orange-ink); --blue-line:rgba(255,149,0,.45); --accent-glow:rgba(255,149,0,.30); }
+html[data-tint="yellow"] { --blue:var(--tint-yellow); --blue-deep:var(--tint-yellow-deep); --blue-soft:var(--tint-yellow-soft); --blue-ink:var(--tint-yellow-ink); --blue-line:rgba(255,204,0,.45); --accent-glow:rgba(255,204,0,.30); }
+html[data-tint="green"]  { --blue:var(--tint-green);  --blue-deep:var(--tint-green-deep);  --blue-soft:var(--tint-green-soft);  --blue-ink:var(--tint-green-ink);  --blue-line:rgba(52,199,89,.45);  --accent-glow:rgba(52,199,89,.30); }
+html[data-tint="blue"]   { --blue:var(--tint-blue);   --blue-deep:var(--tint-blue-deep);   --blue-soft:var(--tint-blue-soft);   --blue-ink:var(--tint-blue-ink);   --blue-line:rgba(0,122,255,.45);   --accent-glow:rgba(0,122,255,.30); }
+html[data-tint="cyan"]   { --blue:var(--tint-cyan);   --blue-deep:var(--tint-cyan-deep);   --blue-soft:var(--tint-cyan-soft);   --blue-ink:var(--tint-cyan-ink);   --blue-line:rgba(0,184,217,.45);   --accent-glow:rgba(0,184,217,.30); }
+/* 夜间：soft/ink 换成深底亮字，line/glow 提亮一档 */
+html.dark[data-tint="red"]    { --blue-soft:#3A1412; --blue-ink:#FFD9D6; --blue-line:rgba(255,89,79,.55); }
+html.dark[data-tint="orange"] { --blue-soft:#33210B; --blue-ink:#FFE1B8; --blue-line:rgba(255,170,40,.55); }
+html.dark[data-tint="yellow"] { --blue-soft:#2E2708; --blue-ink:#FFE98F; --blue-line:rgba(255,217,40,.55); }
+html.dark[data-tint="green"]  { --blue-soft:#0B2613; --blue-ink:#BFF0CE; --blue-line:rgba(78,219,118,.55); }
+html.dark[data-tint="blue"]   { --blue-soft:#0A1E36; --blue-ink:#C7E1FF; --blue-line:rgba(60,150,255,.55); }
+html.dark[data-tint="cyan"]   { --blue-soft:#08232A; --blue-ink:#B9EAF2; --blue-line:rgba(50,199,222,.55); }
+
+/* 主题色选择行：跟「语言」行同构，色块药丸并排 */
+.qisi-tint-row{ border-bottom:0 }   /* 卡片最后一行，去掉下分隔线 */
+.qisi-tint-row .sl .s{ min-height:0 }
+.tint-swatches{ display:flex; gap:9px; align-items:center; flex-wrap:wrap }
+.tint-swatch{
+  width:26px; height:26px; border-radius:50%; cursor:pointer;
+  border:2px solid var(--card); box-shadow:0 0 0 1px var(--line-strong), 0 1px 3px rgba(15,16,20,.12);
+  transition:transform .15s var(--ease), box-shadow .15s var(--ease);
+  padding:0; background-clip:padding-box;
+}
+.tint-swatch:hover{ transform:scale(1.12) }
+.tint-swatch.active{ box-shadow:0 0 0 2px var(--blue), 0 0 0 4px var(--card), 0 2px 6px rgba(15,16,20,.18) }
+/* 各色块底色 */
+.tint-swatch[data-tint="red"]    { background:var(--tint-red) }
+.tint-swatch[data-tint="orange"] { background:var(--tint-orange) }
+.tint-swatch[data-tint="yellow"] { background:var(--tint-yellow) }
+.tint-swatch[data-tint="green"]  { background:var(--tint-green) }
+.tint-swatch[data-tint="blue"]   { background:var(--tint-blue) }
+.tint-swatch[data-tint="cyan"]   { background:var(--tint-cyan) }

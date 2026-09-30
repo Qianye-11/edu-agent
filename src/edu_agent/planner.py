@@ -235,6 +235,136 @@ def make_plan(knowledge_point: str, goal: str = "", top_k: int = 3,
     return rec
 
 
+def revise_plan(knowledge_point: str, instruction: str, current: PlanRecord,
+                top_k: int = 3, template=None) -> PlanRecord:
+    """让教案 Agent 按教师指令编辑当前的结构化教案。"""
+    topic = (knowledge_point or current.title or "未命名课题").strip()
+    instruction = (instruction or "请完善当前教案").strip()
+    hits = retrieve((topic + " " + instruction).strip(),
+                    kinds=["concept", "section"], top_k=top_k)
+    if not hits:
+        raise ValueError("未检索到与当前课题匹配的教材内容，请补充明确的课题或章节")
+    if isinstance(template, str):
+        from edu_agent.template_spec import get_template
+
+        template = get_template(template)
+    if template is None:
+        from edu_agent.template_spec import get_current
+
+        template = get_current()
+
+    current_json = json.dumps(current.model_dump(exclude={"citations"}), ensure_ascii=False)
+    messages = build_messages(topic, instruction, hits, template)
+    messages[1]["content"] += (
+        "\n\n【当前教案（可修改的工作底稿）】\n" + current_json
+        + "\n\n【编辑规则】\n"
+          "请根据老师的本次指令修改上面的当前教案，并输出完整 JSON。"
+          "除非老师明确要求重写整份教案，否则保留未涉及的目标与教学环节；"
+          "需要补充师生活动时，请在对应 flow_steps.content 中写清教师动作、学生任务、提问或评价。"
+    )
+    llm = get_chat_llm(max_tokens=6000, timeout=300)
+    raw = llm.invoke(messages).content or ""
+    try:
+        rec = _parse(raw)
+    except Exception as e:
+        raise ValueError(f"模型返回的教案格式无法解析：{type(e).__name__}") from e
+
+    allowed = {i + 1: h for i, h in enumerate(hits)}
+    rec.citations = [c for c in rec.citations if c.index in allowed][:5]
+    for c in rec.citations:
+        h = allowed.get(c.index)
+        if h:
+            md = h.metadata
+            c.chunk_id = md.get("chunk_id", "")
+            c.chapter = md.get("chapter", "")
+            c.section = md.get("section", "") or ""
+            c.heading = md.get("heading", "") or ""
+            c.page = md.get("page")
+            c.quote = c.quote or h.text[:80]
+    if not rec.title:
+        rec.title = current.title or f"《{topic}》教案"
+    return rec
+
+
+def _stream_chunk_text(chunk) -> str:
+    """兼容 LangChain 不同模型返回的字符串或 content-block 流片段。"""
+    content = getattr(chunk, "content", chunk)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and isinstance(block.get("text"), str):
+                parts.append(block["text"])
+        return "".join(parts)
+    return ""
+
+
+def revise_plan_stream(knowledge_point: str, instruction: str, current: PlanRecord,
+                       top_k: int = 3, template=None):
+    """流式修改教案；先逐片段返回模型输出，最后才解析并提交完整 PlanRecord。
+
+    调用端应只在收到 ``done`` 时覆盖画布。这样断流或 JSON 不完整时，教师原稿不会
+    被半成品破坏。
+    """
+    topic = (knowledge_point or current.title or "未命名课题").strip()
+    instruction = (instruction or "请完善当前教案").strip()
+    yield {"type": "status", "text": "正在检索教材与教案上下文…"}
+    hits = retrieve((topic + " " + instruction).strip(),
+                    kinds=["concept", "section"], top_k=top_k)
+    if not hits:
+        raise ValueError("未检索到与当前课题匹配的教材内容，请补充明确的课题或章节")
+    if isinstance(template, str):
+        from edu_agent.template_spec import get_template
+
+        template = get_template(template)
+    if template is None:
+        from edu_agent.template_spec import get_current
+
+        template = get_current()
+
+    current_json = json.dumps(current.model_dump(exclude={"citations"}), ensure_ascii=False)
+    messages = build_messages(topic, instruction, hits, template)
+    messages[1]["content"] += (
+        "\n\n【当前教案（可修改的工作底稿）】\n" + current_json
+        + "\n\n【编辑规则】\n"
+          "请根据老师的本次指令修改上面的当前教案，并输出完整 JSON。"
+          "除非老师明确要求重写整份教案，否则保留未涉及的目标与教学环节；"
+          "需要补充师生活动时，请在对应 flow_steps.content 中写清教师动作、学生任务、提问或评价。"
+    )
+    yield {"type": "status", "text": "正在逐段生成教案…"}
+    llm = get_chat_llm(max_tokens=6000, timeout=300)
+    raw = ""
+    for chunk in llm.stream(messages):
+        text = _stream_chunk_text(chunk)
+        if not text:
+            continue
+        raw += text
+        yield {"type": "delta", "text": text}
+    try:
+        rec = _parse(raw)
+    except Exception as e:
+        raise ValueError(f"模型返回的教案格式无法解析：{type(e).__name__}") from e
+
+    allowed = {i + 1: h for i, h in enumerate(hits)}
+    rec.citations = [c for c in rec.citations if c.index in allowed][:5]
+    for citation in rec.citations:
+        hit = allowed.get(citation.index)
+        if hit:
+            metadata = hit.metadata
+            citation.chunk_id = metadata.get("chunk_id", "")
+            citation.chapter = metadata.get("chapter", "")
+            citation.section = metadata.get("section", "") or ""
+            citation.heading = metadata.get("heading", "") or ""
+            citation.page = metadata.get("page")
+            citation.quote = citation.quote or hit.text[:80]
+    if not rec.title:
+        rec.title = current.title or f"《{topic}》教案"
+    yield {"type": "done", "record": rec}
+
+
 def to_markdown(p: PlanRecord) -> str:
     lines = [f"# {p.title}", ""]
     if p.objectives:

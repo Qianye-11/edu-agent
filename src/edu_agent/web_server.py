@@ -23,20 +23,24 @@ import os
 import re
 import sys
 import threading
+import time
 import uuid
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 STATIC = ROOT / "static"
 
-from fastapi import FastAPI, UploadFile, File, Query  # noqa: E402
+from fastapi import FastAPI, UploadFile, File, Form, Query  # noqa: E402
 from fastapi.responses import StreamingResponse, HTMLResponse, Response, JSONResponse, FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+from starlette.concurrency import run_in_threadpool  # noqa: E402
 
-from edu_agent import logsetup, pdf_upload, plan_html, planner, routing  # noqa: E402
+from edu_agent import kg, lesson_docx, lesson_library, logsetup, pdf_upload, plan_html, planner, routing  # noqa: E402
 from edu_agent import capabilities, wps_export  # noqa: E402  能力开关 + WPS 导出
+from edu_agent import slide_deck  # noqa: E402  PPT 工作台：预览与导出共用同一份 SVG 版式
 from edu_agent.config import load_settings  # noqa: E402
 from edu_agent.host.store import SessionStore  # noqa: E402
 from edu_agent.template_spec import (  # noqa: E402
@@ -72,9 +76,112 @@ pdf_upload.PDF_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(pdf_upload.PDF_DIR)), name="uploads")
 
 
+async def _read_upload_limited(file: UploadFile, limit: int) -> bytes:
+    """分块读取上传，拒绝超过部署配置的文件，避免 `read()` 无上限占满内存。"""
+    chunks: list[bytes] = []
+    size = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            return b"".join(chunks)
+        size += len(chunk)
+        if size > limit:
+            raise ValueError(f"文件超过上限（{limit // 1024 // 1024} MB）")
+        chunks.append(chunk)
+
+
+# 自选导出目录不一定在仓库内，因此下载接口不能靠「目录前缀」判断。
+# 改为仅接受本进程刚刚生成并登记的随机一次性标识，15 分钟后自动失效。
+_DOWNLOAD_TTL_SECS = 15 * 60
+_downloads: dict[str, tuple[Path, float]] = {}
+_downloads_lock = threading.Lock()
+
+
+def register_download(path: str | Path) -> str:
+    p = Path(path).resolve()
+    if not p.is_file():
+        raise FileNotFoundError(p)
+    now = time.monotonic()
+    with _downloads_lock:
+        for key, (_, created) in list(_downloads.items()):
+            if now - created > _DOWNLOAD_TTL_SECS:
+                _downloads.pop(key, None)
+        token = uuid.uuid4().hex
+        _downloads[token] = (p, now)
+    return token
+
+
+def take_download(token: str) -> Path | None:
+    now = time.monotonic()
+    with _downloads_lock:
+        entry = _downloads.pop(token, None)  # 一次性，避免 URL 被浏览器历史重复暴露
+    if entry is None:
+        return None
+    path, created = entry
+    if now - created > _DOWNLOAD_TTL_SECS or not path.is_file():
+        return None
+    return path
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     return (STATIC / "index.html").read_text(encoding="utf-8")
+
+
+# ---------- 知识星图 ----------
+@app.get("/api/kg/graph")
+def api_kg_graph():
+    return kg.get_kg().get_graph()
+
+
+@app.get("/api/kg/node/{node_id}")
+def api_kg_node(node_id: str):
+    return kg.get_kg().get_node_info(node_id)
+
+
+@app.get("/api/kg/related/{node_id}")
+def api_kg_related(node_id: str, hops: int = 1):
+    return kg.get_kg().get_related(node_id, hops)
+
+
+@app.get("/api/ontology/graph")
+def api_ontology_graph():
+    """全科教材本体；与仅覆盖数学必修一的知识星图保持独立。"""
+    try:
+        import json
+        from edu_agent.ontology import DEFAULT_PATH, Ontology
+
+        raw = json.loads(DEFAULT_PATH.read_text(encoding="utf-8"))
+        graph = Ontology(raw)
+        return {"ok": True, "meta": raw.get("meta") or {},
+                "nodes": list(graph.nodes.values()), "links": graph.edges}
+    except FileNotFoundError:
+        return {"ok": False, "error": "全科教材本体尚未构建"}
+    except Exception as exc:
+        return {"ok": False, "error": f"本体读取失败：{type(exc).__name__}: {exc}"}
+
+
+@app.get("/api/ontology/search")
+def api_ontology_search(q: str, limit: int = 12):
+    try:
+        from edu_agent.ontology import Ontology
+
+        return {"ok": True, "items": Ontology.from_file().search(q, limit=max(1, min(limit, 30)))}
+    except FileNotFoundError:
+        return {"ok": False, "error": "全科教材本体尚未构建", "items": []}
+    except Exception as exc:
+        return {"ok": False, "error": f"本体检索失败：{type(exc).__name__}: {exc}", "items": []}
+
+
+@app.get("/api/kg/search")
+def api_kg_search(q: str = ""):
+    return {"results": kg.get_kg().search(q)}
+
+
+@app.get("/api/kg/health")
+def api_kg_health():
+    graph = kg.get_kg()
+    return {**graph.validate(), "meta": graph.get_graph().get("meta", {})}
 
 
 # ---------- 模板 ----------
@@ -97,8 +204,14 @@ def api_tpl_set(body: TplSet):
 
 @app.post("/api/template/upload")
 async def api_tpl_upload(file: UploadFile = File(...)):
-    tmp = ROOT / "data" / ("upload_" + uuid.uuid4().hex + ".docx")
-    tmp.write_bytes(await file.read())
+    if not (file.filename or "").lower().endswith(".docx"):
+        return {"ok": False, "error": "仅支持 .docx（Word 教案模板）"}
+    tmp = _settings.data_dir / ("upload_" + uuid.uuid4().hex + ".docx")
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        tmp.write_bytes(await _read_upload_limited(file, _settings.upload_max_bytes))
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
     try:
         spec = recognize_docx(tmp)
         save_template(spec, tmp)
@@ -122,8 +235,12 @@ async def api_tpl_rich_import(file: UploadFile = File(...)):
 
     if not (file.filename or "").lower().endswith(".docx"):
         return {"ok": False, "error": "仅支持 .docx（Word 教案模板）"}
-    tmp = ROOT / "data" / ("tpl_" + uuid.uuid4().hex + ".docx")
-    tmp.write_bytes(await file.read())
+    tmp = _settings.data_dir / ("tpl_" + uuid.uuid4().hex + ".docx")
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        tmp.write_bytes(await _read_upload_limited(file, _settings.upload_max_bytes))
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
     try:
         from edu_agent import template_spec as _ts
 
@@ -172,6 +289,39 @@ def api_tpl_rich_get(id: str = ""):
         return {"ok": False, "error": "该模板不是富模板（只有板块骨架）",
                 "preview": template_sketch(spec)}
     return {"ok": True, "template": rich, "stats": template_rich.stats(rich)}
+
+
+@app.get("/api/template/canvas")
+def api_tpl_canvas(id: str = "default"):
+    """把任意模板转换为教案画布可直接渲染的富模型。
+
+    模板中心同时允许两种存量格式：旧版 v1 只有板块骨架，v2 则保存段落、表格和
+    字符格式。教案中心不应该把这种实现差异暴露给老师，因此这里统一返回 v2；
+    旧骨架会在内存中转换，不改写用户原有模板文件。
+    """
+    from edu_agent import plan_sync, template_rich
+
+    template_id = str(id or "default").strip() or "default"
+    available = {str(item.get("template_id") or "") for item in list_templates()}
+    if template_id not in available:
+        return JSONResponse({"ok": False, "error": f"没有模板「{template_id}」"}, status_code=404)
+
+    rich = template_rich.load_rich(template_id)
+    source = "rich"
+    if rich is None:
+        original = template_rich.ORIG_DIR / f"{template_id}.docx"
+        if original.exists():
+            # v1 JSON 只是早期识别出的板块索引；真正的字体、段落和表格样式仍在原始
+            # DOCX 中。教案中心加载时必须优先解析原稿，不能降级成纯标题骨架。
+            rich = template_rich.docx_to_rich(
+                original, template_id=template_id, name=get_template(template_id).name
+            )
+            source = "original-docx"
+        else:
+            rich = plan_sync.rich_from_skeleton(get_template(template_id))
+            source = "skeleton"
+    return {"ok": True, "template": rich, "source": source,
+            "stats": template_rich.stats(rich)}
 
 
 @app.post("/api/template/rich/save")
@@ -298,6 +448,252 @@ class PlanFromTemplateReq(BaseModel):
     session_id: str = ""
     template_id: str = ""       # 不传则用 Agent B 当前模板
     save: bool = False          # 默认不落盘：交给教案中心编辑器继续改，满意后再「保存为模板」
+
+
+class PlanAssistantReq(BaseModel):
+    """教案中心内 Agent B 的一次对话请求。"""
+    instruction: str = ""
+    plan: dict = {}
+    reference_ids: list[str] = Field(default_factory=list)
+    history: list[dict] = Field(default_factory=list)
+
+
+def _plan_assistant_instruction(instruction: str, history: list[dict] | None = None,
+                                memory_prefix: str = "", reference_text: str = "") -> str:
+    """为 Agent B 组合当前指令、最近对话、长期记忆与用户选定的规范教案。"""
+    blocks = ["【用户本次指令】\n" + str(instruction or "").strip()]
+    recent = []
+    for item in (history or [])[-10:]:
+        if not isinstance(item, dict):
+            continue
+        role = "教师" if str(item.get("role") or "") == "user" else "Agent B"
+        text = " ".join(str(item.get("text") or "").split()).strip()
+        if text:
+            recent.append(f"{role}：{text[:500]}")
+    if recent:
+        blocks.append("【最近对话（用于理解追问与连续修改）】\n" + "\n".join(recent))
+    if str(memory_prefix or "").strip():
+        blocks.append("【教师长期记忆（跨对话偏好，若与本次指令冲突则以本次为准）】\n"
+                      + str(memory_prefix).strip())
+    if str(reference_text or "").strip():
+        blocks.append(
+            "【规范教案参考】\n以下材料仅用于借鉴结构、课堂活动与评价方式，不要照抄无关课题。\n"
+            + str(reference_text).strip()
+        )
+    return "\n\n".join(blocks)
+
+
+def _design_to_record(plan: dict) -> planner.PlanRecord:
+    """浏览器规范表格模型 -> Agent B 的结构化输入。"""
+    src = plan if isinstance(plan, dict) else {}
+    goals = src.get("goals") if isinstance(src.get("goals"), dict) else {}
+    objectives = [str(goals.get(k) or "").strip() for k in ("knowledge", "method", "value")]
+    objectives = [x for x in objectives if x]
+    if str(src.get("objective") or "").strip():
+        objectives.append(str(src.get("objective")).strip())
+    flow = []
+    for item in src.get("steps") or []:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("points") or "").strip()
+        activity = str(item.get("activity") or "").strip()
+        if activity:
+            content += ("\n师生活动：" if content else "师生活动：") + activity
+        try:
+            minutes = max(1, int(item.get("minutes") or 5))
+        except (TypeError, ValueError):
+            minutes = 5
+        flow.append(planner.FlowStep(phase=str(item.get("name") or "教学环节"),
+                                     minutes=minutes, content=content))
+    key_points = [str(src.get("focus") or "").strip()] if str(src.get("focus") or "").strip() else []
+    return planner.PlanRecord(title=str(src.get("title") or "").strip(), objectives=objectives,
+                              key_points=key_points, flow_steps=flow)
+
+
+def _record_to_design(rec: planner.PlanRecord, previous: dict) -> dict:
+    """Agent B 的结果 -> 浏览器规范表格模型，保留不在 Agent 契约内的表格字段。"""
+    old = previous if isinstance(previous, dict) else {}
+    goals = list(rec.objectives or [])
+    old_steps = {str(x.get("name") or ""): x for x in (old.get("steps") or []) if isinstance(x, dict)}
+    steps = []
+    for step in rec.flow_steps:
+        old_step = old_steps.get(step.phase, {})
+        content = str(step.content or "")
+        marker = "师生活动："
+        points, activity = content, str(old_step.get("activity") or "")
+        if marker in content:
+            points, activity = content.split(marker, 1)
+        steps.append({"name": step.phase or "教学环节", "minutes": max(1, int(step.minutes or 5)),
+                      "points": points.strip(), "activity": activity.strip()})
+    if not steps:
+        steps = old.get("steps") or []
+    old_goals = old.get("goals") if isinstance(old.get("goals"), dict) else {}
+    return {
+        "title": rec.title or str(old.get("title") or ""),
+        "grade": str(old.get("grade") or ""), "mode": "table",
+        "lessonType": str(old.get("lessonType") or "讲授"),
+        "objective": "\n".join(goals),
+        "goals": {
+            "knowledge": goals[0] if len(goals) > 0 else str(old_goals.get("knowledge") or ""),
+            "method": goals[1] if len(goals) > 1 else str(old_goals.get("method") or ""),
+            "value": goals[2] if len(goals) > 2 else str(old_goals.get("value") or ""),
+        },
+        "focus": "；".join(rec.key_points or []) or str(old.get("focus") or ""),
+        "homework": str(old.get("homework") or ""), "steps": steps,
+    }
+
+
+def _plan_assistant_result(rec: planner.PlanRecord, body: PlanAssistantReq,
+                           references: list[dict]) -> dict:
+    """把 Agent B 结果整理成同步与流式接口共用的最终事件。"""
+    design = _record_to_design(rec, body.plan)
+    message = (f"已参考 {len(references)} 份规范教案并更新当前教案。" if references else
+               "已按你的要求更新当前教案；你可以继续追问或让我调整其中一个环节。")
+    remembered = ""
+    memory_state = {"enabled": False, "count": 0, "remembered": ""}
+    try:
+        from edu_agent import memory, memory_auto
+
+        fact = memory_auto.explicit_fact(body.instruction)
+        if fact and memory.add_fact(MEM_PROFILE, fact, kind="preference", source="user"):
+            remembered = fact
+        memory_auto.extract_async(body.instruction, message, MEM_PROFILE)
+        memory_state = {"enabled": memory.memory_enabled(MEM_PROFILE),
+                        "count": memory.stats(MEM_PROFILE).get("facts", 0),
+                        "remembered": remembered}
+    except Exception:  # noqa: BLE001 记忆落库失败不影响当前教案结果
+        pass
+    return {"ok": True, "plan": design, "title": rec.title,
+            "steps": len(design.get("steps") or []), "message": message,
+            "memory": memory_state, "references": references,
+            "citations": [c.model_dump() for c in rec.citations]}
+
+
+@app.post("/api/plan/assistant")
+def api_plan_assistant(body: PlanAssistantReq):
+    """Agent B 在教案中心按对话编辑表格；只返回数据，不落盘、不调用 WPS。"""
+    instruction = (body.instruction or "").strip()
+    if not instruction:
+        return {"ok": False, "error": "请先输入希望 Agent B 怎么修改教案"}
+    current = _design_to_record(body.plan)
+    topic = current.title or instruction
+    reference_text, references = lesson_library.context(body.reference_ids)
+    memory_prefix = ""
+    try:
+        from edu_agent import memory
+
+        memory_prefix = memory.profile_memory_prefix(MEM_PROFILE)
+    except Exception:  # noqa: BLE001 记忆不可用不能阻断教案编辑
+        pass
+    agent_instruction = _plan_assistant_instruction(
+        instruction, body.history, memory_prefix, reference_text
+    )
+    try:
+        rec = planner.revise_plan(topic, agent_instruction, current)
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"Agent B 未能完成：{e}"}
+    return _plan_assistant_result(rec, body, references)
+
+
+def _plan_assistant_stream_events(body: PlanAssistantReq):
+    """教案中心 Agent B SSE：模型片段实时下发，完整校验通过后才发送 plan。"""
+    instruction = (body.instruction or "").strip()
+    if not instruction:
+        yield {"t": "error", "text": "请先输入希望 Agent B 怎么修改教案"}
+        return
+    current = _design_to_record(body.plan)
+    topic = current.title or instruction
+    reference_text, references = lesson_library.context(body.reference_ids)
+    memory_prefix = ""
+    try:
+        from edu_agent import memory
+
+        memory_prefix = memory.profile_memory_prefix(MEM_PROFILE)
+    except Exception:  # noqa: BLE001
+        pass
+    agent_instruction = _plan_assistant_instruction(
+        instruction, body.history, memory_prefix, reference_text
+    )
+    try:
+        for event in planner.revise_plan_stream(topic, agent_instruction, current):
+            kind = event.get("type")
+            if kind == "status":
+                yield {"t": "status", "text": event.get("text", "正在生成教案…")}
+            elif kind == "delta":
+                yield {"t": "d", "text": event.get("text", "")}
+            elif kind == "done" and event.get("record") is not None:
+                result = _plan_assistant_result(event["record"], body, references)
+                result["t"] = "done"
+                yield result
+                return
+        yield {"t": "error", "text": "Agent B 未返回完整教案，请重试"}
+    except Exception as e:  # noqa: BLE001
+        yield {"t": "error", "text": f"Agent B 未能完成：{e}"}
+
+
+@app.post("/api/plan/assistant/stream")
+def api_plan_assistant_stream(body: PlanAssistantReq):
+    return _sse(_plan_assistant_stream_events(body))
+
+
+# ---------- 教案中心：规范教案知识库 ----------
+class LessonLibraryReq(BaseModel):
+    id: str = ""
+    title: str = ""
+    subject: str = ""
+    grade: str = ""
+    lesson_type: str = ""
+    category: str = ""
+    tags: list[str] = []
+    source: str = "current"
+    html: str = ""
+
+
+@app.get("/api/lesson-library")
+def api_lesson_library(query: str = "", category: str = ""):
+    items = lesson_library.list_entries(query=query, category=category)
+    categories = sorted({str(x.get("category")) for x in items if x.get("category")})
+    return {"ok": True, "items": items, "categories": categories, "count": len(items)}
+
+
+@app.get("/api/lesson-library/{entry_id}")
+def api_lesson_library_item(entry_id: str):
+    item = lesson_library.get(entry_id)
+    if not item:
+        return JSONResponse({"ok": False, "error": "教案条目不存在"}, status_code=404)
+    return {"ok": True, "item": item}
+
+
+@app.post("/api/lesson-library")
+def api_lesson_library_save(body: LessonLibraryReq):
+    try:
+        item = lesson_library.save(body.model_dump())
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "item": item}
+
+
+@app.delete("/api/lesson-library/{entry_id}")
+def api_lesson_library_delete(entry_id: str):
+    return lesson_library.delete(entry_id)
+
+
+class LessonDocxReq(BaseModel):
+    title: str = "教案"
+    html: str = ""
+
+
+@app.post("/api/lesson/export-docx")
+def api_lesson_export_docx(body: LessonDocxReq):
+    """把教案中心当前页面直接生成 DOCX；使用 python-docx，不调用 WPS。"""
+    try:
+        path = lesson_docx.export_html(body.html, body.title)
+        token = register_download(path)
+        return {"ok": True, "filename": path.name, "path": str(path),
+                "download_url": "/api/wps/download?id=" + token,
+                "engine": "python-docx", "detail": f"已生成 {path.name}（未调用 WPS）"}
+    except (ValueError, OSError) as e:
+        return {"ok": False, "error": str(e)}
 
 
 def _last_plan_markdown(sid: str) -> str:
@@ -552,7 +948,7 @@ class ChatReq(BaseModel):
     session_id: str | None = None
     preset: str = "A"          # S | A | B | auto
     template_id: str = "default"
-    corpus: str = "textbook"   # textbook | pdf:<source>
+    corpus: str = "textbook"   # textbook | rj_textbooks | pdf:<source>
 
 
 def _code(preset: str) -> str:
@@ -722,14 +1118,14 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
     # 2026-09-22 追加第三路：知识库 wiki（"学会的讲义"，见 edu_agent/wiki_index.py）。
     #   与上面两路同一哲学：失败静默、绝不影响回答；命中时把概念页小节拼进前缀，
     #   并要求回答引用 [[页面名]]（wiki 页本身带 ^[pXX] 页码溯源）。
-    try:
-        from edu_agent import wiki_index
+    wiki_evidence = ""
+    if req.corpus == "textbook":
+        try:
+            from edu_agent import wiki_index
 
-        blk = wiki_index.prompt_block(text, k=2)
-        if blk:
-            prefix = (prefix + "；" if prefix else "") + blk
-    except Exception:  # noqa: BLE001
-        pass
+            wiki_evidence = wiki_index.prompt_block(text, k=2)
+        except Exception:  # noqa: BLE001
+            pass
 
     src = None
     pdir = None
@@ -739,6 +1135,16 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
         pdir = pdf_upload.VDB_DIR
         pcol = pdf_upload.COLLECTION
         yield {"t": "status", "text": "正在检索 PDF《" + src + "》并作答…"}
+    elif req.corpus == "rj_textbooks" or req.corpus.startswith("rj_textbooks:"):
+        from edu_agent.rj_textbooks import COLLECTION as RJ_TEXTBOOKS_COLLECTION, VDB_DIR as RJ_TEXTBOOKS_DIR
+
+        pcol = RJ_TEXTBOOKS_COLLECTION
+        pdir = RJ_TEXTBOOKS_DIR
+        if req.corpus.startswith("rj_textbooks:"):
+            src = req.corpus.split(":", 1)[1]
+            yield {"t": "status", "text": "正在检索选定教材并作答…"}
+        else:
+            yield {"t": "status", "text": "正在检索人教版全科教材库并作答…"}
     else:
         yield {"t": "status", "text": "正在检索教材并作答…"}
     acc = ""
@@ -746,7 +1152,8 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
     citations = []
     plan_opt: dict = {}
     try:
-        for ev in ask_stream(text, history=history, memory_prefix=prefix, source=src,
+        for ev in ask_stream(text, history=history, memory_prefix=prefix,
+                             evidence_prefix=wiki_evidence, source=src,
                              persist_dir=pdir, collection=pcol):
             ty = ev.get("type")
             if ty == "delta":
@@ -790,6 +1197,8 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
     done = {"t": "done", "mode": "A", "text": final_answer, "citations": citations}
     if plan_opt.get("suggest"):
         done["plan_options"] = plan_opt
+    if _deck_flag(text):                      # 显式「生成课件」→ 前端据此给导出入口
+        done["deck"] = True
     yield done
 
 
@@ -830,7 +1239,23 @@ def _stream_supervisor(sid: str, req: ChatReq, text: str):
             "text": final_text, "citations": citations, "html": html_name}
     if doc:
         done["doc"] = doc
+    if _deck_flag(text):
+        done["deck"] = True
     yield done
+
+
+def _deck_flag(text: str) -> bool:
+    """这句话是不是「显式要课件」——决定 done 事件要不要带 deck 标记。
+
+    判定权在 courseware.wants_deck（只认「动作词 + 课件/PPT」相邻，疑问句不算），
+    这里只做一层吞异常的包装：课件模块出问题也绝不能让对话链路出错。
+    """
+    try:
+        from edu_agent import courseware
+
+        return courseware.wants_deck(text)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _doc_payload(md: str, title: str = "", grade: str = "") -> dict:
@@ -890,6 +1315,8 @@ def _stream_planner(sid: str, req: ChatReq, text: str):
                 "title": rec.title, "citations": [c.model_dump() for c in rec.citations]}
         if doc:
             done["doc"] = doc
+        if _deck_flag(text):                  # 「帮我备一节…要课件」→ 出完教案直接给课件入口
+            done["deck"] = True
         yield done
     except Exception as e:
         yield {"t": "error", "text": "B 出错：" + type(e).__name__ + ": " + str(e)}
@@ -1051,21 +1478,8 @@ def api_page_image(page: int = Query(..., ge=1, le=999), source: str = "", dpi: 
     source 上传资料标识（source 或文件名）；空 = 教材原文。
     只读：渲染产物写 data/page_cache/，不动 PDF 与向量库。
     """
-    from edu_agent import page_image
-
-    dpi = max(72, min(int(dpi or 150), 300))
-    if source:
-        hit = next((s for s in pdf_upload.list_sources()
-                    if source in (str(s.get("source") or ""), str(s.get("file") or ""))), None)
-        if hit is None:
-            return JSONResponse({"ok": False, "error": "上传资料不存在"}, status_code=404)
-        pdf, off, prefix = pdf_upload.PDF_DIR / str(hit.get("file") or ""), 0, "up"
-    else:
-        s = load_settings()
-        pdf = s.textbook_pdf if (s.textbook_pdf and s.textbook_pdf.exists()) else None
-        off, prefix = _TXT_OFF, "tb"
     try:
-        data, cache_file, phys = page_image.get_page_image(pdf, page, offset=off, dpi=dpi, prefix=prefix)
+        data, cache_file, phys = _render_page_png(page, source, dpi)
     except FileNotFoundError as e:
         return JSONResponse({"ok": False, "error": f"PDF 不可用：{e}"}, status_code=404)
     except IndexError as e:
@@ -1079,6 +1493,128 @@ def api_page_image(page: int = Query(..., ge=1, le=999), source: str = "", dpi: 
         headers={"Cache-Control": "public, max-age=86400",
                  "X-Physical-Page": str(phys), "X-Cache-File": cache_file.name},
     )
+
+
+def _render_page_png(page: int, source: str = "", dpi: int = 150):
+    """解析受控 PDF 来源并渲染页面；原页展示与视觉分析共用同一安全入口。"""
+    from edu_agent import page_image
+
+    dpi = max(72, min(int(dpi or 150), 300))
+    if source:
+        hit = next((s for s in pdf_upload.list_sources()
+                    if source in (str(s.get("source") or ""), str(s.get("file") or ""))), None)
+        if hit is None:
+            raise FileNotFoundError("上传资料不存在")
+        # 原始展示名与真实落盘名分离；只经 stored_path 取受控 basename，
+        # 这样“官方教材”直达原页和普通上传资料都能正确渲染。
+        pdf = pdf_upload.stored_path(hit.get("stored_file") or hit.get("file") or "")
+        off, prefix = 0, "up"
+    else:
+        s = load_settings()
+        pdf = s.textbook_pdf if (s.textbook_pdf and s.textbook_pdf.exists()) else None
+        off, prefix = _TXT_OFF, "tb"
+    return page_image.get_page_image(pdf, page, offset=off, dpi=dpi, prefix=prefix)
+
+
+class VisionPageReq(BaseModel):
+    page: int = Field(ge=1, le=999)
+    source: str = ""
+    question: str = ""
+    session_id: str = ""
+    dpi: int = Field(default=200, ge=72, le=300)
+    confirm: bool = False
+
+
+def _vision_session(session_id: str, user_text: str, markdown: str, meta: dict) -> str:
+    sid = str(session_id or "").strip()
+    if not sid or _store.get(sid) is None:
+        sid = _store.new()
+    _store.append(sid, "user", user_text, meta={"mode": "V", **meta})
+    _store.append(sid, "assistant", _tagged("A", markdown), meta={"mode": "V", **meta})
+    _store.set_title_if_new(sid, user_text.splitlines()[0][:18])
+    return sid
+
+
+@app.get("/api/vision/status")
+def api_vision_status():
+    from edu_agent import vision
+
+    ready, detail = vision.available()
+    settings = load_settings()
+    return {"ok": True, "ready": ready, "detail": detail,
+            "model": settings.vision_model,
+            "formats": ["JPEG", "PNG", "GIF", "WebP"],
+            "max_bytes": settings.vision_max_bytes}
+
+
+@app.post("/api/vision/analyze")
+async def api_vision_analyze(file: UploadFile = File(...), question: str = Form(""),
+                             session_id: str = Form(""), confirm: bool = Form(False)):
+    """分析用户图片；原文件不落盘，发送远程模型前经过权限闸门。"""
+    from edu_agent import permissions, vision
+
+    blocked = permissions.guard("vision_analyze", confirm)
+    if blocked:
+        return blocked
+    settings = load_settings()
+    try:
+        data = await _read_upload_limited(file, min(settings.upload_max_bytes,
+                                                    settings.vision_max_bytes))
+        result = await run_in_threadpool(
+            vision.analyze_image, data, file.filename or "image", question,
+        )
+    except (ValueError, vision.VisionError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("vision analyze failed")
+        return JSONResponse({"ok": False, "error": f"视觉分析失败：{type(exc).__name__}"},
+                            status_code=500)
+    markdown = vision.to_markdown(result, file.filename or "image")
+    user_text = "分析图片《" + (file.filename or "image") + "》"
+    if question.strip():
+        user_text += "：" + question.strip()
+    sid = _vision_session(session_id, user_text, markdown, {
+        "vision": {"filename": file.filename or "image",
+                   "confidence": result.get("confidence"),
+                   "image_type": result.get("image_type")},
+    })
+    return {"ok": True, "session_id": sid, "markdown": markdown, "result": result}
+
+
+@app.post("/api/vision/page")
+async def api_vision_page(body: VisionPageReq):
+    """直接分析教材或已上传 PDF 的受控页面，不接收任意服务器路径。"""
+    from edu_agent import permissions, vision
+
+    blocked = permissions.guard("vision_analyze", body.confirm)
+    if blocked:
+        return blocked
+    try:
+        data, _cache_file, physical_page = await run_in_threadpool(
+            _render_page_png, body.page, body.source, body.dpi,
+        )
+        result = await run_in_threadpool(
+            vision.analyze_image, data, f"page-{body.page}.png", body.question,
+        )
+    except (FileNotFoundError, IndexError, ValueError, vision.VisionError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("vision page analyze failed")
+        return JSONResponse({"ok": False, "error": f"原页分析失败：{type(exc).__name__}"},
+                            status_code=500)
+    label = ("上传资料" if body.source else "教材") + f"第 {body.page} 页"
+    markdown = vision.to_markdown(result, label)
+    user_text = "分析" + label
+    if body.question.strip():
+        user_text += "：" + body.question.strip()
+    sid = _vision_session(body.session_id, user_text, markdown, {
+        "vision": {"source": body.source, "page": body.page,
+                   "physical_page": physical_page,
+                   "confidence": result.get("confidence"),
+                   "image_type": result.get("image_type")},
+    })
+    return {"ok": True, "session_id": sid, "markdown": markdown,
+            "page": body.page, "physical_page": physical_page, "result": result}
 
 
 _AUTO_DIR = ROOT / "content" / "structured_auto"
@@ -1128,10 +1664,10 @@ def api_textbook_chapters():
     return {"ok": True, "chapters": out}
 
 
-@app.get("/api/textbook/stats")
-def api_textbook_stats():
-    """教材知识库统计（块数取自向量库计数）。"""
+def _main_textbook_stats() -> dict:
+    """内置官方教材统计；多本上传教材则由 /api/knowledge-bases 统一列出。"""
     blocks = None
+    pages = None
     try:
         from langchain_chroma import Chroma
         from edu_agent.config import get_embeddings
@@ -1144,14 +1680,142 @@ def api_textbook_stats():
     n_ch = 0
     if _AUTO_DIR.exists():
         n_ch = len(list(_AUTO_DIR.glob("*.md")))
-    return {"ok": True, "book": "数学 · 必修第一册（人教A版2019课标版）",
-            "chapters": n_ch, "blocks": blocks,
+    if _txt and _txt.exists():
+        try:
+            import pymupdf
+            doc = pymupdf.open(str(_txt))
+            pages = max(0, doc.page_count - _TXT_OFF)
+            doc.close()
+        except Exception:
+            pages = None
+    return {"book": "数学 · 必修第一册（人教A版2019课标版）",
+            "chapters": n_ch, "pages": pages, "blocks": blocks,
             "source_pdf": str(ROOT / "content" / "raw") if (ROOT / "content" / "raw").exists() else None}
+
+
+@app.get("/api/textbook/stats")
+def api_textbook_stats():
+    """兼容旧前端的内置教材统计。"""
+    return {"ok": True, **_main_textbook_stats()}
+
+
+def _source_library(item: dict) -> str:
+    """旧上传件没有 library 字段时，安全地归入“个人资料”。"""
+    try:
+        return pdf_upload.normalize_library(item.get("library"))
+    except ValueError:
+        return "personal"
+
+
+@app.get("/api/knowledge-bases")
+def api_knowledge_bases():
+    """知识库目录：内置教材 + 被标记为官方教材的 PDF 都可直达。"""
+    primary = _main_textbook_stats()
+    sources = [{**item, "library": _source_library(item)} for item in pdf_upload.list_sources()]
+    official = [{
+        "id": "textbook", "corpus": "textbook", "title": primary["book"],
+        "kind": "built_in", "readonly": True, "chapters": primary["chapters"],
+        "pages": primary["pages"], "blocks": primary["blocks"],
+    }]
+    try:
+        from edu_agent.rj_textbooks import catalog as rj_textbook_catalog, stats as rj_textbook_stats
+
+        rj_blocks = rj_textbook_stats().get("collection_count", 0)
+        if rj_blocks:
+            official.append({
+                "id": "rj_textbooks", "corpus": "rj_textbooks", "title": "人教版高中全科教材",
+                "kind": "built_in", "readonly": True, "chapters": None,
+                "pages": None, "blocks": rj_blocks,
+            })
+            for book in rj_textbook_catalog():
+                official.append({
+                    "id": "rj_textbooks:" + book["source"],
+                    "corpus": "rj_textbooks:" + book["source"],
+                    "title": book["title"], "kind": "built_in", "readonly": True,
+                    "subject": book["subject"], "edition": book["edition"],
+                    "source": book["source"], "pages": None, "chapters": None,
+                    "blocks": book["blocks"], "pdf_available": book["pdf_available"],
+                })
+    except Exception:
+        pass
+    for item in sources:
+        if item["library"] != "official":
+            continue
+        official.append({
+            "id": "pdf:" + str(item.get("source") or ""), "corpus": "pdf:" + str(item.get("source") or ""),
+            "title": str(item.get("file") or item.get("source") or "官方教材"), "kind": "uploaded",
+            "readonly": False, "source": str(item.get("source") or ""),
+            "pages": item.get("pages"), "blocks": item.get("chunks"), "chapters": None,
+        })
+    personal = [item for item in sources if item["library"] == "personal"]
+    return {"ok": True, "official_books": official, "personal_documents": personal}
+
+
+@app.get("/api/official-books/{source}/pdf")
+def api_official_book_pdf(source: str):
+    """在浏览器中打开一册公共教材的本地原始 PDF，不接受任意文件路径。"""
+    try:
+        from edu_agent.rj_textbooks import official_pdf_path
+
+        pdf = official_pdf_path(source)
+        if pdf is None:
+            return JSONResponse(status_code=404, content={"ok": False, "error": "该教材未找到可打开的 PDF"})
+        return FileResponse(str(pdf), media_type="application/pdf", filename=pdf.name)
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"ok": False, "error": f"打开教材失败：{type(exc).__name__}"})
+
+
+@app.get("/api/official-books/{source}/chapters")
+def api_official_book_chapters(source: str):
+    """公共教材的章/节导航及其对应 PDF 物理页。"""
+    try:
+        from edu_agent.rj_textbooks import chapters, official_pdf_path
+
+        if official_pdf_path(source) is None:
+            return JSONResponse(status_code=404, content={"ok": False, "error": "该教材未找到可打开的 PDF"})
+        return {"ok": True, "chapters": chapters(source)}
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"ok": False, "error": f"读取教材目录失败：{type(exc).__name__}"})
+
+
+@app.get("/api/knowledge-health")
+def api_knowledge_health():
+    """只读检查索引版本、源文件、embedding 配置和 PDF 目录一致性。"""
+    try:
+        from edu_agent.knowledge_health import audit
+
+        return audit()
+    except Exception as e:  # noqa: BLE001 健康接口本身也要给出可诊断结果
+        return {"ok": False, "status": "error", "issues": [{
+            "level": "error", "code": "audit_failed",
+            "message": f"{type(e).__name__}: {e}",
+        }]}
 
 
 @app.get("/api/pdfs")
 def api_pdfs():
-    return {"sources": pdf_upload.list_sources()}
+    return {"sources": [{**item, "library": _source_library(item)}
+                        for item in pdf_upload.list_sources()]}
+
+
+class PdfLibraryReq(BaseModel):
+    source: str
+    library: str
+    confirm: bool = False
+
+
+@app.post("/api/pdf/library")
+def api_pdf_library(body: PdfLibraryReq):
+    """切换已上传 PDF 的知识库归属；索引不动，因此立即生效。"""
+    from edu_agent import permissions
+
+    blocked = permissions.guard("pdf_library_manage", body.confirm)
+    if blocked:
+        return blocked
+    try:
+        return pdf_upload.set_library(body.source.strip(), body.library)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
 
 
 @app.post("/api/pdf/del")
@@ -1167,7 +1831,8 @@ def api_pdf_del(body: dict):
         return {"ok": False, "error": "资料不存在"}
     pdf_upload._save_meta(keep)
     try:
-        f = pdf_upload.PDF_DIR / (hit.get("file") or "")
+        # 新版元数据存服务端生成的 stored_file；旧版才回退 file，仍经过 basename 校验。
+        f = pdf_upload.stored_path(hit.get("stored_file") or hit.get("file") or "")
         if f.exists():
             f.unlink()
     except Exception:
@@ -1185,7 +1850,8 @@ def api_pdf_del(body: dict):
 
 
 @app.post("/api/pdf/ingest")
-async def api_pdf_ingest(file: UploadFile = File(...), confirm: bool = False):
+async def api_pdf_ingest(file: UploadFile = File(...), confirm: bool = False,
+                         library: str = "personal"):
     from edu_agent import permissions
 
     blocked = permissions.guard("pdf_ingest", confirm)     # 写本地向量库 = 有副作用，先过权限闸门
@@ -1193,9 +1859,18 @@ async def api_pdf_ingest(file: UploadFile = File(...), confirm: bool = False):
         return blocked
     if not (file.filename or "").lower().endswith(".pdf"):
         return {"ok": False, "error": "仅支持 .pdf"}
-    data = await file.read()
     try:
-        info = pdf_upload.ingest_pdf(data, file.filename or "doc.pdf")
+        library = pdf_upload.normalize_library(library)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    try:
+        data = await _read_upload_limited(file, _settings.upload_max_bytes)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    try:
+        info = pdf_upload.ingest_pdf(data, file.filename or "doc.pdf",
+                                     max_pages=_settings.upload_max_pdf_pages,
+                                     library=library)
         return {"ok": True, **info}
     except Exception as e:
         return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
@@ -1245,25 +1920,408 @@ def api_wps_export(body: dict):
         # WPS 可用 → 照旧；WPS 不可用且本机有 WSL 后路 → 改道 WSL 渲染（见 edu_agent/wsl_docx.py）
         from edu_agent import wsl_docx
 
-        return wsl_docx.export_best(body.get("payload") or {},
-                                   markdown=str(body.get("markdown") or ""),
-                                   kind=str(body.get("kind") or "docx").lower(),
-                                   out_dir=(body.get("outDir") or "").strip() or None,
-                                   template=body.get("template") or None)
+        result = wsl_docx.export_best(body.get("payload") or {},
+                                      markdown=str(body.get("markdown") or ""),
+                                      kind=str(body.get("kind") or "docx").lower(),
+                                      out_dir=(body.get("outDir") or "").strip() or None,
+                                      template=body.get("template") or None)
+        if result.get("ok") and result.get("path"):
+            token = register_download(result["path"])
+            result["download_url"] = "/api/wps/download?id=" + token
+        return result
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
 
 
 @app.get("/api/wps/download")
-def api_wps_download(path: str = ""):
-    """把导出的 Office 文件回传浏览器（前端「下载到本机」按钮用）。"""
-    try:
-        p = Path(path).resolve()
-    except Exception:
-        return JSONResponse({"ok": False, "error": "非法路径"}, status_code=400)
-    if not p.is_file() or p.suffix.lower() not in (".docx", ".pptx", ".doc", ".ppt", ".pdf"):
-        return JSONResponse({"ok": False, "error": "仅支持回传导出的 Office 文件"}, status_code=404)
+def api_wps_download(id: str = ""):
+    """下载本进程刚导出的 Office 文件；不接受客户端给出的任意本机路径。"""
+    p = take_download(id)
+    if p is None or p.suffix.lower() not in (".docx", ".pptx", ".doc", ".ppt", ".pdf"):
+        return JSONResponse({"ok": False, "error": "下载链接无效或已过期，请重新导出"}, status_code=404)
     return FileResponse(str(p), filename=p.name)
+
+
+# ---------- 课件生成（对话链路 → 原生 PPTX，2026-09-26）----------
+class CoursewareReq(BaseModel):
+    markdown: str = ""          # 会话里那份教案（前端把它贴回来）
+    payload: dict | None = None # 教案中心 DZ 结构（可选，优先）
+    title: str = ""
+    session_id: str = ""
+    outDir: str = ""
+    confirm: bool = False       # 权限动作 ask 时，前端确认后带 true 重试
+
+
+class SlideWorkbenchReq(BaseModel):
+    """教案中心 PPT 面板的轻量合同：当前教案 → 同源 SVG 预览 / PPTX。"""
+
+    slides: list[dict] | None = None
+    title: str = ""
+    theme_id: str = ""
+    template_id: str = ""       # ppt-master 原生母版；为空时沿用画布主题导出
+    confirm: bool = False
+
+
+class SlideSlotEditReq(BaseModel):
+    """原版工作台的文字槽位编辑请求（不落盘，由教案中心持有草稿）。"""
+
+    slides: list[dict] | None = None
+    index: int = 0
+    slot: str = ""
+    text: str | None = None
+    patch: dict | None = None
+
+
+class SlideObjectEditReq(BaseModel):
+    """原版画布自由对象：文本框或形状的新增、修改、删除与层级调整。"""
+
+    slides: list[dict] | None = None
+    index: int = 0
+    action: str = "add"
+    id: str = ""
+    kind: str = "shape"
+    shape: str = "rect"
+    patch: dict | None = None
+    title: str = ""
+    theme_id: str = ""
+    src: str = ""  # kind=image 时：data/uploads 下的受限相对路径
+
+
+@app.get("/api/slide/themes")
+def api_slide_themes():
+    """原版 PPT 工作台的主题目录；读取失败不影响教案编辑。"""
+    try:
+        return {"ok": True, "default": slide_deck.default_theme_id(),
+                "themes": slide_deck.themes()}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "default": "", "themes": [],
+                "error": f"主题读取失败：{type(exc).__name__}: {exc}"}
+
+
+@app.get("/api/ppt-master/templates")
+def api_ppt_master_templates():
+    """公开当前已安装 ppt-master 的课堂可用母版，避免前端写死一个并不存在的模板。"""
+    from edu_agent import ppt_master
+
+    root = ppt_master.engine_root() / "skills" / "ppt-master" / "templates" / "layouts"
+    catalog = [
+        {"id": "presentation_core_43", "name": "PPT Master · 课堂母版（4:3）",
+         "description": "16 个课堂与投影版式，含标题、对比、流程、图表、表格"},
+        {"id": "presentation_core", "name": "PPT Master · 通用母版（16:9）",
+         "description": "20 个通用演示版式，适合课堂、公开课与说课"},
+    ]
+    return {"ok": True, "templates": [item for item in catalog
+            if (root / item["id"] / "templates" / "design_spec.md").is_file()]}
+
+
+@app.get("/api/ppt/templates")
+def api_ppt_templates():
+    """教案中心的 PPT 模板库：视觉主题与真实 PPT Master 母版分开陈列。"""
+    themes = []
+    for item in slide_deck.themes():
+        palette = item.get("palette") or {}
+        imported = item.get("kind") == "pptx"
+        themes.append({
+            "id": f"theme:{item.get('id')}", "kind": "theme", "theme_id": item.get("id"),
+            "master_id": "", "name": item.get("name") or item.get("id"),
+            "description": ("原 PPTX 模板：保留母版、背景和版式，Agent 只填充文字槽"
+                            if imported else "用于编辑器预览和普通可编辑导出"),
+            "tags": (["原模板填充", f"{item.get('pages') or 0} 页原稿"] if imported
+                     else ["视觉主题", "16:9"]),
+            "source_pptx": imported,
+            "palette": {"background": (item.get("canvas") or {}).get("bg", "#FFFFFF"),
+                        "text": palette.get("text", "#172033"),
+                        "accent": palette.get("accent", "#2563EB"),
+                        "sub": palette.get("sub", "#64748B"),
+                        "soft": palette.get("soft", "#EFF6FF"),
+                        "line": palette.get("line", "#CBD5E1")},
+        })
+    master_response = api_ppt_master_templates()
+    masters = master_response.get("templates", [])
+    for item in masters:
+        is_classroom = item["id"] == "presentation_core_43"
+        themes.insert(0 if is_classroom else 1, {
+            "id": f"master:{item['id']}", "kind": "master", "theme_id": "tech-editorial",
+            "master_id": item["id"],
+            "name": "课堂规范 4:3" if is_classroom else "通用演示 16:9",
+            "description": item["description"],
+            "tags": ["PPT Master 原生母版", "16 个版式" if is_classroom else "20 个版式"],
+            "palette": {"background": "#FFFFFF", "text": "#1E293B", "accent": "#2563EB",
+                        "sub": "#64748B", "soft": "#EFF6FF", "line": "#CBD5E1"},
+        })
+    return {"ok": True, "templates": themes}
+
+
+@app.get("/api/ppt/templates/preview")
+def api_ppt_template_preview(id: str = Query("", min_length=1, max_length=80)):
+    """返回上传 PPTX 的第 1 页真实缩略图；内置主题没有原稿，不走这条路径。"""
+    from edu_agent import ppt_polish, slide_fill, slide_template
+
+    template = slide_template.get(id)
+    if not template or template.get("kind") != "pptx":
+        return JSONResponse({"ok": False, "error": "未找到可预览的上传模板"}, status_code=404)
+
+    source = slide_template.root() / slide_template._slug(id) / "template.pptx"
+    if not source.is_file():
+        return JSONResponse({"ok": False, "error": "模板原稿不存在"}, status_code=404)
+
+    # 转换器会写临时 SVG；读入第 1 页后立即清理，不能在模板目录留下任何派生文件。
+    import shutil
+
+    job = ppt_polish.workroot() / f"template-preview-{uuid.uuid4().hex}"
+    try:
+        job.mkdir(parents=True, exist_ok=False)
+        pages = slide_fill.preview_pages(source, job, limit=1)
+        if not pages:
+            return JSONResponse({"ok": False, "error": "模板缩略图生成失败"}, status_code=503)
+        return Response(content=pages[0], media_type="image/svg+xml",
+                        headers={"Cache-Control": "private, max-age=300"})
+    finally:
+        shutil.rmtree(job, ignore_errors=True)
+
+
+@app.delete("/api/ppt/templates/{template_id}")
+def api_ppt_template_delete(template_id: str):
+    """软删除老师上传的模板；内置主题与 PPT Master 母版始终只读。"""
+    from edu_agent import slide_template
+
+    template = slide_template.get(template_id)
+    if not template or template.get("kind") != "pptx":
+        return JSONResponse({"ok": False, "error": "只能删除自己上传的 PPTX 模板"}, status_code=404)
+    result = slide_template.delete_template(template_id, soft=True)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
+@app.post("/api/ppt/templates/upload")
+async def api_ppt_template_upload(file: UploadFile = File(...)):
+    """上传一份 PPTX/POTX 并纳入本地模板库；原稿只保存副本，从不回写上传文件。"""
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".pptx", ".potx"}:
+        return JSONResponse({"ok": False, "error": "仅支持 .pptx 或 .potx 演示模板"}, status_code=400)
+    tmp = _settings.data_dir / f"ppt_template_{uuid.uuid4().hex}{suffix}"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        tmp.write_bytes(await _read_upload_limited(file, _settings.upload_max_bytes))
+        if not zipfile.is_zipfile(tmp):
+            return JSONResponse({"ok": False, "error": "文件不是有效的 Office 演示文稿包"}, status_code=400)
+        with zipfile.ZipFile(tmp) as archive:
+            entries = archive.infolist()
+            if "ppt/presentation.xml" not in archive.namelist():
+                return JSONResponse({"ok": False, "error": "文件不是有效的 PowerPoint 演示模板"}, status_code=400)
+            if len(entries) > 20_000 or sum(item.file_size for item in entries) > _settings.upload_max_bytes * 8:
+                return JSONResponse({"ok": False, "error": "模板解压后的内容过大，未导入"}, status_code=400)
+        from edu_agent import slide_template
+
+        result = slide_template.import_pptx(tmp, name=Path(file.filename or "导入模板").stem)
+        return result
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("PPT template import failed")
+        return JSONResponse({"ok": False, "error": f"模板导入失败：{type(exc).__name__}: {exc}"}, status_code=500)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+@app.post("/api/slide/render")
+def api_slide_render(body: SlideWorkbenchReq):
+    """工作台预览：上传 PPTX 走原模板填充，普通主题走 SVG 渲染。"""
+    try:
+        slides = slide_deck.clean_slides(body.slides or [])
+        # 上传的模板不能只借一组颜色：先填到原稿副本，再把那份真实 PPTX 转为 SVG。
+        # 这保证预览里的母版、背景图和导出的 PPTX 来自同一个原模板。
+        from edu_agent import slide_template
+
+        imported = slide_template.get(body.theme_id)
+        if imported and imported.get("kind") == "pptx":
+            from edu_agent import slide_fill
+
+            filled = slide_fill.fill_pptx(body.theme_id, slides, title=body.title,
+                                           with_preview=True, preview_only=True, preview_limit=30)
+            if not filled.get("ok"):
+                return JSONResponse({"ok": False, "error": filled.get("error") or "原模板预览生成失败",
+                                     "warnings": filled.get("warnings") or []}, status_code=400)
+            pages = filled.get("preview") or []
+            if not pages:
+                return JSONResponse({"ok": False,
+                                     "error": "已填充原模板，但本机无法生成预览图；请检查 PPT 预览组件",
+                                     "warnings": filled.get("warnings") or []}, status_code=503)
+            return {"ok": True, "theme_id": body.theme_id, "pages": pages,
+                    "layouts": [p.get("layout") or "原模板版式" for p in (filled.get("plan") or {}).get("pages") or []],
+                    "boxes": [], "warnings": filled.get("warnings") or [],
+                    "template_mode": "source-pptx", "template_pages": len((filled.get("plan") or {}).get("pages") or []),
+                    "stats": {"pages": len(pages), "chars": sum(len(str(x)) for s in slides for x in (s.get("bullets") or []))}}
+        return {**slide_deck.build_deck(body.theme_id, slides, title=body.title,
+                                        annotate=True), "enabled": True}
+    except (FileNotFoundError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("PPT SVG render failed")
+        return JSONResponse({"ok": False, "error": f"渲染失败：{type(exc).__name__}: {exc}"}, status_code=500)
+
+
+@app.post("/api/slide/slot")
+def api_slide_slot(body: SlideSlotEditReq):
+    """把原版 SVG 的文字槽写回当前 PPT 草稿，再由同一引擎重排。"""
+    slides = slide_deck.clean_slides(body.slides or [])
+    if not slides:
+        return JSONResponse({"ok": False, "error": "请先生成 PPT 页面"}, status_code=400)
+    if body.index < 0 or body.index >= len(slides):
+        return JSONResponse({"ok": False, "error": "页面编号无效"}, status_code=400)
+    result: dict = {"ok": True, "slot": body.slot}
+    if body.text is not None:
+        changed = slide_deck.apply_slot(slides[body.index], body.slot, body.text)
+        if not changed.get("ok"):
+            return JSONResponse(changed, status_code=400)
+        result.update(changed)
+    if body.patch:
+        changed = slide_deck.apply_override(slides[body.index], body.slot, body.patch)
+        if not changed.get("ok"):
+            return JSONResponse(changed, status_code=400)
+        result.update(changed)
+    if body.text is None and not body.patch:
+        return JSONResponse({"ok": False, "error": "需要文字或画布位置修改"}, status_code=400)
+    return {"ok": True, "slides": slide_deck.clean_slides(slides), **result}
+
+
+@app.post("/api/slide/object")
+def api_slide_object(body: SlideObjectEditReq):
+    """为教案中心的 PPT 画布维护自由文本框 / 形状；结果只保存在当前草稿。"""
+    slides = slide_deck.clean_slides(body.slides or [])
+    if not slides:
+        return JSONResponse({"ok": False, "error": "请先生成 PPT 页面"}, status_code=400)
+    if body.index < 0 or body.index >= len(slides):
+        return JSONResponse({"ok": False, "error": "页面编号无效"}, status_code=400)
+    page = dict(slides[body.index])
+    objects = slide_deck.clean_objects(page.get("objects"))
+    action = str(body.action or "add").lower()
+    focus = ""
+    if action == "add":
+        focus = slide_deck.next_object_id(objects)
+        pic = None
+        if str(body.kind) == "image":
+            from edu_agent import slide_image
+
+            info = slide_image.probe(slide_image.uploads_root() / str(body.src or ""))
+            if info.get("width") and info.get("height"):
+                pic = (float(info["width"]), float(info["height"]))
+        objects.append(slide_deck.new_object(body.kind, body.shape, oid=focus,
+                                              theme=slide_deck.theme(body.theme_id),
+                                              src=str(body.src or ""), pic=pic))
+    elif action == "patch":
+        changed = slide_deck.patch_object(objects, body.id, body.patch)
+        if not changed.get("ok"):
+            return JSONResponse(changed, status_code=400)
+        objects, focus = changed["objects"], str(body.id)
+    elif action == "delete":
+        objects = [obj for obj in objects if str(obj.get("id")) != str(body.id)]
+    elif action in ("up", "down"):
+        ids = [str(obj.get("id")) for obj in objects]
+        if str(body.id) not in ids:
+            return JSONResponse({"ok": False, "error": "找不到这个对象"}, status_code=400)
+        position = ids.index(str(body.id))
+        target = position + (1 if action == "up" else -1)
+        if not (0 <= target < len(objects)):
+            return JSONResponse({"ok": False, "error": "已经到达层级边界"}, status_code=400)
+        objects[position], objects[target] = objects[target], objects[position]
+        focus = str(body.id)
+    else:
+        return JSONResponse({"ok": False, "error": f"不支持的对象操作：{action}"}, status_code=400)
+    if objects:
+        page["objects"] = objects
+    else:
+        page.pop("objects", None)
+    slides[body.index] = page
+    cleaned = slide_deck.clean_slides(slides)
+    return {"ok": True, "slides": cleaned, "objects": cleaned[body.index].get("objects", []),
+            "id": focus, "index": body.index, "action": action}
+
+
+@app.post("/api/slide/image/upload")
+async def api_slide_image_upload(file: UploadFile = File(...)):
+    """接收 PPT 本地配图；只写入受限 uploads 目录，返回可安全内联的相对路径。"""
+    from edu_agent import slide_image
+
+    try:
+        data = await _read_upload_limited(file, 20 * 1024 * 1024)
+        result = slide_image.save_upload(data, file.filename or "upload.png", "lesson-center")
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    if not result.get("ok"):
+        return JSONResponse({"ok": False, "error": result.get("error") or "图片上传失败"}, status_code=400)
+    return {"ok": True, "path": result["path"], "width": result.get("width"),
+            "height": result.get("height"), "detail": "图片已加入当前 PPT 草稿"}
+
+
+@app.post("/api/slide/deck")
+def api_slide_deck(body: SlideWorkbenchReq):
+    """导出原版工作台所预览的同一份原生可编辑 PPTX。"""
+    try:
+        from edu_agent import permissions
+
+        blocked = permissions.guard("export_pptx", bool(body.confirm))
+        if blocked:
+            return blocked
+        slides = slide_deck.clean_slides(body.slides or [])
+        from edu_agent import slide_template
+
+        imported = slide_template.get(body.theme_id)
+        if imported and imported.get("kind") == "pptx":
+            # 优先：老师上传的原稿。保留其母版、图片、背景与版式，只替换可填文字。
+            from edu_agent import slide_fill
+
+            out = slide_fill.fill_pptx(body.theme_id, slides, title=body.title, with_preview=False)
+        elif body.template_id:
+            # 走 ppt-master 的原生 Layout 原型，而非当前画布的轻量 SVG 版式。
+            from edu_agent import ppt_master
+
+            out = ppt_master.generate(slides, name=body.title or "课堂课件",
+                                      template_id=body.template_id)
+            if out.get("ok") and out.get("pptx"):
+                out["file"] = out["pptx"]
+                out["filename"] = Path(str(out["pptx"])).name
+        else:
+            out = slide_deck.export_deck_pptx(body.theme_id, slides, title=body.title)
+        if out.get("ok") and out.get("file"):
+            out["download_url"] = "/api/wps/download?id=" + register_download(out["file"])
+        return out
+    except Exception as exc:  # noqa: BLE001
+        log.exception("PPT deck export failed")
+        return {"ok": False, "error": f"PPTX 生成失败：{type(exc).__name__}: {exc}"}
+
+
+@app.post("/api/ppt/courseware")
+def api_ppt_courseware(req: CoursewareReq):
+    """教案 / 会话内容 → **原生可编辑** .pptx（引擎在 WSL 里跑，实测约 15~30s，首次含冷启动）。
+
+    两道闸门（与「导出 PPT · WPS」一致，不新造概念）：
+      ① 能力开关 skill:ppt-master（关掉 → gate=capability）
+      ② 权限动作 export_pptx（他当前是 ask → 第一次返回 gate=permission，前端确认后带 confirm=true）
+    内容来源优先级：payload（教案中心）> markdown（请求体，前端贴回当前回答）> 会话里最近一份教案。
+    交付沿用 WPS 导出那套**一次性下载令牌**，不接受客户端给任意路径。
+    """
+    try:
+        if not capabilities.is_enabled("skill", "ppt-master"):
+            return {"ok": False, "gate": "capability",
+                    "error": "「课件生成」能力已关闭（右栏「运行状态」里可以打开）"}
+        from edu_agent import permissions
+
+        blocked = permissions.guard("export_pptx", bool(req.confirm))
+        if blocked:
+            return blocked
+        from edu_agent import courseware
+
+        md = str(req.markdown or "").strip()
+        if not md and not (req.payload or {}).get("steps"):
+            md = _last_plan_markdown(str(req.session_id or "").strip() or (_store.current_id() or ""))
+        r = courseware.generate(markdown=md, payload=req.payload, title=req.title,
+                                out_dir=(req.outDir or "").strip() or None)
+        if r.get("ok") and r.get("pptx"):
+            token = register_download(r["pptx"])
+            r["download_url"] = "/api/wps/download?id=" + token
+        return r
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
 
 
 # ---------- 长期记忆（对齐 DeepSeek「记忆」：跨会话 · 可见 · 可删 · 可关） ----------
@@ -1471,4 +2529,6 @@ if __name__ == "__main__":
     logsetup.setup(level=os.getenv("EDU_LOG_LEVEL", "INFO"),
                    log_file=str(s.log_file))
     _warmup()
-    uvicorn.run(app, host="127.0.0.1", port=5174, log_level="warning")
+    # 端口：默认 5174；EDU_WEB_PORT 可覆盖（演示/多实例并存，如 EDU_WEB_PORT=5181）
+    uvicorn.run(app, host=os.getenv("EDU_WEB_HOST", "127.0.0.1"),
+                port=int(os.getenv("EDU_WEB_PORT", "5174")), log_level="warning")

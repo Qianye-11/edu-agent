@@ -34,6 +34,8 @@ ACTIONS: list[dict] = [
     {"id": "template_save", "label": "保存 / 覆盖教案模板", "risk": "write", "default": "ask"},
     {"id": "template_delete", "label": "删除教案模板", "risk": "destructive", "default": "ask"},
     {"id": "pdf_ingest", "label": "上传 PDF 并写入本地向量库", "risk": "write", "default": "ask"},
+    {"id": "pdf_library_manage", "label": "调整资料的知识库归属", "risk": "write", "default": "ask"},
+    {"id": "vision_analyze", "label": "将图片发送到远程视觉模型进行分析", "risk": "network", "default": "ask"},
     {"id": "file_open", "label": "用本机 WPS / 默认程序打开文件", "risk": "local", "default": "allow"},
 ]
 

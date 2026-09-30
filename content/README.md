@@ -17,7 +17,8 @@
 .venv\Scripts\python.exe src\edu_agent\pdf_import.py    # 读 TEXTBOOK_PDF -> structured_auto/
 \`\`\`
 - 解析目录页（实测每条目跨三行：标题/页码/点线），按第X章分组，印刷页码→物理页偏移自动锚定（实测 +5）。
-- 已产出：5 章 52 节。入库时 >1400 字的节自动按行切块（见 ingest._split_long_sections）。
+- 已产出：5 章 52 节。入库时统一切为目标约 700 字的语义块，块间保留约 90 字上下文；
+  当前共 296 块（见 `chunking.semantic_chunks` 与 `ingest._split_long_sections`）。
 
 ## 文件结构：front-matter + 逐条 chunk
 \`\`\`markdown
@@ -58,10 +59,17 @@ chapter_title: 集合与常用逻辑用语
 ## 入库后的 Document.metadata（ingest.py 生成）
 \`\`\`json
 { "chunk_id": "math-m1-c3-s2-k1", "kind": "concept",
+  "parent_id": "math-m1-c3-s2", "chunk_index": 1, "chunk_count": 3,
+  "content_hash": "sha256...", "is_sidebar": false,
+  "content_role": "concept",
   "subject": "数学", "book": "必修第一册", "version": "人教A版2019课标版",
   "chapter": "第三章", "section": "3.2",
   "heading": "函数的基本性质", "page": 76, "anchor": "正文" }
 \`\`\`
+
+`content_role` 是面向检索的教学角色，取值为 `concept / example / exercise /
+explanation / sidebar`。它与来源类型 `kind` 分离：自动整节块仍保持 `kind=section`，但可按
+块内语义标注为概念、例题或练习，用作弱排序先验，不替代向量和 BM25 相关度。
 
 ## 已知边界（重要，演示预期管理）
 - **公式是图片/字形替换**：PDF 抽出的文字里数学符号为替换字形（如 狓 犃 犖）或缺失——叙述文字完整可读；
@@ -72,4 +80,6 @@ chapter_title: 集合与常用逻辑用语
 \`\`\`bash
 .venv\Scripts\python.exe -c "import sys; sys.path.insert(0,'src'); from edu_agent.ingest import ingest; print(ingest())"
 \`\`\`
-自动扫 structured/ + structured_auto/ 两个目录，全量重建 chroma_db（幂等）。
+自动扫 structured/ + structured_auto/ 两个目录。系统先构建并校验临时 collection，
+再把它切换为 `edu_textbook`；旧 collection 以 `edu_textbook_backup_<时间>` 保留，
+不会删除同一 Chroma 目录中的 `edu_wiki`。

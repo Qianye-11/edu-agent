@@ -17,7 +17,9 @@ import sqlite3
 import time
 from pathlib import Path
 
-DB = Path(__file__).resolve().parents[2] / "data" / "memory.db"
+from edu_agent.config import load_settings
+
+DB = load_settings().data_dir / "memory.db"
 
 # 单条记忆最长字符数（防把整篇教材塞进记忆）
 FACT_MAX = 200

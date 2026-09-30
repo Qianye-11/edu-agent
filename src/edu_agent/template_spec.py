@@ -188,15 +188,18 @@ def list_templates() -> list[dict]:
                                  for e in (b.get("elements") or []) if e.get("type") == "table")
                 else:
                     tables = sum(1 for b in blocks if b.get("type") == "table")
-                out.append({"template_id": d.get("template_id"), "name": d.get("name"),
+                template_id = str(d.get("template_id") or f.stem)
+                out.append({"template_id": template_id, "name": d.get("name"),
                             "blocks": len(blocks), "tables": tables,
-                            "rich": int(d.get("spec_version") or 1) >= 2})
+                            "rich": int(d.get("spec_version") or 1) >= 2,
+                            "original": (ORIG_DIR / f"{template_id}.docx").exists()})
             except Exception:
                 continue
     if not any(o["template_id"] == "default" for o in out):
         dt = default_template()
         out.insert(0, {"template_id": "default", "name": dt.name, "blocks": len(dt.blocks),
-                       "tables": sum(1 for b in dt.blocks if b.type == "table"), "rich": False})
+                       "tables": sum(1 for b in dt.blocks if b.type == "table"), "rich": False,
+                       "original": False})
     return out
 
 

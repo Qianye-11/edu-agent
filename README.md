@@ -26,7 +26,7 @@
 | 轨 | 目录 | kind | 状态 |
 |---|---|---|---|
 | 人工精修细卡 | content/structured/ | concept/example/exercise | ⏳ S3 第一章施工中（用户决定暂缓） |
-| PDF 自动整节 | content/structured_auto/ | section | ✅ 5 章 52 节（151 chunk） |
+| PDF 自动整节 | content/structured_auto/ | section | ✅ 5 章 52 节（296 个细粒度语义块） |
 
 ## 工程补强（2026-09-07）：缺失项 #2/#3/#4 补齐 + 单测全绿
 按历史遗留的缺失项清单逐条补齐（对应模块 docstring 各标 #N）：
@@ -42,7 +42,7 @@
 **编排层 P1**（graph 把 A 的学情摘要 coach_summary 拼入 B 的 goal，B 无摘要照常独立出教案）。
 
 ### 单测
-当前离线测试套件共 **298 例全绿**（其中 2 例真实 WPS 联调按环境条件跳过；其余 296 例通过），默认不调用网络、Chroma 或真实 LLM：
+当前离线测试套件共 **302 例全绿**（其中 2 例真实 WPS 联调按环境条件跳过；其余 300 例通过），默认不调用网络、Chroma 或真实 LLM：
 
 ```
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
@@ -95,6 +95,8 @@
    ├─ plan_html.py         # 教案 markdown -> HTML 落盘（content/plans/）
    ├─ memory.py            # Agent A 长期记忆（SQLite data/memory.db，按 profile）
    ├─ math_verify.py       # 简易验算附加（出错兜底提示）
+   ├─ vision.py            # 图片/图象/公式 OCR + 多模态分析 + 受限 SymPy 复核
+   ├─ kg.py                # 知识星图校验/查询（数据源 content/kg/graph.json）
    ├─ pdf_upload.py        # 用户上传 PDF -> 独立向量库 + 检索
    └─ web_server.py        # 【唯一 UI 网关 5174】薄路由 + SSE（A/S/B/auto + 模板 + PDF）
 ```
@@ -102,8 +104,14 @@
 ## 进度勾选清单
 - [x] S1 基地：依赖装好（3.11）、**双连通冒烟全绿**、骨架就位
 - [x] S2.5 教材到手（数学必修一 PDF）+ 自动切节全册（52 节）
-- [x] S5 入库 Chroma **151 条**（幂等全量重建）
-- [x] S4(节级) eval/golden_questions.json 15 条（细卡版跳过，待精修后升级 chunk 级）
+- [x] S5 入库 Chroma **296 条**（临时 collection 校验后切换，旧版本可回滚）
+- [x] S4(节级) eval/golden_questions.json 15 条
+- [x] S6(细粒度) eval/golden_questions_v2.json 40 条（概念/方法/旁栏/显式坐标分组门槛）
+- [x] 图片与公式视觉分析：上传图片 / 教材原页 → OCR 与图象理解 → 本地公式复核
+- [x] 知识星图真实性优化：58 节点 / 77 关系，覆盖五章，进度与教材页坐标动态化
+- [x] 教案中心模板与多页编辑：4 类预置模板、加页/复制/删除、旧草稿迁移、DOCX 真分页
+- [x] 教案库与 Agent B 联动：保存当前教案、DOCX 入库、搜索筛选、多页还原、软删除、参考教案
+- [x] Agent B 可移动悬浮入口：点击开关面板、拖动防误触、位置记忆、窄屏边界约束
 - [x] S6 检索冒烟 **13/15**（>=12 达标；两处❌为第四章旁栏节措辞撞车，记录待调优）
 - [x] S7 ask() 合法 JSON + 坐标引用（实测：单调性/集合/正弦函数 3 例高质量作答）
 - [x] S8 越界题走降级分支（实测「不定积分」→ 低置信降级，不硬编）
@@ -151,7 +159,7 @@
 | 能力 | 落点 | 说明 |
 |---|---|---|
 | 片段体检 | `src/edu_agent/figdetect.py` | 给每个片段判 `has_figure` / `fig_nums`(图号) / `fidelity`(文字层是否损坏)；口径与入库回填一致 |
-| 元数据回填 | `scripts/backfill_chunk_meta.py` | 给向量库 151 个片段补上述三键（跑前自动整库备份到 `data/backup/`）。实测：有图号 64、低保真 33 |
+| 元数据回填 | `scripts/backfill_chunk_meta.py` | 兼容旧库的回填工具；新入库链路已原生写入图片与保真度元数据。当前 296 块中含图 209、低保真 42 |
 | 生成侧硬约束 | `src/edu_agent/prompts.py`（FIGURE_GUARD）+ `src/edu_agent/generate.py`（`_snippet_block()`） | 含图片段加 ⚠ 标注并附硬指令：片段文字里没出现的公式/符号**一律当"书上只有图"**，禁止写出/推导/用常识补全，只给页码+图号并提示看原页。非流式与流式两条链路共用同一函数，防口径漂移 |
 | 原页图接口 | `GET /api/page_image?page=N[&source=&dpi=]`（`src/edu_agent/page_image.py`） | 印刷页 → 物理页 `+6`；pymupdf 渲染 150dpi PNG，缓存 `data/page_cache/`；越界 404、非法 422 |
 | 看原页浏览器（前端） | `static/index.html` | 正文绿色引用 pill 与侧栏引用卡都可点开原书页：上一页/下一页、跳任意页、本节首/本章首、回到引用页、键盘 ←→、Esc |
@@ -182,7 +190,7 @@
 - **Agent B CLI（出教案）**：`.venv/Scripts/python.exe src/edu_agent/planner.py "函数的单调性" "重点班45分钟"`
 - **编排层 CLI**：`.venv/Scripts/python.exe src/edu_agent/graph.py "帮我写一份函数的单调性的教案"`（普通问自动走 A）
 - **总指挥 CLI**：`.venv/Scripts/python.exe src/edu_agent/supervisor.py "帮我备一节 对数函数 的教案"`
-- **单测**：`.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"`（当前 **298 例全绿**；296 通过、2 例真实 WPS 联调按环境跳过）
+- **单测**：`.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"`（当前 **302 例全绿**；300 通过、2 例真实 WPS 联调按环境跳过）
 - 停止：`deploy/stop_ui.cmd`（查杀 5174）或 `netstat -ano | findstr :5174` 后 Stop-Process
 - 注意：会话数据现在落 `data/edu_sessions.db`（SQLite），重启不丢；想整体搬数据根设 `EDU_DATA_DIR` 即可
 - 已知：个别题端到端偶发 60~113s（DeepSeek 波动），演示选已验证的快题；越界题自动降级

@@ -1,0 +1,90 @@
+{
+ "modes": [
+  {
+   "id": "pyramid",
+   "skeleton": "Conclusion first; structured arguments; data contextualized with supported comparisons where useful",
+   "context": "Decision support, analysis, strategy, board / exec reports",
+   "rules": {
+    "1. Narrative skeleton": "**Conclusion first**: the page title *is* the conclusion, not a label. The body develops the supporting arguments beneath it.\n\nSCQA opening, pyramid body:\n\n| Stage | Role | Where |\n|---|---|---|\n| Situation | establish shared context | opening pages |\n| Complication | the tension / problem | early pages |\n| Question | the implicit question to resolve | transition |\n| Answer | the recommendation, developed through structured evidence; use MECE when the source supports it | body pages |\n\n**Assertion titles** — write the finding, not the topic:\n\n| Weak (topic) | Strong (assertion) |\n|---|---|\n| \"Market Overview\" | \"Domestic market grows 23% YoY, outpacing the global average\" |\n| \"Challenges\" | \"Three structural contradictions block scaled deployment\" |\n| \"Our Solution\" | \"Three-phase path: Focus, Expand, Scale\" |\n\n**Contextualize data** — pair a figure with a supported comparison when that comparison changes the decision; otherwise state its direct relevance or implication. Never invent a prior period, benchmark, competitor, target, or rank to satisfy the mode.\n\n**Structured decomposition** — when decomposing drivers, segments, or options, make branches meaningfully distinct and cover what the decision needs. Preserve real overlap or an acknowledged gap instead of fabricating a perfect MECE partition.\n\n---",
+    "2. Page-structure tendencies": "- Title (the conclusion) → concise takeaway → supporting evidence beneath.\n- Each body page centers on a decision-relevant question and states a clear conclusion; supporting subquestions may share the page when their relationship matters.\n- Decomposition pages (driver tree / MECE breakdown / 2×2 matrix) carry the analytical load.\n- Source attribution on every data page.\n\n> Page structure is a tendency, not a coordinate template. Compose qualitative card/tree/KPI/2×2 topology at runtime through [`executor-structure.md`](../executor-structure.md); value-driven charts and cell grids may use their catalogs. This mode decides *what argument each page makes*, not pixel positions.\n\n---",
+    "3. Speaker-notes register": "Conclusion-driven: open each page's notes with the takeaway, then support it with a compact set of facts in flowing prose. Composed, authoritative. Pair a number with a supported comparison when it materially clarifies the takeaway (\"23% — nearly double the industry's 12%\"); otherwise explain its implication directly. Spell percentages as words where the spoken form reads more naturally. (Common framework: [`executor-notes.md`](../executor-notes.md) §1.)\n\n---",
+    "4. Page skeleton example": "```\nTitle:    \"Retention, not acquisition, now drives growth\"   ← the conclusion\nTakeaway: one line — \"CAC up 40% YoY, yet repurchase lifted 60% of revenue growth\"\nBody:     supporting arguments with contextualized data\nFooter:   Source: … | page #\n```"
+   },
+   "must": [
+    "Title (the conclusion) → concise takeaway → supporting evidence beneath.",
+    "Each body page centers on a decision-relevant question and states a clear conclusion; supporting subquestions may share the page when their relationship matters.",
+    "Decomposition pages (driver tree / MECE breakdown / 2×2 matrix) carry the analytical load.",
+    "Source attribution on every data page."
+   ],
+   "source": "ppt-master references/modes/pyramid.md"
+  },
+  {
+   "id": "narrative",
+   "skeleton": "Story arc — situation → tension → resolution; suspense and turns",
+   "context": "Pitches, case studies, brand journeys, fundraising",
+   "rules": {
+    "1. Narrative skeleton": "**Arc across the deck and within suitable beats**: scenario → conflict → resolution. Set a stake, raise tension, resolve it, and bridge to the next beat without forcing the complete arc onto every page.\n\n**Suspense and payoff**: pose a question at the right moment and answer it at the beat where the evidence lands. Let curiosity pull the audience forward.\n\n**Human framing**: anchor abstract points in a protagonist, a moment, a concrete stake (\"a team that shipped in two weeks instead of three months\").\n\n**Narrative movement**: use a reframe, reveal, or change in stakes where the material supports it. The sequence should move rather than merely relabel flat exposition.\n\nTitles read as beats that advance the arc (\"Then the numbers stopped adding up\"), not as labels.\n\n---",
+    "2. Page-structure tendencies": "- Vary dense and breathing beats according to tension, payoff, and audience fatigue; do not enforce a mechanical alternation.\n- Visual weight guides the eye through each beat (hero image, one focal number, a pull quote).\n- Continuity within a chapter, variation between chapters.\n\n> Structure serves the arc, not a grid. Compose qualitative topology at runtime through [`executor-structure.md`](../executor-structure.md); Chart/Table references remain in their catalogs, and general composition in [`executor-base.md`](../executor-base.md). This mode decides *the emotional beat of each page*.\n\n---",
+    "3. Speaker-notes register": "Conversational narration — like talking with the audience, not reading a report. Use scenario-conflict-resolution within a page when that beat benefits from it. Metaphors make the abstract tangible (\"like adding a turbocharger\"). Plain rhetorical questions create suspense; bridge each page from the prior one. Conversational data (\"nearly a third\", \"more than doubled\"). (Common framework: [`executor-notes.md`](../executor-notes.md) §1.)\n\n---",
+    "4. Page skeleton example": "```\nPage 3 (turn):   full-bleed image + one line — \"Then deployment broke.\"\nPage 4 (payoff): the reframe — what changed, one focal number\nNotes:           \"You might be wondering where the opportunity is…\" (bridges, builds)\n```"
+   },
+   "must": [
+    "Vary dense and breathing beats according to tension, payoff, and audience fatigue; do not enforce a mechanical alternation.",
+    "Visual weight guides the eye through each beat (hero image, one focal number, a pull quote).",
+    "Continuity within a chapter, variation between chapters."
+   ],
+   "source": "ppt-master references/modes/narrative.md"
+  },
+  {
+   "id": "instructional",
+   "skeleton": "Concept decomposition; step-by-step; parallel exposition",
+   "context": "Training, tutorials, explainers, knowledge sharing",
+   "rules": {
+    "1. Narrative skeleton": "**Decompose, then sequence**: break the subject into parts and present them in a deliberate order (simple → complex, prerequisite → dependent, overview → detail).\n\n**Focused learning unit**: center each page on a coherent teaching step; related concepts may share a page when their relationship is what the learner needs to understand.\n\n**Parallel exposition**: sibling concepts get parallel structure — same shape, same depth — so the audience can compare and map them.\n\n**Ground abstraction**: use a concrete example or analogy when it clarifies the principle; sequence example and explanation according to the learner's prerequisite needs.\n\n**Signpost**: orient the learner — what we covered, what comes next.\n\nTitles state what the page teaches (\"How attention weights are computed\") — clear over clever.\n\n---",
+    "2. Page-structure tendencies": "- Numbered steps / ordered flows for processes; parallel cards for sibling concepts.\n- Diagrams that build incrementally; annotate the part currently being explained.\n- Concrete examples anchor abstract points when they improve transfer or comprehension.\n\n> Compose step, flow, and diagram topology at runtime through [`executor-structure.md`](../executor-structure.md); value-driven teaching charts remain in [`templates/charts/`](../../templates/charts/). This mode decides *the learning order and granularity*.\n\n---",
+    "3. Speaker-notes register": "Patient, explanatory. Define before using; analogy then principle. Anticipate the learner's question and answer it. Steady pace; signpost transitions (\"now that we have X, we can ask Y\"). Conversational data. (Common framework: [`executor-notes.md`](../executor-notes.md) §1.)\n\n---",
+    "4. Page skeleton example": "```\nTitle:  \"Step 2 — Scoring each token against the query\"\nBody:   concrete example (3 tokens) → the rule it illustrates → one diagram\nNotes:  \"Remember the query from the last page? Here's what it does next…\"\n```"
+   },
+   "must": [
+    "Numbered steps / ordered flows for processes; parallel cards for sibling concepts.",
+    "Diagrams that build incrementally; annotate the part currently being explained.",
+    "Concrete examples anchor abstract points when they improve transfer or comprehension."
+   ],
+   "source": "ppt-master references/modes/instructional.md"
+  },
+  {
+   "id": "showcase",
+   "skeleton": "Visual-led impact; big imagery / numbers; emotional rhythm",
+   "context": "Launches, brand reveals, event / promo decks",
+   "rules": {
+    "1. Narrative skeleton": "**Image / number leads, words support**: establish a dominant visual hierarchy through a hero image, large number, or short phrase; supporting elements may share the page without competing for focus.\n\n**Emotional rhythm**: build and release — a run of bold pages punctuated by a quiet one. Pace for feeling, not density.\n\n**Primary idea stated big**: center each page on a clear takeaway expressed at scale; retain supporting context when the audience needs it to understand or trust that takeaway.\n\n**Reveal structure**: hold back, then reveal (the product, the result, the tagline) for maximum effect.\n\nTitles are short and evocative — a phrase, not a sentence.\n\n---",
+    "2. Page-structure tendencies": "- Full-bleed imagery with overlay text; a focal hero number or phrase.\n- Generous negative space around the primary visual relationship.\n- Bold use of the deck's theme color for atmosphere (cover / chapter pages).\n\n> Hero / full-bleed / breathing-page geometry lives in [`executor-base.md`](../executor-base.md) and the compact [`image-layout-patterns.md`](../image-layout-patterns.md) vocabulary loaded by the image branch; this mode decides *what each page makes primary*.\n\n---",
+    "3. Speaker-notes register": "Energetic, evocative — sets mood and builds anticipation. Short, punchy sentences. Lets the visual do the work and narrates the feeling around it. (Common framework: [`executor-notes.md`](../executor-notes.md) §1.)\n\n---",
+    "4. Page skeleton example": "```\nPage (reveal): full-bleed product image + one line — \"Meet the new standard.\"\nPage (proof):  single huge number \"10×\" + one phrase, vast whitespace\nNotes:         \"Imagine cutting that to seconds. That's what this does.\"\n```"
+   },
+   "must": [
+    "Full-bleed imagery with overlay text; a focal hero number or phrase.",
+    "Generous negative space around the primary visual relationship.",
+    "Bold use of the deck's theme color for atmosphere (cover / chapter pages)."
+   ],
+   "source": "ppt-master references/modes/showcase.md"
+  },
+  {
+   "id": "briefing",
+   "skeleton": "Neutral, complete, scannable; topic titles, even weight, no thesis",
+   "context": "Status updates, reference decks, catalogs, meeting packs, FAQs",
+   "rules": {
+    "1. Narrative skeleton": "**No thesis, by design**: the deck informs rather than argues. Don't manufacture a conclusion-first claim (that's `pyramid`) or a turn (that's `narrative`) where the material is simply \"here is what's true\".\n\n**Topic titles, not assertions**: the page title names its subject plainly (\"Q3 headcount by team\", \"Supported file formats\") — clarity for lookup beats a persuasive finding. This is the deliberate inverse of `pyramid`'s assertion titles.\n\n**`core_message` states coverage, not a claim**: when filling `design_spec.md §IX`, write each page's `core_message` as what the page lays out (\"Q3 headcount across teams\"), not what it proves (\"headcount is concentrating in engineering\"). The §IX field reads as an assertion under the other modes; under `briefing` it names scope.\n\n**Complete over selective**: include the full reference set the audience needs to scan, not only the points that support a case. Coverage is the value here.\n\n**Parallel, even treatment**: sibling items get the same shape and weight so they can be compared and located quickly; nothing is dramatized over its peers unless it genuinely differs.\n\n**Sectioned for navigation**: group related facts, label the groups, keep order predictable (chronological / categorical / alphabetical) so the reader can jump to what they need.\n\n---",
+    "2. Page-structure tendencies": "- Tables, definition lists, status cards, reference grids, dashboards — scannable structures over hero compositions.\n- Even hierarchy within a section; consistent layout across sibling pages so the eye always knows where to look.\n- Where one figure genuinely matters (a total, a status flag, an exception), surface it — but don't invent a punchline the content doesn't have.\n\n> Cell-grid tables and value-driven marks may use [`templates/tables/`](../../templates/tables/) and [`templates/charts/`](../../templates/charts/); qualitative topology is composed at runtime through [`executor-structure.md`](../executor-structure.md). A dashboard may combine them. This mode decides *that the page informs completely and neutrally*, not pixel positions.",
+    "3. Speaker-notes register": "Even, factual, plain. State what the page shows without building tension or pressing a \"so what\". No rhetorical questions, no suspense — a clear read-out the listener can follow or skim. Numbers stated plainly. (Common framework: [`executor-notes.md`](../executor-notes.md) §1.)",
+    "4. Page skeleton example": "```\nTitle: \"Q3 deliverables by workstream\"        ← a topic label, not a claim\nBody:  status table — workstream | owner | status | due — rows at equal weight\nNotes: \"Three workstreams are on track; payments is at risk on the integration.\" (plain read-out)\n```"
+   },
+   "must": [
+    "Tables, definition lists, status cards, reference grids, dashboards — scannable structures over hero compositions.",
+    "Even hierarchy within a section; consistent layout across sibling pages so the eye always knows where to look.",
+    "Where one figure genuinely matters (a total, a status flag, an exception), surface it — but don't invent a punchline the content doesn't have."
+   ],
+   "source": "ppt-master references/modes/briefing.md"
+  }
+ ]
+}

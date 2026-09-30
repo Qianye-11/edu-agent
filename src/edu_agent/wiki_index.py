@@ -145,8 +145,10 @@ def sync(rebuild: bool = False, quiet: bool = False) -> dict:
         vecs = embed([c["text"] for c in batch])
         if len(vecs) != len(batch):
             raise RuntimeError("embedding 数量不匹配（ollama 未启动？）")
-        col.add(ids=[c["id"] for c in batch], documents=[c["text"] for c in batch],
-                embeddings=vecs, metadatas=[c["meta"] for c in batch])
+        # todo 同时包含新增块和“同 ID、正文已变化”的块；add 不会可靠覆盖旧 ID，
+        # 必须使用 upsert 才能保证 Markdown 修改后向量与正文同步更新。
+        col.upsert(ids=[c["id"] for c in batch], documents=[c["text"] for c in batch],
+                   embeddings=vecs, metadatas=[c["meta"] for c in batch])
         added += len(batch)
     r = {"pages": len(files), "chunks_total": len(all_chunks), "added": added,
          "removed": len(removed), "collection_count": col.count()}

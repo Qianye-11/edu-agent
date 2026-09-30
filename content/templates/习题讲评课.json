@@ -1,0 +1,17 @@
+{
+  "spec_version": 2,
+  "template_id": "习题讲评课",
+  "name": "习题讲评课模板",
+  "source": "builtin-preset",
+  "blocks": [
+    {"id": "ex_basic", "kind": "section", "level": 1, "title": "讲评主题与目标", "elements": [{"id": "ex_basic_p", "type": "para", "text": "讲评范围：\n核心目标：\n课时：", "align": "", "runs": []}]},
+    {"id": "ex_data", "kind": "section", "level": 1, "title": "答题数据与学情", "elements": [{"id": "ex_data_table", "type": "table", "header": true, "cells": [[{"text": "题号/知识点", "b": true, "align": "center"}, {"text": "正确率", "b": true, "align": "center"}, {"text": "主要问题", "b": true, "align": "center"}], [{"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}]]}]},
+    {"id": "ex_causes", "kind": "section", "level": 1, "title": "错因分类", "elements": [{"id": "ex_causes_p", "type": "para", "text": "概念理解：\n方法选择：\n运算表达：\n审题习惯：", "align": "", "runs": []}]},
+    {"id": "ex_typical", "kind": "section", "level": 1, "title": "典型错题讲评", "elements": [{"id": "ex_typical_table", "type": "table", "header": true, "cells": [[{"text": "原题/错解", "b": true, "align": "center"}, {"text": "纠错过程", "b": true, "align": "center"}, {"text": "方法提炼", "b": true, "align": "center"}], [{"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}]]}]},
+    {"id": "ex_multi", "kind": "section", "level": 1, "title": "一题多解与通法", "elements": [{"id": "ex_multi_p", "type": "para", "text": "解法比较：\n通用策略：\n适用边界：", "align": "", "runs": []}]},
+    {"id": "ex_variant", "kind": "section", "level": 1, "title": "变式训练", "elements": [{"id": "ex_variant_p", "type": "para", "text": "同类巩固：\n条件变化：\n综合迁移：", "align": "", "runs": []}]},
+    {"id": "ex_check", "kind": "section", "level": 1, "title": "订正清单", "elements": [{"id": "ex_check_table", "type": "table", "header": true, "cells": [[{"text": "学生任务", "b": true, "align": "center"}, {"text": "完成证据", "b": true, "align": "center"}, {"text": "教师复核", "b": true, "align": "center"}], [{"text": "独立订正并说明错因", "b": false, "align": ""}, {"text": "订正记录", "b": false, "align": ""}, {"text": "待填写", "b": false, "align": ""}]]}]},
+    {"id": "ex_homework", "kind": "section", "level": 1, "title": "跟踪作业", "elements": [{"id": "ex_homework_p", "type": "para", "text": "必做：\n选做：\n下次跟踪方式：", "align": "", "runs": []}]},
+    {"id": "ex_reflect", "kind": "section", "level": 1, "title": "教学反思", "elements": [{"id": "ex_reflect_p", "type": "para", "text": "课后填写。", "align": "", "runs": []}]}
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "spec_version": 2,
+  "template_id": "探究式课堂",
+  "name": "探究式课堂模板",
+  "source": "builtin-preset",
+  "blocks": [
+    {
+      "id": "inq_basic",
+      "kind": "section",
+      "level": 1,
+      "title": "教学基本信息",
+      "elements": [
+        {
+          "id": "inq_basic_table",
+          "type": "table",
+          "header": false,
+          "cells": [
+            [{"text": "课题", "b": true, "align": "center"}, {"text": "待填写", "b": false, "align": ""}, {"text": "课时", "b": true, "align": "center"}, {"text": "1课时", "b": false, "align": ""}],
+            [{"text": "授课班级", "b": true, "align": "center"}, {"text": "待填写", "b": false, "align": ""}, {"text": "授课教师", "b": true, "align": "center"}, {"text": "待填写", "b": false, "align": ""}]
+          ]
+        }
+      ]
+    },
+    {"id": "inq_goal", "kind": "section", "level": 1, "title": "教学目标", "elements": [{"id": "inq_goal_p", "type": "para", "text": "围绕核心素养描述可观察、可评价的学习结果。", "align": "", "runs": []}]},
+    {"id": "inq_problem", "kind": "section", "level": 1, "title": "核心问题与学情分析", "elements": [{"id": "inq_problem_p", "type": "para", "text": "学生已有基础：\n核心问题：\n可能困难：", "align": "", "runs": []}]},
+    {"id": "inq_context", "kind": "section", "level": 1, "title": "情境导入", "elements": [{"id": "inq_context_p", "type": "para", "text": "创设真实或数学情境，提出驱动性问题。", "align": "", "runs": []}]},
+    {"id": "inq_explore", "kind": "section", "level": 1, "title": "自主探究", "elements": [{"id": "inq_explore_p", "type": "para", "text": "探究任务：\n学习支架：\n预期发现：", "align": "", "runs": []}]},
+    {"id": "inq_coop", "kind": "section", "level": 1, "title": "合作交流", "elements": [{"id": "inq_coop_p", "type": "para", "text": "组织方式：\n交流问题：\n教师追问：", "align": "", "runs": []}]},
+    {"id": "inq_construct", "kind": "section", "level": 1, "title": "归纳建构", "elements": [{"id": "inq_construct_p", "type": "para", "text": "引导学生概括结论、辨析条件并建立知识联系。", "align": "", "runs": []}]},
+    {"id": "inq_transfer", "kind": "section", "level": 1, "title": "迁移练习", "elements": [{"id": "inq_transfer_p", "type": "para", "text": "基础应用：\n变式提升：\n即时反馈：", "align": "", "runs": []}]},
+    {"id": "inq_eval", "kind": "section", "level": 1, "title": "评价与作业", "elements": [{"id": "inq_eval_p", "type": "para", "text": "课堂评价证据：\n分层作业：", "align": "", "runs": []}]},
+    {"id": "inq_reflect", "kind": "section", "level": 1, "title": "教学反思", "elements": [{"id": "inq_reflect_p", "type": "para", "text": "课后填写。", "align": "", "runs": []}]}
+  ]
+}

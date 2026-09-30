@@ -1,0 +1,19 @@
+{
+  "id": "builtin-inquiry",
+  "title": "探究式课堂规范模板",
+  "subject": "通用",
+  "grade": "中学",
+  "lesson_type": "探究课",
+  "category": "规范模板",
+  "tags": [
+    "问题驱动",
+    "学生活动",
+    "过程评价"
+  ],
+  "source": "built_in",
+  "locked": true,
+  "quality": "规范",
+  "html": "<h1>探究式课堂规范模板</h1><table><tbody><tr><td class=\"lp-label\">授课教师</td><td data-lp=\"teacher\"></td><td class=\"lp-label\">授课班级</td><td data-lp=\"class\"></td><td class=\"lp-label\">授课时间</td><td data-lp=\"time\"></td></tr><tr><td class=\"lp-label\">科目</td><td data-lp=\"subject\"></td><td class=\"lp-label\">授课内容</td><td colspan=\"3\" data-lp=\"title\">探究式课堂规范模板</td></tr><tr><td class=\"lp-label\">课程分析</td><td colspan=\"5\" data-lp=\"analysis\">说明教材位置、内容结构、学情基础与学习障碍。</td></tr><tr><td class=\"lp-label\">教学目标</td><td colspan=\"5\"><p><b>知识与技能：</b><span data-lp=\"knowledge\">明确可观察、可评价的学习结果。</span></p><p><b>过程与方法：</b><span data-lp=\"method\">写清学生经历的学习过程与方法。</span></p><p><b>情感态度与价值观：</b><span data-lp=\"value\">体现学科价值、态度与责任。</span></p></td></tr><tr><td class=\"lp-label\">重点难点</td><td colspan=\"5\" data-lp=\"focus\">重点对应核心目标；难点对应学生认知障碍。</td></tr><tr><td class=\"lp-label\">课前准备</td><td colspan=\"5\" data-lp=\"prepare\">课件、教具、学具与学习资源。</td></tr><tr><td class=\"lp-label lp-process-label\">教<br>学<br>过<br>程</td><td colspan=\"5\" data-lp=\"process\"><p>创设情境与提出问题；自主探究与合作交流；展示论证与追问；迁移应用与评价反思。</p><p>每个环节补充：教师活动、学生任务、设计意图、评价方式与时间。</p></td></tr><tr><td class=\"lp-label\">板书与作业</td><td colspan=\"5\" data-lp=\"homework\">板书呈现知识主线；作业体现基础、提升与拓展分层。</td></tr><tr><td class=\"lp-label\">课后反思</td><td colspan=\"5\" data-lp=\"reflection\">记录目标达成、课堂证据、问题与改进。</td></tr></tbody></table>",
+  "created_at": "2026-09-27T15:45:53+08:00",
+  "updated_at": "2026-09-27T15:45:53+08:00"
+}

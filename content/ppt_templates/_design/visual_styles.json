@@ -1,0 +1,808 @@
+{
+ "styles": [
+  {
+   "id": "swiss-minimal",
+   "group": "Corporate / product",
+   "character": "Grid-locked, sharp, aggressive whitespace, near-zero ornament",
+   "paired_rendering": "minimalist-swiss",
+   "illustration": "sparse",
+   "rules": {
+    "shape": "- Shape language: favor sharp, exact native contours, true circles, single-weight rules, and a small number of large geometric planes. Use square corners by default; any rounding stays barely perceptible. The full native vocabulary remains eligible when the selected contour stays purposeful, exact, and sparse.\n- Composition geometry: one oversized geometric plane — a full-height color column, a giant disc, a heavy bar — zoning the page; an asymmetric split with content flush to one axis; a hero numeral at architectural scale; a single diagonal rule or type line as the deliberate grid break. Few, large, exact — geometry at poster scale is Swiss, clutter is not.\n- Decoration: omit ornament without an information or composition job. No ornamental gradients, decorative blocks, or badges — structure carries the page. Content-bearing imagery, illustration, decorative lettering, and native geometry remain eligible when they strengthen that structure.\n- Whitespace: vast and deliberate; negative space carries as much weight as content. Wide margins, generous gutters.\n- Layout snaps to a visible or implied modular grid; rigorous column / row alignment.",
+    "typography": "- Sans-serif, single family; regular/bold contrast. Exact Light/Black requires a user-confirmed installed face. Tight, rigorous spacing.\n- Strong size hierarchy — large headlines, small precise body. Left-aligned, flush.\n\n> Family is chosen at confirmation `g` by subject fit — this style asks for a grotesque / neo-grotesque *character*, not a specific font. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- A dominant color may define a deliberate grid zone while the field stays near-white; keep accent color localized enough that it reads as punctuation rather than decoration.\n- Color as conceptual zone, not decoration. No gradients.\n\n> HEX values come from confirmation `e`; this style only governs how sparingly they are applied — it names no colors.",
+    "texture": "- Strictly flat. No shadows, no depth, no material — 2D conceptual planes only.",
+    "paired": "`minimalist-swiss` — one coherence candidate for AI images that shares the grid-austere aesthetic; the resolved rendering decision owns the choice.",
+    "illustration_propensity": "**sparse** — whitespace and grid lead. Use illustration selectively when it sharpens hierarchy or creates a deliberate counterpoint without eroding negative space; scale and placement follow the page composition. An explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: favor sharp, exact native contours, true circles, single-weight rules, and a small number of large geometric planes. Use square corners by default; any rounding stays barely perceptible. The full native vocabulary remains eligible when the selected contour stays purposeful, exact, and sparse.",
+    "Composition geometry: one oversized geometric plane — a full-height color column, a giant disc, a heavy bar — zoning the page; an asymmetric split with content flush to one axis; a hero numeral at architectural scale; a single diagonal rule or type line as the deliberate grid break. Few, large, exact — geometry at poster scale is Swiss, clutter is not.",
+    "Decoration: omit ornament without an information or composition job. No ornamental gradients, decorative blocks, or badges — structure carries the page. Content-bearing imagery, illustration, decorative lettering, and native geometry remain eligible when they strengthen that structure.",
+    "Whitespace: vast and deliberate; negative space carries as much weight as content. Wide margins, generous gutters."
+   ],
+   "defaults": {
+    "palette": {
+     "bg": "#FAFAF8",
+     "text": "#0A0A0A",
+     "accent": "#002FA7",
+     "sub": "#737373",
+     "line": "#D4D4D2",
+     "soft": "#F0F0EE"
+    },
+    "geometry": {
+     "radius": 0,
+     "shadow": false,
+     "gradient": false,
+     "line_w": 1
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": true,
+   "note": "照 Swiss 硬规则：直角、纯色、不透明、单一高饱和锚点；灰阶跨主题统一（guizang themes-swiss 实测值）",
+   "source": "ppt-master references/visual-styles/swiss-minimal.md"
+  },
+  {
+   "id": "soft-rounded",
+   "group": "Corporate / product",
+   "character": "Rounded cards, gentle elevation, approachable",
+   "paired_rendering": "flat",
+   "illustration": "supportive",
+   "rules": {
+    "shape": "- Shape language: visibly rounded rectangles, pill tags, and soft containers. Keep the radius family coherent deck-wide.\n- Composition geometry: a large soft disc or blob bleeding off one edge as the color field; a pill chain or exact native `arc` / `blockArc` preset replacing the boxed step row; one hero panel overlapping a full-width tinted band; an oversized rounded numeral behind the point. Use a custom arc path only when the presets cannot faithfully express the intended contour. Cards are the container language, not the composition — vary the stage they sit on.\n- Decoration: cards as the primary container; icon accents; numbered circles; gentle dividers. Moderate, in service of clarity.\n- Whitespace: comfortable padding inside cards; even gutters; balanced rather than austere.",
+    "typography": "- Friendly sans (humanist or geometric); medium weights; clear but not severe hierarchy.\n- Rounded, open letterforms suit; avoid condensed / industrial faces.\n\n> Families are chosen at confirmation `g`; this style asks for an approachable sans *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Theme color used confidently on covers / chapter backgrounds; same-hue tints for card backings; accent for key figures.\n- Warmer, more generous color use than swiss / editorial. Assign hues by semantic role and visual hierarchy; intentional multi-hue compositions remain valid.\n\n> HEX values come from confirmation `e`; this style governs confident, friendly color use without naming colors or imposing a ratio.",
+    "texture": "- Gentle elevation: soft shadows on floating cards, subtle tints, and optional same-hue gradients. Keep the elevation hierarchy shallow and coherent; peer-grid cards stay flat.",
+    "paired": "`flat` — clean modern blocks for AI images. (For frosted-glass depth, see the dedicated [`glassmorphism`](./glassmorphism.md) style.)",
+    "illustration_propensity": "**supportive** — when illustration is selected, friendly rounded elements can carry anchors, support, rhythm, or warmth across the page system. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: visibly rounded rectangles, pill tags, and soft containers. Keep the radius family coherent deck-wide.",
+    "Composition geometry: a large soft disc or blob bleeding off one edge as the color field; a pill chain or exact native `arc` / `blockArc` preset replacing the boxed step row; one hero panel overlapping a full-width tinted band; an oversized rounded numeral behind the point. Use a custom arc path only when the presets cannot faithfully express the intended contour. Cards are the container language, not the composition — vary the stage they sit on.",
+    "Decoration: cards as the primary container; icon accents; numbered circles; gentle dividers. Moderate, in service of clarity.",
+    "Whitespace: comfortable padding inside cards; even gutters; balanced rather than austere."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 8,
+     "shadow": true,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/soft-rounded.md"
+  },
+  {
+   "id": "glassmorphism",
+   "group": "Corporate / product",
+   "character": "Translucent glass panels, gradient light, floating depth",
+   "paired_rendering": "glassmorphism",
+   "illustration": "sparse",
+   "rules": {
+    "shape": "- Shape language: visibly rounded translucent glass panels (low fill-opacity over the dark field) with bright hairline edges; layered, floating cards that imply blur and frost.\n- Composition geometry: one hero glass panel set off-axis over a radial bloom; overlapping translucent discs building the focal cluster; a large glass ring encircling the key metric; panels stepped in depth to imply sequence; a diagonal light beam crossing the dark field.\n- Decoration: soft radial light blooms in the background; thin luminous edge highlights along panels; restrained — the glass material is the decoration, not added ornament. Realize the radial bloom / glow halo as a `<circle>` / `<ellipse>` with a `<radialGradient>` fill, never a `rect rx=w/2` standing in for it.\n- Whitespace: dark negative space reads as depth; let panels float on it with room to breathe.",
+    "typography": "- Clean modern sans; regular with selective bold; airy. Exact Light/Black requires a user-confirmed installed face. Headlines can carry a luminous gradient on the dark field.\n\n> Families are chosen at confirmation `g`; this style asks for a clean, modern, airy sans *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Dark field; the deck's colors read as luminous gradients flowing across panels and titles, low-opacity glass tints, and a subordinate neon accent. Color behaves like light through glass, not flat fill.\n- Depth and hierarchy come from how brightly the glass glows, not from heavy saturation.\n\n> HEX values come from confirmation `e`; this style only governs the translucent-glass, luminous-gradient discipline — it names no colors.",
+    "texture": "- Depth via translucency, layering, bright edge highlights, and soft background glow — not hard drop shadows. Smooth multi-stop gradients are intrinsic here (the one style where generous gradient use is on-brand); keep them luminous, not muddy.",
+    "paired": "`glassmorphism` — frosted translucent panels / soft-gradient imagery matching the glass surfaces.",
+    "illustration_propensity": "**sparse** — translucent panels, gradient light, and floating depth lead. Use illustration selectively within, behind, beside, or across the glass layers when it improves composition without obscuring their hierarchy. An explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: visibly rounded translucent glass panels (low fill-opacity over the dark field) with bright hairline edges; layered, floating cards that imply blur and frost.",
+    "Composition geometry: one hero glass panel set off-axis over a radial bloom; overlapping translucent discs building the focal cluster; a large glass ring encircling the key metric; panels stepped in depth to imply sequence; a diagonal light beam crossing the dark field.",
+    "Decoration: soft radial light blooms in the background; thin luminous edge highlights along panels; restrained — the glass material is the decoration, not added ornament. Realize the radial bloom / glow halo as a `<circle>` / `<ellipse>` with a `<radialGradient>` fill, never a `rect rx=w/2` standing in for it.",
+    "Whitespace: dark negative space reads as depth; let panels float on it with room to breathe."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 10,
+     "shadow": true,
+     "gradient": true
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/glassmorphism.md"
+  },
+  {
+   "id": "dark-tech",
+   "group": "Corporate / product",
+   "character": "Dark canvas, glow accents, geometric precision",
+   "paired_rendering": "digital-dashboard",
+   "illustration": "sparse",
+   "rules": {
+    "shape": "- Shape language: crisp geometry; thin glowing rules; hexagon / circuit / grid motifs used sparingly. Corners may be sharp or only slightly rounded.\n- Composition geometry: a glowing diagonal circuit trace splitting the field; concentric orbit rings staging a central metric; a hexagon node cluster mapping components; an oversized low-opacity numeral or glyph floating behind the content layer; thin bracket frames zoning the page.\n- Decoration: glow accents, fine grid backgrounds, monospace labels, node / connector lines. Restrained — precision over clutter.\n- Whitespace: dark negative space reads as depth; let elements float on it.",
+    "typography": "- Clean sans for body; monospace for labels / figures / code cues. Wide tracking on small-caps labels.\n- High-contrast hierarchy against the dark field.\n\n> Families are chosen at confirmation `g`; this style asks for a clean sans + monospace pairing. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Dark background; a restrained set of luminous accents carries focus through glowing figures or active nodes while everything else stays low-key.\n- The accent does the work of attention through localized, high-contrast use rather than a fixed point count.\n\n> HEX values come from confirmation `e`; this style only governs the dark-field, luminous-accent discipline — it names no colors.",
+    "texture": "- Depth via glow and layering on dark, not drop shadows. Outer glow / light strokes mark elevation; gradients stay same-hue and subtle.",
+    "paired": "`digital-dashboard` or `blueprint` — polished UI / technical-schematic look for AI images.",
+    "illustration_propensity": "**sparse** — glow accents and geometric precision lead. Use illustration selectively as a focal or supporting layer that belongs to the dark-tech system rather than generic clip-art; form and scale follow the page job. An explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: crisp geometry; thin glowing rules; hexagon / circuit / grid motifs used sparingly. Corners may be sharp or only slightly rounded.",
+    "Composition geometry: a glowing diagonal circuit trace splitting the field; concentric orbit rings staging a central metric; a hexagon node cluster mapping components; an oversized low-opacity numeral or glyph floating behind the content layer; thin bracket frames zoning the page.",
+    "Decoration: glow accents, fine grid backgrounds, monospace labels, node / connector lines. Restrained — precision over clutter.",
+    "Whitespace: dark negative space reads as depth; let elements float on it."
+   ],
+   "defaults": {
+    "palette": {
+     "bg": "#0F1212",
+     "text": "#F2F2F0",
+     "accent": "#4CC2FF",
+     "sub": "#9AA0A6",
+     "line": "#2A2F33",
+     "soft": "#171B1E"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 2,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/dark-tech.md"
+  },
+  {
+   "id": "blueprint",
+   "group": "Corporate / product",
+   "character": "Schematic line work on dark paper, isometric, annotated",
+   "paired_rendering": "blueprint",
+   "illustration": "supportive",
+   "rules": {
+    "shape": "- Shape language: thin single-weight line frames (no heavy fills); components drawn as outlined geometry; optional isometric / 3D-axonometric projection for structures. Slight or zero corner rounding.\n- Composition geometry: let the schematic be the layout — a full-page annotated drawing as the skeleton with content hung on leader lines; a circular detail blow-up linked to its source; dimension-line brackets framing a hero figure; an isometric exploded stack for structure or sequence; a drawing-sheet title block anchoring one corner.\n- Decoration: the engineering-drawing vocabulary — dimension lines, leader arrows, component codes, coordinate labels, a faint gridline backdrop under everything. Annotation *is* the decoration.\n- Whitespace: the grid breathes through; let line work float on the dark field with measured spacing.",
+    "typography": "- Clean sans for labels and body; monospace for every component name / code / coordinate — mirroring how real technical docs read.\n- Small, precise annotation type; wide tracking on coordinate / dimension labels. Restraint over emphasis.\n\n> Families are chosen at confirmation `g`; this style asks for a clean sans + monospace pairing. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Dark paper field; a single line-color carries all the schematic line work (frames, connectors, edges); one spot accent marks the current state / key path / callout — the classic engineering-drawing convention of one highlight color.\n- Everything else stays low-key line work. The accent appears at few points, high contrast.\n\n> HEX values come from confirmation `e`; this style only governs the line-vs-accent discipline — it names no colors.",
+    "texture": "- Flat line work, not material elevation. Depth reads from isometric projection and layered line weights, not shadows. Optional subtle corner vignette / accent glow on the dark paper — keep it faint.",
+    "paired": "`blueprint` — one coherence candidate for AI imagery that shares the schematic line-drawing aesthetic; the resolved rendering decision owns the choice.",
+    "illustration_propensity": "**supportive** — when illustration is selected, its natural language is schematic line-work, annotated marks, and blueprint-aligned transparent elements, whether authored in SVG or generated and sliced. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: thin single-weight line frames (no heavy fills); components drawn as outlined geometry; optional isometric / 3D-axonometric projection for structures. Slight or zero corner rounding.",
+    "Composition geometry: let the schematic be the layout — a full-page annotated drawing as the skeleton with content hung on leader lines; a circular detail blow-up linked to its source; dimension-line brackets framing a hero figure; an isometric exploded stack for structure or sequence; a drawing-sheet title block anchoring one corner.",
+    "Decoration: the engineering-drawing vocabulary — dimension lines, leader arrows, component codes, coordinate labels, a faint gridline backdrop under everything. Annotation *is* the decoration.",
+    "Whitespace: the grid breathes through; let line work float on the dark field with measured spacing."
+   ],
+   "defaults": {
+    "palette": {
+     "bg": "#0F1212",
+     "text": "#F2F2F0",
+     "accent": "#4CC2FF",
+     "sub": "#9AA0A6",
+     "line": "#2A2F33",
+     "soft": "#171B1E"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/blueprint.md"
+  },
+  {
+   "id": "editorial",
+   "group": "Editorial / publication",
+   "character": "Magazine hierarchy, rules & columns, serif/sans interplay",
+   "paired_rendering": "editorial",
+   "illustration": "supportive",
+   "rules": {
+    "shape": "- Shape language: a rectilinear editorial scaffold favors thin rules and column dividers over repeated cards. Outlined, compound, or exact native contours remain available when they clarify ownership, contrast, sequence, or emphasis; restraint controls their visual weight, not the contour vocabulary. Rounding, when used, stays visually minimal.\n- Composition geometry: an oversized drop cap or numeral anchoring the page; a pull quote breaking across columns; a full-height vertical rule the content hangs from; an asymmetric column split instead of mechanically even columns; a figure deliberately crossing a column edge.\n- Decoration: hairline rules, kickers / eyebrows, pull quotes, drop-style emphasis — typographic, not graphic. Sparing.\n- Whitespace: structured by columns and baseline rhythm; comfortable but information-rich.\n- Multi-column text flow where content suits.",
+    "typography": "- Serif / sans interplay: a serif for headlines or pull quotes against a clean sans body (or the reverse). Clear role contrast.\n- Strong vertical hierarchy: kicker → headline → standfirst → body. Generous leading.\n\n> Families are chosen at confirmation `g`; this style asks for an editorial serif/sans *pairing*, not specific fonts. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Mostly monochrome text on a light field; a restrained accent may emphasize a rule, highlighted figure, or kicker.\n- Restraint — color marks structure and emphasis, not decoration.\n\n> HEX values come from confirmation `e`; this style only governs the monochrome-with-structural-accent discipline — it names no colors.",
+    "texture": "- Flat to barely-raised. Rules and whitespace separate content, not shadows. Shadow only on a genuine floating element.",
+    "paired": "`editorial` — magazine-style infographic look for AI images.",
+    "illustration_propensity": "**supportive** — when illustration is selected, editorial elements can anchor, frame, pace, or clarify a page while typography and evidence retain authority. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: a rectilinear editorial scaffold favors thin rules and column dividers over repeated cards. Outlined, compound, or exact native contours remain available when they clarify ownership, contrast, sequence, or emphasis; restraint controls their visual weight, not the contour vocabulary. Rounding, when used, stays visually minimal.",
+    "Composition geometry: an oversized drop cap or numeral anchoring the page; a pull quote breaking across columns; a full-height vertical rule the content hangs from; an asymmetric column split instead of mechanically even columns; a figure deliberately crossing a column edge.",
+    "Decoration: hairline rules, kickers / eyebrows, pull quotes, drop-style emphasis — typographic, not graphic. Sparing.",
+    "Whitespace: structured by columns and baseline rhythm; comfortable but information-rich."
+   ],
+   "defaults": {
+    "palette": {
+     "bg": "#FFFFFF",
+     "text": "#1A1A1A",
+     "accent": "#B3261E",
+     "sub": "#6B6B6B",
+     "line": "#DCDCDC",
+     "soft": "#F5F5F5"
+    },
+    "geometry": {
+     "radius": 0,
+     "shadow": false,
+     "gradient": false,
+     "line_w": 1
+    },
+    "density": {
+     "blocks_max": 6,
+     "chars_per_block_max": 26
+    }
+   },
+   "tuned": true,
+   "note": "杂志层级：细分隔线 + 分栏 + 衬线/无衬线对照；允许比默认略密",
+   "source": "ppt-master references/visual-styles/editorial.md"
+  },
+  {
+   "id": "photo-editorial",
+   "group": "Editorial / publication",
+   "character": "Full-bleed photography dominates, text points & captions",
+   "paired_rendering": "corporate-photo",
+   "illustration": "sparse",
+   "rules": {
+    "shape": "- Shape language: large full-bleed / edge-to-edge image fields are the page's spine; text sits in restrained columns, caption blocks, kickers, or overlay headlines. Minimal chrome — the photograph carries the page.\n- Composition geometry: an L-shaped text zone carved out of the full bleed; a headline straddling the photo edge; a diptych / triptych panel split; one floating caption card breaking the image boundary — moves that serve the photograph, never bury it.\n- Decoration: thin rules, section numbering, small figure notes; nothing competes with the image.\n- Whitespace: generous around text; the photo fills, the type breathes beside it. Asymmetric magazine composition.\n\n> **No usable image → fall back to `editorial`.** This style's spine is the photograph; when a page has no suitable image available, render it in the `editorial` text-led layout (magazine columns) rather than a full-bleed placeholder — an empty / dashed image frame contradicts the style's whole premise. A deterministic, observable condition, not a judgment call.",
+    "typography": "- Editorial serif / CJK title × clean sans body; magazine-column cadence; small precise captions and figure notes. Words are concise — they point, they don't fill.\n\n> Families are chosen at confirmation `g`; this style asks for an editorial serif-title × clean-sans-body *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- The photograph carries the color; the text-side field stays a quiet neutral so imagery dominates; one restrained accent marks numbering, rules, or a key word.\n- Deliberately understated on the type side — the image is the loudest element, by design.\n\n> HEX values come from confirmation `e`; this style only governs the image-dominant, understated-type discipline — it names no colors.",
+    "texture": "- Flat — no decorative shadows. The one practical exception: a scrim gradient over an image where overlay text needs legibility. Photography supplies the texture.",
+    "paired": "`corporate-photo` — real editorial photography as the hero imagery the layout is built around.",
+    "illustration_propensity": "**sparse** — photography leads. Use illustration selectively when it frames, connects, or extends the photographic composition without displacing factual or visual authority; form and scale follow the page job. An explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: large full-bleed / edge-to-edge image fields are the page's spine; text sits in restrained columns, caption blocks, kickers, or overlay headlines. Minimal chrome — the photograph carries the page.",
+    "Composition geometry: an L-shaped text zone carved out of the full bleed; a headline straddling the photo edge; a diptych / triptych panel split; one floating caption card breaking the image boundary — moves that serve the photograph, never bury it.",
+    "Decoration: thin rules, section numbering, small figure notes; nothing competes with the image.",
+    "Whitespace: generous around text; the photo fills, the type breathes beside it. Asymmetric magazine composition."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 3,
+     "chars_per_block_max": 18
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/photo-editorial.md"
+  },
+  {
+   "id": "data-journalism",
+   "group": "Editorial / publication",
+   "character": "Multi-column micro-charts, sidebars, source lines, dense",
+   "paired_rendering": "editorial",
+   "illustration": "sparse",
+   "rules": {
+    "shape": "- Shape language: a dense multi-column grid carrying many small charts and data tables inline; editorial sidebars and pull-stats; hairline dividers; hero numbers; a running source / footnote line. Information density is the look — kept legible by a rigorous grid.\n- Composition geometry: the chart as the page's spine — layout wraps the visualization instead of boxing it; a hero number at full column scale; a full-width spanner rule dropping into a stat band; a sidebar cut into the grid; small-multiple strips instead of one boxed chart.\n- Decoration: minimal beyond the data — a single accent rule, sparing annotation. Charts and numbers are the visual interest, not ornament.\n- Whitespace: tight but structured; the grid earns density without clutter.",
+    "typography": "- Serif headline / hero-number for authority × a clean sans or monospace with lining figures for numeric precision in tables and chart labels. Small captions and source lines; tight, deliberate hierarchy.\n\n> Families are chosen at confirmation `g`; this style asks for a serif-headline × precise-sans/mono-data *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- A restrained field — light publication paper or dark graphite both fit (Economist vs Bloomberg-terminal); the deck's accent marks risk / key figures, an optional secondary distinguishes a second series; charts use tints of the same family, never a rainbow.\n- Numbers are colored to *mean* (up / down / risk / focus), not to decorate.\n\n> HEX values come from confirmation `e`; this style only governs the restrained-field, meaning-coded-data discipline — it names no colors.",
+    "texture": "- Flat, publication-grade — when either carries the relationship, favor hairline rules over heavy cards. Flatness governs visual weight, not contour vocabulary; outlined or compound page fields remain compatible. Optional scrim on any image; no glow, no decorative shadow.",
+    "paired": "`editorial` — magazine-style infographic imagery sharing the data-publication aesthetic.",
+    "illustration_propensity": "**sparse** — charts, sidebars, and evidence lead. Use illustration selectively for orientation, narrative framing, or emphasis without obscuring values or source authority; form and scale follow the page job. An explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: a dense multi-column grid carrying many small charts and data tables inline; editorial sidebars and pull-stats; hairline dividers; hero numbers; a running source / footnote line. Information density is the look — kept legible by a rigorous grid.",
+    "Composition geometry: the chart as the page's spine — layout wraps the visualization instead of boxing it; a hero number at full column scale; a full-width spanner rule dropping into a stat band; a sidebar cut into the grid; small-multiple strips instead of one boxed chart.",
+    "Decoration: minimal beyond the data — a single accent rule, sparing annotation. Charts and numbers are the visual interest, not ornament.",
+    "Whitespace: tight but structured; the grid earns density without clutter."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 6,
+     "chars_per_block_max": 26
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/data-journalism.md"
+  },
+  {
+   "id": "brutalist",
+   "group": "Editorial / publication",
+   "character": "Newsprint density, ruled boxes, raw structure, flat",
+   "paired_rendering": "screen-print` / `editorial",
+   "illustration": "supportive",
+   "rules": {
+    "shape": "- Shape language: favor hard-edged native contours, ruled boxes, thick black borders / cell frames, visible column dividers, brackets, block arrows, and raw stamps. Exact native shapes remain eligible when their semantic job fits; treat them with the same sharp print discipline. Corner radius `rx=\"0\"` — never rounded.\n- Composition geometry: a masthead numeral or headline set so large it crosses column rules; one grid cell inverted to solid ink (light type on dark) as the focal cell; full-bleed rule bars slicing sections; a single rotated stamp-box breaking the grid at one deliberate point.\n- Decoration: the grid itself is the decoration — masthead bars, rule lines, boxed pull-quotes, halftone fills. No gradients, no soft cards, no shadows.\n- Whitespace: tight and deliberate — narrow margins, dense columns, a newspaper's packed rhythm. Density is the point; retain enough breathing room for hierarchy and readability without imposing a per-page count.\n- Irregular multi-column layout (mixed column widths) over a uniform grid; asymmetry is intentional.",
+    "typography": "- Strong role contrast: a heavy display sans for headlines (poster-black weight), a serif character for column body, and monospace for figures / data can create the collision this style needs without imposing a family count.\n- Small body size, high density; strong size jump between masthead headline and body. Flush-left columns, tight leading.\n\n> Families are chosen at confirmation `g`; this style asks for a display-black × serif-body × monospace-data *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Near-monochrome: ink-dark structure and type on a paper-light field; use a localized spot accent as punctuation, such as a masthead rule, key figure, or stamp.\n- Color as punctuation, not fill. No color blocking, no gradients — the accent earns attention by scarcity.\n\n> HEX values come from confirmation `e`; this style only governs how sparingly the accent is used — it names no colors.",
+    "texture": "- Strictly flat — no drop shadows, no elevation. Depth comes from rule weight and halftone texture, not material. Optional paper-grain / halftone `<pattern>` for a printed feel.",
+    "paired": "`screen-print` or `editorial` — halftone monochrome imagery that sits inside the newsprint aesthetic.",
+    "illustration_propensity": "**supportive** — when illustration is selected, raw halftone cuts and illustration elements can anchor or disrupt the newsprint composition while structure remains legible. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: favor hard-edged native contours, ruled boxes, thick black borders / cell frames, visible column dividers, brackets, block arrows, and raw stamps. Exact native shapes remain eligible when their semantic job fits; treat them with the same sharp print discipline. Corner radius `rx=\"0\"` — never rounded.",
+    "Composition geometry: a masthead numeral or headline set so large it crosses column rules; one grid cell inverted to solid ink (light type on dark) as the focal cell; full-bleed rule bars slicing sections; a single rotated stamp-box breaking the grid at one deliberate point.",
+    "Decoration: the grid itself is the decoration — masthead bars, rule lines, boxed pull-quotes, halftone fills. No gradients, no soft cards, no shadows.",
+    "Whitespace: tight and deliberate — narrow margins, dense columns, a newspaper's packed rhythm. Density is the point; retain enough breathing room for hierarchy and readability without imposing a per-page count."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/brutalist.md"
+  },
+  {
+   "id": "memphis",
+   "group": "Expressive / print",
+   "character": "Clashing color blocks, geometric confetti, bold outlines",
+   "paired_rendering": "flat",
+   "illustration": "core",
+   "rules": {
+    "shape": "- Shape language: bold geometric primitives — circles, triangles, zigzags, squiggles, blobs — with thick dark outlines. Mixed corner radii allowed; playful inconsistency is on-brand.\n- Composition geometry: a giant primitive bleeding off one edge as the backdrop; a diagonal two-color field split; a zigzag or squiggle band as the section divider; props scattered at angles around one dominant rotated frame or badge at the focal point.\n- Decoration: scattered geometric confetti, color-block backings, pattern fills (dots / stripes), oversized punctuation. Generous decoration — but composed, not chaotic.\n- Whitespace: energetic asymmetry; props float at angles. Still leave the focal content room to read against the noise.",
+    "typography": "- Display poster type for headlines (heavy, attention-grabbing); a neutral readable sans for body so density stays legible under the visual energy.\n- Big, confident headline scale; tight to the artwork. Body kept clean and quiet by contrast.\n\n> Families are chosen at confirmation `g`; this style asks for a display-poster headline × neutral-sans body *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Multi-accent clash is the signature, but the light field and dark outlines remain visually dominant. Front a curated subset of the deck accents on each page instead of displaying the whole set by quota.\n- A light field carries the noise; dark outlines anchor every shape so the clash reads as composed, not muddy. Disciplined exuberance, never rainbow soup.\n\n> HEX values come from confirmation `e`; this style governs how many accents appear and how boldly — it names no colors.",
+    "texture": "- Mostly flat pop-art blocks; bold outlines do the separating, not shadows. Optional hard-offset (sticker / cutout) shadows for a retro pop feel — flat, not soft. Keep gradients rare.",
+    "paired": "`flat` — clean vivid flat-color illustration that matches the pop-block energy.",
+    "illustration_propensity": "**core** — when illustration is selected, bold-outline elements, confetti, and geometric shapes may lead the Memphis language. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: bold geometric primitives — circles, triangles, zigzags, squiggles, blobs — with thick dark outlines. Mixed corner radii allowed; playful inconsistency is on-brand.",
+    "Composition geometry: a giant primitive bleeding off one edge as the backdrop; a diagonal two-color field split; a zigzag or squiggle band as the section divider; props scattered at angles around one dominant rotated frame or badge at the focal point.",
+    "Decoration: scattered geometric confetti, color-block backings, pattern fills (dots / stripes), oversized punctuation. Generous decoration — but composed, not chaotic.",
+    "Whitespace: energetic asymmetry; props float at angles. Still leave the focal content room to read against the noise."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 2,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/memphis.md"
+  },
+  {
+   "id": "zine",
+   "group": "Expressive / print",
+   "character": "Riso misregistration, halftone, limited palette, print grit",
+   "paired_rendering": "screen-print",
+   "illustration": "core",
+   "rules": {
+    "shape": "- Shape language: cut-and-paste blocks, offset color shapes, rough frames; outlines in a near-black ink tone. Corner radius low or zero — print-flat, not soft-digital.\n- Composition geometry: rotated pasted-on blocks (slight skew) building the collage stage; a torn-strip band as the section divider; an oversized halftone shape bleeding behind the content; a photocopy frame or taped corner anchoring the focal block; column scraps at mixed widths.\n- Decoration: the riso print artifacts — subtle visible color-layer misregistration, halftone-dot `<pattern>` texture, overlapping color blocks that imply another color where they cross. Texture is the decoration.\n- Whitespace: poster-like — bold focal blocks with raw margins; deliberate roughness over clean alignment.",
+    "typography": "- Punk-DIY contrast: a heavy poster display face for headlines, a plain readable sans for body, monospace for annotation (typewriter / photocopier feel).\n- Big headline tension against quiet body; slight intentional looseness reads as hand-set rather than mechanical.\n\n> Families are chosen at confirmation `g`; this style asks for a display-poster × plain-sans × monospace-annotation *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- A tightly limited spot palette (riso logic) sits on a warm paper field; a dominant ink pairing does most of the work and any additional spot color appears selectively.\n- Color is laid as flat spot fills, not gradients; overlap and offset of the same small ink set create depth and extra-color illusions. Scarcity and overlap, not variety.\n\n> HEX values come from confirmation `e`; this style governs the flat-spot, misregistered-overlay discipline — it names no colors.",
+    "texture": "- Flat print, no digital elevation. Depth from layer offset and halftone grain, not shadows. Warm-paper grain via faint texture / low-opacity halftone is on-brand; avoid drop shadows and slick gradients.",
+    "paired": "`screen-print` — duotone / spot-ink imagery that shares the riso print aesthetic.",
+    "illustration_propensity": "**core** — when illustration is selected, riso / halftone elements and cutout imagery may lead the zine's print grit. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: cut-and-paste blocks, offset color shapes, rough frames; outlines in a near-black ink tone. Corner radius low or zero — print-flat, not soft-digital.",
+    "Composition geometry: rotated pasted-on blocks (slight skew) building the collage stage; a torn-strip band as the section divider; an oversized halftone shape bleeding behind the content; a photocopy frame or taped corner anchoring the focal block; column scraps at mixed widths.",
+    "Decoration: the riso print artifacts — subtle visible color-layer misregistration, halftone-dot `<pattern>` texture, overlapping color blocks that imply another color where they cross. Texture is the decoration.",
+    "Whitespace: poster-like — bold focal blocks with raw margins; deliberate roughness over clean alignment."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/zine.md"
+  },
+  {
+   "id": "vintage-poster",
+   "group": "Expressive / print",
+   "character": "Mid-century flat blocks, halftone, retro-geometric warmth",
+   "paired_rendering": "vintage-poster",
+   "illustration": "core",
+   "rules": {
+    "shape": "- Shape language: bold geometric shapes with rounded organic edges, often slightly off-axis for retro tension; overlapping flat blocks; thick hand-aware lines; stylized, reduced iconography (a stylized sun, an angular mountain).\n- Composition geometry: a giant sun disc or arch as the backdrop anchor; ray wedges radiating from the focal point; off-axis overlapping blocks staging the content; a horizon band splitting the page into field and sky zones; one badge or rosette seal at the emphasis point.\n- Decoration: the print artifacts — halftone dot overlays, slight ink misregistration — carry the character. Generated illustration stays reduced and graphic. Required documentary photography remains eligible; integrate it through crop, tonal reduction, halftone, or another print treatment instead of replacing the real subject with invented imagery.\n- Whitespace: confident poster composition — a few large blocks, deliberate negative space.",
+    "typography": "- Retro display character for headlines (mid-century geometric, confident); a simple legible body by contrast.\n\n> Families are chosen at confirmation `g`; this style asks for a mid-century display *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Applied as limited flat blocks (a small set of colors): the primary dominates large blocks, the secondary reads as a warm paper field, the accent marks small shapes or tints the halftone.\n- Flat color only — no gradients; depth comes from overlap, not blending.\n\n> HEX values come from confirmation `e`; this style only governs the limited-flat-block, halftone discipline — it names no colors.",
+    "texture": "- Flat — depth implied via overlapping shapes, never via shadow. Halftone dot pattern or paper grain at low opacity gives printed age; slight ink-offset character is on-brand.",
+    "paired": "`vintage-poster` — mid-century poster imagery with matching halftone and retro-geometric warmth.",
+    "illustration_propensity": "**core** — when illustration is selected, mid-century motifs and halftone cuts may lead the poster look. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: bold geometric shapes with rounded organic edges, often slightly off-axis for retro tension; overlapping flat blocks; thick hand-aware lines; stylized, reduced iconography (a stylized sun, an angular mountain).",
+    "Composition geometry: a giant sun disc or arch as the backdrop anchor; ray wedges radiating from the focal point; off-axis overlapping blocks staging the content; a horizon band splitting the page into field and sky zones; one badge or rosette seal at the emphasis point.",
+    "Decoration: the print artifacts — halftone dot overlays, slight ink misregistration — carry the character. Generated illustration stays reduced and graphic. Required documentary photography remains eligible; integrate it through crop, tonal reduction, halftone, or another print treatment instead of replacing the real subject with invented imagery.",
+    "Whitespace: confident poster composition — a few large blocks, deliberate negative space."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/vintage-poster.md"
+  },
+  {
+   "id": "paper-cut",
+   "group": "Expressive / print",
+   "character": "Layered cut-paper sheets, soft inter-layer shadow, tactile",
+   "paired_rendering": "paper-cut",
+   "illustration": "core",
+   "rules": {
+    "shape": "- Shape language: forms defined by crisp, slightly-irregular cut edges (no outlines); simplified, stylized shapes that read as cut paper rather than illustration. A silhouette intended to read as hand-cut uses an irregular `<polygon>` / `<path>` instead of a pristine digital box. Functional native contours and deliberately machine-cut layers remain eligible inside the same paper system.\n- Composition geometry: stacked wave sheets building the page bottom-up; a die-cut window revealing the layer beneath; one large cut disc (sun / moon) anchoring the composition; tabbed sheet edges ordering steps; a foreground frame layer with the content on the sheet behind it.\n- Decoration: layering itself is the device — each element is a \"sheet\" stacked over the one beneath; small cut-out accents on the top layer.\n- Whitespace: cozy, composed — the backing sheet shows through as breathing room.",
+    "typography": "- Clean friendly sans; warm, not severe. Titles can sit on a cut-paper banner shape.\n\n> Families are chosen at confirmation `g`; this style asks for a warm, rounded, approachable sans *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Each color reads as one sheet of paper — the primary is the dominant foreground sheet, the secondary the backing field, the accent a small top-layer cut-out.\n- Layering and overlap drive emphasis more than proportion: even a small primary sheet in front of a large secondary reads as primary-led.\n\n> HEX values come from confirmation `e`; this style only governs the each-color-is-a-sheet, layering discipline — it names no colors.",
+    "texture": "- Real layered depth — a soft, low-opacity drop shadow under cut layers is core here (the style where layered shadow is the point, not a violation). Matte paper grain on each sheet.",
+    "paired": "`paper-cut` — layered cut-paper imagery sharing the tactile, hand-made depth.",
+    "illustration_propensity": "**core** — when illustration is selected, layered cut-paper elements may lead the style, and transparent slices match it natively. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: forms defined by crisp, slightly-irregular cut edges (no outlines); simplified, stylized shapes that read as cut paper rather than illustration. A silhouette intended to read as hand-cut uses an irregular `<polygon>` / `<path>` instead of a pristine digital box. Functional native contours and deliberately machine-cut layers remain eligible inside the same paper system.",
+    "Composition geometry: stacked wave sheets building the page bottom-up; a die-cut window revealing the layer beneath; one large cut disc (sun / moon) anchoring the composition; tabbed sheet edges ordering steps; a foreground frame layer with the content on the sheet behind it.",
+    "Decoration: layering itself is the device — each element is a \"sheet\" stacked over the one beneath; small cut-out accents on the top layer.",
+    "Whitespace: cozy, composed — the backing sheet shows through as breathing room."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 2,
+     "shadow": true,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/paper-cut.md"
+  },
+  {
+   "id": "sketch-notes",
+   "group": "Hand-drawn / brush",
+   "character": "Warm paper, doodle line work, soft pastel blocks",
+   "paired_rendering": "sketch-notes",
+   "illustration": "core",
+   "rules": {
+    "shape": "- Shape language: rounded shapes drawn with a slight wobble; pastel block fills that slightly overshoot their outlines (hand-painted feel); simple cartoon icons. When a contour must read as doodled, draw the wobble as a `<path>` with non-aligned points rather than treating `<rect rx>` as hand drawing. Functional native contours remain eligible and may share the page with hand-drawn marks.\n- Composition geometry: a wavy-arrow journey path structuring the whole page; a radial mind-map around a central doodle; a hand-drawn banner ribbon carrying the title; numbered circles hopping along a dotted route; one cloud frame around the idea that matters.\n- Decoration: small doodles — stars, sparkles, dots, underlines — sprinkled sparingly for warmth; wavy hand-drawn arrows connecting ideas with short inline labels.\n- Whitespace: airy and well-organized; generous gaps between elements keep it friendly, never dense.",
+    "typography": "- Friendly hand-lettered titles; clear humanist body. Warmth and legibility over corporate severity.\n\n> Families are chosen at confirmation `g`; this style asks for a warm hand-lettered / humanist *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Warm, soft paper field; the deck's colors rendered as gentle pastel tints inside the blocks rather than full saturation; one accent reserved for a key arrow or emphasis.\n- Generous but gentle — soft tints, never high-chroma or rainbow.\n\n> HEX values come from confirmation `e`; this style only governs the soft-pastel, warm-field discipline — it names no colors.",
+    "texture": "- Flat 2D — sketchnote is intentionally flat. Optional subtle paper grain for warmth; no drop shadows.",
+    "paired": "`sketch-notes` — cream-paper hand-drawn imagery with soft pastel fills, sharing the friendly note aesthetic.",
+    "illustration_propensity": "**core** — when illustration is selected, doodles and hand-drawn elements may lead the style rather than act as incidental garnish. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: rounded shapes drawn with a slight wobble; pastel block fills that slightly overshoot their outlines (hand-painted feel); simple cartoon icons. When a contour must read as doodled, draw the wobble as a `<path>` with non-aligned points rather than treating `<rect rx>` as hand drawing. Functional native contours remain eligible and may share the page with hand-drawn marks.",
+    "Composition geometry: a wavy-arrow journey path structuring the whole page; a radial mind-map around a central doodle; a hand-drawn banner ribbon carrying the title; numbered circles hopping along a dotted route; one cloud frame around the idea that matters.",
+    "Decoration: small doodles — stars, sparkles, dots, underlines — sprinkled sparingly for warmth; wavy hand-drawn arrows connecting ideas with short inline labels.",
+    "Whitespace: airy and well-organized; generous gaps between elements keep it friendly, never dense."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 4,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/sketch-notes.md"
+  },
+  {
+   "id": "ink-notes",
+   "group": "Hand-drawn / brush",
+   "character": "Pale field, black hand-ink, sparse semantic accent",
+   "paired_rendering": "ink-notes",
+   "illustration": "supportive",
+   "rules": {
+    "shape": "- Shape language: hand-drawn line work with slight, intentional wobble — boxes, arrows, dividers and brackets sketched as if on a thoughtful whiteboard. When a mark must read as hand-inked, realize it as `<path>` / `<polyline>` with off-grid points rather than a pristine primitive. Functional native contours remain eligible; line defines structure, while repeated filled-card grids are not the default grammar.\n- Composition geometry: a circled central concept with branch arrows carrying the page; a hand-drawn Venn or overlap sketch as the argument; strike-through-and-replace geometry for before/after; one oversized bracket grouping the evidence under the claim.\n- Decoration: minimal — a few doodle marks (stars, dashes, dots, underlines) for emphasis. Restraint is the look; clutter breaks the \"considered\" feel.\n- Whitespace: generous and empty; the pale field carries most of the canvas, elements float with room around them.",
+    "typography": "- Hand-lettered / humanist character for titles — bold, slightly oversized, confident. Plain legible sans for body.\n- Reads as written-by-hand-but-deliberate, not corporate-precise.\n\n> Families are chosen at confirmation `g`; this style asks for a humanist / hand-lettered title *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Near-monochrome: ink-dark line work on a pale field carries the composition; the deck's accent remains a sparse semantic mark for risk, positive state, or emphasis.\n- Color carries meaning, not decoration; use only the accents that signify something on the current page.\n\n> HEX values come from confirmation `e`; this style only governs the monochrome-with-semantic-accent discipline — it names no colors.",
+    "texture": "- Strictly flat — no shadows, no paper grain (the field stays clean). Depth reads from line weight and spacing alone.",
+    "paired": "`ink-notes` — black-ink visual-note imagery on a clean field, matching the considered hand-drawn aesthetic.",
+    "illustration_propensity": "**supportive** — when illustration is selected, hand-ink elements can anchor, annotate, or connect a composition while the style's considered restraint remains intact. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: hand-drawn line work with slight, intentional wobble — boxes, arrows, dividers and brackets sketched as if on a thoughtful whiteboard. When a mark must read as hand-inked, realize it as `<path>` / `<polyline>` with off-grid points rather than a pristine primitive. Functional native contours remain eligible; line defines structure, while repeated filled-card grids are not the default grammar.",
+    "Composition geometry: a circled central concept with branch arrows carrying the page; a hand-drawn Venn or overlap sketch as the argument; strike-through-and-replace geometry for before/after; one oversized bracket grouping the evidence under the claim.",
+    "Decoration: minimal — a few doodle marks (stars, dashes, dots, underlines) for emphasis. Restraint is the look; clutter breaks the \"considered\" feel.",
+    "Whitespace: generous and empty; the pale field carries most of the canvas, elements float with room around them."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/ink-notes.md"
+  },
+  {
+   "id": "chalkboard",
+   "group": "Hand-drawn / brush",
+   "character": "Dark slate, chalk strokes, powdery pastel accents",
+   "paired_rendering": "chalkboard",
+   "illustration": "core",
+   "rules": {
+    "shape": "- Shape language: chalk-stroke line work with slightly diffused, dry-medium edges; sketched boxes, brackets, arrows in chalk. When a mark must read as hand-drawn chalk, use a `<path>` with non-aligned points rather than a pristine primitive. Functional native contours remain eligible; keep their paint, weight, and hierarchy inside the chalkboard system.\n- Composition geometry: one big chalk ring around the term that matters; a radial mind-map spreading from a central concept; a hand-drawn arc timeline sweeping the board; an oversized chalk bracket grouping half the page; a boxed corner note holding the takeaway.\n- Decoration: underlines and emphasis marks; a few sprinkled chalk stars / dots. Blackboard pedagogy — organized sections, a clear central focus.\n- Whitespace: the dark board reads as room; let chalk marks breathe rather than crowd.",
+    "typography": "- Hand-lettered chalk character for titles; legible body. Dry, nostalgic, classroom-warm.\n\n> Families are chosen at confirmation `g`; this style asks for a hand-lettered chalk title *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Dark slate field; off-white chalk carries most marks; the deck's colors appear as soft, powdery pastel chalk accents, used sparingly.\n- Restrained and powdery — never saturated fills.\n\n> HEX values come from confirmation `e`; this style only governs the chalk-on-slate, powdery-accent discipline — it names no colors.",
+    "texture": "- Flat — depth from chalk-stroke weight, not material. Chalk-dust grain texture across the board is on-brand; no drop shadows.",
+    "paired": "`chalkboard` — chalk-on-slate imagery with the same classroom feel.",
+    "illustration_propensity": "**core** — when illustration is selected, chalk-drawn marks and doodles may lead the classroom aesthetic. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: chalk-stroke line work with slightly diffused, dry-medium edges; sketched boxes, brackets, arrows in chalk. When a mark must read as hand-drawn chalk, use a `<path>` with non-aligned points rather than a pristine primitive. Functional native contours remain eligible; keep their paint, weight, and hierarchy inside the chalkboard system.",
+    "Composition geometry: one big chalk ring around the term that matters; a radial mind-map spreading from a central concept; a hand-drawn arc timeline sweeping the board; an oversized chalk bracket grouping half the page; a boxed corner note holding the takeaway.",
+    "Decoration: underlines and emphasis marks; a few sprinkled chalk stars / dots. Blackboard pedagogy — organized sections, a clear central focus.",
+    "Whitespace: the dark board reads as room; let chalk marks breathe rather than crowd."
+   ],
+   "defaults": {
+    "palette": {
+     "bg": "#0F1212",
+     "text": "#F2F2F0",
+     "accent": "#4CC2FF",
+     "sub": "#9AA0A6",
+     "line": "#2A2F33",
+     "soft": "#171B1E"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/chalkboard.md"
+  },
+  {
+   "id": "ink-wash",
+   "group": "Hand-drawn / brush",
+   "character": "Rice-paper whitespace, brush marks, seal accent, still",
+   "paired_rendering": "ink-notes` / `watercolor",
+   "illustration": "supportive",
+   "rules": {
+    "shape": "- Shape language: minimal brush-stroke marks and hairline dividers; the occasional ink-dark block; a single seal-stamp (印章) square as a focal accent. Avoid repeated card / box grids so emptiness remains the structure. A mark intended as brush stroke or ink bleed uses an irregular `<path>` with uneven control points rather than an `<ellipse>` / `<circle>` standing in for a wash. Functional native contours remain eligible when they serve meaning without turning the page into boxed UI.\n- Composition geometry: one broad brush sweep as the page's diagonal spine; an open ensō-like ring framing the core phrase; a vertical scroll band ordering a sequence; a low wash horizon with content floating in the emptiness above; the seal square placed to counterweight an asymmetric field.\n- Decoration: almost none; what little appears reads as brush and seal. Asymmetric, scroll-like composition with deliberate off-balance.\n- Whitespace: vast and intentional — the rice-paper field carries most of the page; a few elements float in great calm.",
+    "typography": "- Brush / serif character for titles (calligraphic, expressive) against a clean modern sans body — a Kai × Hei contrast axis. Large airy titles, generous leading, vertical rhythm welcome.\n\n> Families are chosen at confirmation `g`; this style asks for a calligraphic-brush title × clean-sans body *character*. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- A pale rice-paper field dominates; ink-dark carries type and the rare ink shape; a single warm seal-red accent appears at one key point — scarce, like a stamp on a scroll.\n- Near-monochrome ink discipline — restraint is the aesthetic, not abundance.\n\n> HEX values come from confirmation `e`; this style only governs the ink-on-paper, single-seal-accent discipline — it names no colors.",
+    "texture": "- Flat — emptiness and brush weight carry depth, not shadow. Optional faint paper grain or low-opacity ink-bleed wash; no drop shadows.",
+    "paired": "`ink-notes` or `watercolor` — mono-ink or soft-wash imagery that shares the literati restraint.",
+    "illustration_propensity": "**supportive** — when illustration is selected, brush, seal, or painted elements can anchor or frame a page while stillness and whitespace lead. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: minimal brush-stroke marks and hairline dividers; the occasional ink-dark block; a single seal-stamp (印章) square as a focal accent. Avoid repeated card / box grids so emptiness remains the structure. A mark intended as brush stroke or ink bleed uses an irregular `<path>` with uneven control points rather than an `<ellipse>` / `<circle>` standing in for a wash. Functional native contours remain eligible when they serve meaning without turning the page into boxed UI.",
+    "Composition geometry: one broad brush sweep as the page's diagonal spine; an open ensō-like ring framing the core phrase; a vertical scroll band ordering a sequence; a low wash horizon with content floating in the emptiness above; the seal square placed to counterweight an asymmetric field.",
+    "Decoration: almost none; what little appears reads as brush and seal. Asymmetric, scroll-like composition with deliberate off-balance.",
+    "Whitespace: vast and intentional — the rice-paper field carries most of the page; a few elements float in great calm."
+   ],
+   "defaults": {
+    "palette": {
+     "bg": "#F8F6F2",
+     "text": "#2B2B2B",
+     "accent": "#9E2B25",
+     "sub": "#797877",
+     "line": "#EAE7E1",
+     "soft": "#F1EEE9"
+    },
+    "geometry": {
+     "radius": 0,
+     "shadow": false,
+     "gradient": false,
+     "line_w": 1
+    },
+    "density": {
+     "blocks_max": 4,
+     "chars_per_block_max": 20
+    }
+   },
+   "tuned": true,
+   "note": "宣纸底 + 墨黑字 + **单一朱红印色**（accent 只许出现一处）；大片留白，密度比默认更松",
+   "source": "ppt-master references/visual-styles/ink-wash.md"
+  },
+  {
+   "id": "pixel-art",
+   "group": "Specialty",
+   "character": "Strict pixel grid, blocky forms, limited palette, flat",
+   "paired_rendering": "pixel-art",
+   "illustration": "core",
+   "rules": {
+    "shape": "- Shape language: style-defining visible forms align to a pixel grid — blocky shapes, stepped edges, sharp transitions, no smooth curves; optional 1-pixel darker outlines for definition. Exact native presets remain eligible when their semantic contour survives this blocky treatment; otherwise use a faithful stepped construction.\n- Composition geometry: a stepped pixel staircase as the divider; an oversized sprite anchoring the page; a HUD frame with corner brackets zoning content; a tile ground-band along the bottom edge; a pixel progress bar as the sequence device.\n- Decoration: classic game framing — HUD bars, tile floors, sprite icons, chunky pixel borders. References NES / SNES / arcade composition.\n- Whitespace: grid-disciplined; let blocks sit on clean tiled ground rather than crowd.",
+    "typography": "- Pixel / bitmap display character for headlines; keep body in a clean legible face — full-pixel body type strains at reading length.\n\n> Families are chosen at confirmation `g`; this style asks for a pixel / bitmap display *character* for titles, legible body alongside. This governs editable native text; decorative-lettering eligibility remains a separate carrier decision.",
+    "colors": "- Colors used as palette slots: primary the dominant object, secondary the terrain / background, accent the highlights and markers; a darker shade of the primary serves as outline pixels.\n- Flat blocks only — shading comes from palette layering (lighter top, darker bottom), never gradients.\n\n> HEX values come from confirmation `e`; this style only governs the palette-slot, flat-pixel discipline — it names no colors.",
+    "texture": "- No texture beyond the pixel grid itself; strictly flat blocks. Depth reads from lighter-top / darker-bottom pixel shading, not drop shadows.",
+    "paired": "`pixel-art` — 8-bit imagery on the same grid, sharing the retro-game aesthetic.",
+    "illustration_propensity": "**core** — when illustration is selected, pixel sprites and blocky forms may lead the style. Role, scale, reuse, and placement stay Strategist judgment; an explicit user request wins either way, and `image_usage: none` writes no illustration rows."
+   },
+   "must": [
+    "Shape language: style-defining visible forms align to a pixel grid — blocky shapes, stepped edges, sharp transitions, no smooth curves; optional 1-pixel darker outlines for definition. Exact native presets remain eligible when their semantic contour survives this blocky treatment; otherwise use a faithful stepped construction.",
+    "Composition geometry: a stepped pixel staircase as the divider; an oversized sprite anchoring the page; a HUD frame with corner brackets zoning content; a tile ground-band along the bottom edge; a pixel progress bar as the sequence device.",
+    "Decoration: classic game framing — HUD bars, tile floors, sprite icons, chunky pixel borders. References NES / SNES / arcade composition.",
+    "Whitespace: grid-disciplined; let blocks sit on clean tiled ground rather than crowd."
+   ],
+   "defaults": {
+    "palette": {
+     "text": "#2B2B2B",
+     "accent": "#2F6BFF",
+     "sub": "#6B6B6B",
+     "line": "#E6EAF2",
+     "soft": "#F7F9FC",
+     "accent_max_ratio": 0.1,
+     "bg": "#FFFFFF"
+    },
+    "geometry": {
+     "line_w": 1,
+     "radius": 0,
+     "shadow": false,
+     "gradient": false
+    },
+    "density": {
+     "blocks_max": 5,
+     "chars_per_block_max": 22
+    }
+   },
+   "tuned": false,
+   "note": "派生默认值（等样张评审后逐套人工调）",
+   "source": "ppt-master references/visual-styles/pixel-art.md"
+  }
+ ]
+}

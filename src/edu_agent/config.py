@@ -35,6 +35,12 @@ class Settings:
     deepseek_api_key: str
     deepseek_base_url: str
     deepseek_model: str
+    # 视觉理解：默认复用 DeepSeek 凭据，也可独立覆盖为任意 OpenAI 兼容 VLM
+    vision_api_key: str
+    vision_base_url: str
+    vision_model: str
+    vision_max_bytes: int
+    vision_timeout: float
     # embedding：双通道
     embedding_provider: str          # ollama | siliconflow
     ollama_base_url: str
@@ -57,6 +63,9 @@ class Settings:
     # 「新建项目 / 文件浏览」的默认根目录（EDU_FS_ROOT 可覆盖；不写死盘符）
     # 注意：必填字段必须排在带默认值的字段之前，否则 dataclass 报 TypeError
     fs_root: Path
+    # 上传防护：避免本地网关因异常大文件耗尽内存/磁盘；可按部署环境覆盖
+    upload_max_bytes: int
+    upload_max_pdf_pages: int
     # WPS MCP（第三方 wps-skills，装在仓库外；见 deploy/setup_wps_mcp.cmd）
     wps_mcp_dir: Path | None = None      # 环境变量 WPS_MCP_DIR：wps-skills 克隆目录
     wps_mcp_entry: Path | None = None    # 环境变量 WPS_MCP_ENTRY：直接指定 dist/index.js
@@ -64,6 +73,10 @@ class Settings:
     @property
     def deepseek_ready(self) -> bool:
         return is_key_ready(self.deepseek_api_key)
+
+    @property
+    def vision_ready(self) -> bool:
+        return is_key_ready(self.vision_api_key) and bool(self.vision_model.strip())
 
     @property
     def siliconflow_ready(self) -> bool:
@@ -79,10 +92,17 @@ def load_settings() -> Settings:
     data_dir = _path(os.getenv("EDU_DATA_DIR", "./data"))
     wps_dir = os.getenv("WPS_MCP_DIR", "").strip()
     wps_entry = os.getenv("WPS_MCP_ENTRY", "").strip()
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY", "")
+    deepseek_base = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
     return Settings(
-        deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-        deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+        deepseek_api_key=deepseek_key,
+        deepseek_base_url=deepseek_base,
         deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+        vision_api_key=os.getenv("VISION_API_KEY", deepseek_key),
+        vision_base_url=os.getenv("VISION_BASE_URL", deepseek_base),
+        vision_model=os.getenv("VISION_MODEL", "deepseek-flash"),
+        vision_max_bytes=max(1, int(os.getenv("VISION_MAX_BYTES", str(8 * 1024 * 1024)))),
+        vision_timeout=max(10.0, float(os.getenv("VISION_TIMEOUT", "120"))),
         embedding_provider=os.getenv("EMBEDDING_PROVIDER", "ollama").strip().lower(),
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         embedding_model=os.getenv("EMBEDDING_MODEL", "bge-m3"),
@@ -99,6 +119,8 @@ def load_settings() -> Settings:
         rerank_provider=os.getenv("RERANK_PROVIDER", "local").strip().lower(),
         rerank_model_dir=_path(os.getenv("RERANK_MODEL_DIR", "./model_cache/bge-reranker-v2-m3")),
         fs_root=_path(os.getenv("EDU_FS_ROOT", str(Path.home()))),
+        upload_max_bytes=max(1, int(os.getenv("EDU_UPLOAD_MAX_BYTES", str(25 * 1024 * 1024)))),
+        upload_max_pdf_pages=max(1, int(os.getenv("EDU_UPLOAD_MAX_PDF_PAGES", "300"))),
         wps_mcp_dir=Path(wps_dir) if wps_dir else None,
         wps_mcp_entry=Path(wps_entry) if wps_entry else None,
     )

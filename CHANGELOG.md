@@ -2,6 +2,62 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；版本号跟界面显示对齐。
 
+## [Unreleased] - 2026-09-28
+
+### 新增
+- 教案中心新增模板选择与套用，提供默认、探究式课堂、单元复习课、习题讲评课 4 类模板；
+  新接口 `GET /api/template/canvas` 同时兼容旧骨架模板和 v2 富模板。
+- 教案画布支持加页、复制页、删除页、当前页状态和跨页编辑；DOCX 导出使用真实 Word 分页符，
+  HTML 下载按 A4 分页打印。
+- 当前 5174 新增全高“教案库 · 模板中心”：保存当前多页教案、导入 DOCX 到库、搜索与分类筛选、
+  卡片缩略预览、打开/套用、软删除，并接通 `GET/POST/DELETE /api/lesson-library`。
+- 教案库条目可以选作 Agent B 参考；前端提交 `reference_ids`，后端按选择的教案补充生成上下文。
+- Agent B 入口从顶部工具栏改为可拖动悬浮按钮；面板打开时入口自动隐藏、关闭面板后恢复，并支持拖动阈值防误触、视口边界约束、窄屏适配和位置记忆。
+
+### 兼容
+- 原单页草稿继续使用原 localStorage 键，首次读取后无损迁移成 v4 多页结构。
+- 旧 v1 模板若存在 `content/templates/orig/<id>.docx`，画布优先从原稿恢复段落、字体和表格样式，
+  不再错误地降级成只有板块标题的骨架。
+- Agent B 改为读取整份多页文档并跨页查找匹配板块。
+- 验收：前端脚本语法校验通过；5174 教案库接口与浏览器实测通过；全量测试
+  `382 passed, 3 skipped, 20 subtests passed`。
+
+## [v1.15.0] - 2026-09-26
+
+### 新增
+- **对话里说一句就出课件（原生 PPTX）**：说「帮我备一节 3.3 幂函数的课，要课件」/「生成课件」/
+  「把这个教案做成PPT」→ 回答下方的操作行里多一个按钮并**自动开跑**，约 20 秒后变成「下载课件 .pptx」。
+  - 新增 `src/edu_agent/courseware.py`：意图判定（`wants_deck`，只认显式指令、疑问句不算）+
+    内容→版式映射（Markdown 走 `wps_export.slides_from_markdown` 同一解析 → 要点页；
+    教案中心 DZ → 卡片页；空环节 → 章节页；超上限自动分页）；
+  - `web_server.py`：三处 `done` 事件在显式要课件时多带 `deck:true`；
+    新增 `POST /api/ppt/courseware`（两道闸门：能力开关 ppt-master + 权限动作 `export_pptx`；
+    交付沿用 `/api/wps/download` 的一次性令牌，不接受客户端给路径）；
+  - `static/index.html`：操作行新增第 4 个按钮（**只在显式要课件的那条回答上出现**，不新起卡片 ——
+    老师明确讨厌每条都弹卡片），并在回答落地后自动触发一次；
+  - 单测 `tests/test_courseware.py`（15 例，全离线）；文档 `docs/20-课件生成接入对话链路.md`。
+  - 实测：接口真链路 20.5s / 4 页 / 质量门 0 错；下载包 slides=4 · shapes=21 · pictures=0 · media=0；
+    无头 Edge + CDP 前端接线 **ALL PASS**；`scripts/run_tests.sh` → **337 例 OK(skipped=3)**。
+
+- **课件生成接入 PPT Master（原生可编辑 PPTX）**：第三方 MIT 引擎 ppt-master 只借「编译器层」
+  （`finalize_svg` + `svg_quality_checker` 质量门 + `svg_to_pptx` 原生 DrawingML），**不搬其提示词层**；
+  页面由桥接层用固定版式（cover / section / cards / bullets）确定性渲染，不让模型手写 SVG 撞严格契约。
+  - 新增 `src/edu_agent/ppt_master.py`（Windows 侧编排：路径换算复用 wsl_docx、默认 WSL 后端、
+    `generate` / `compile_project` / `verify` / `available` 四个入口）；
+  - 新增 `scripts/wsl_ppt_bridge.py`（WSL 侧，stdio 一行一 JSON，与 wsl_docx_bridge 同形）：
+    渲染 SVG → 写 `spec_lock.md` → 过质量门 → 导出 `.pptx`，并支持对已有工程走同一条门；
+  - 能力注册表新增 `ppt-master` 技能条目（`builtin=True`，带 `running/detail` 探活状态）；
+  - 引擎装在**仓库外** `D:\hermes\ppt-master`（`EDU_PPT_MASTER_ROOT` 可改），128MB 不入库；
+  - 单测新增 `tests/test_ppt_master.py`（离线 18 例 + 真链路 1 例，`EDU_TEST_PPT=1` 跑真引擎）。
+  - 文档：`docs/19-课件生成接入PPT-Master.md`。
+
+### 说明
+- 为什么走 WSL：与 wsl_docx 同因——本机 SAC 拦 lxml，ppt-master 的导出链路依赖它；SAC 管不到 WSL。
+- 为什么默认后端不自动切 native：`native_ok()` 只看「本进程能否 import pptx」，而引擎脚本要用的是
+  **同一个解释器环境**；本机 .venv 能 import、系统 python(3.14.6) 不能，自动切换会把能跑误判成跑不了。
+- 本轮实测：3 页课件 `errors=0`，`verify` 得 shapes=29 / pictures=0 / media_files=0、
+  东亚字体 Microsoft YaHei、`native_editable=true`；`scripts/run_tests.sh` → 322 例 OK（skipped=3）。
+
 ## [v1.14.0] - 2026-09-19
 
 ### 新增

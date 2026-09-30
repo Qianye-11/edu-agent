@@ -1,0 +1,160 @@
+{
+  "templates": [
+    {
+      "id": "hand-drawn",
+      "name": "手绘墨",
+      "kind": "json",
+      "source": "japanese-hand-drawn-editorial-ppt-skill/references/style-system.md",
+      "pages": 0,
+      "layouts": [],
+      "palette": {
+        "text": "#2B2B2B",
+        "accent": "#6C7A89",
+        "sub": "#797877",
+        "line": "#EAE7E1",
+        "soft": "#EAE7E1",
+        "gray": "#BDBDBD",
+        "accent_max_ratio": 0.1
+      },
+      "fonts": {
+        "latin": "Arial",
+        "ea": "微软雅黑",
+        "stack": [
+          "Arial",
+          "微软雅黑",
+          "sans-serif"
+        ]
+      },
+      "ok": true,
+      "degraded": []
+    },
+    {
+      "id": "illustration",
+      "name": "插画暖",
+      "kind": "json",
+      "source": "modern-illustration-editorial-ppt-skill/references/style-system.md",
+      "pages": 0,
+      "layouts": [],
+      "palette": {
+        "text": "#2F2F2F",
+        "accent": "#A7C7E7",
+        "accent2": "#E8A87C",
+        "sub": "#7B7978",
+        "line": "#DED8D1",
+        "soft": "#EAF4FC",
+        "accent_max_ratio": 0.1
+      },
+      "fonts": {
+        "latin": "Arial",
+        "ea": "微软雅黑",
+        "stack": [
+          "Arial",
+          "微软雅黑",
+          "sans-serif"
+        ]
+      },
+      "ok": true,
+      "degraded": []
+    },
+    {
+      "id": "tech-editorial",
+      "name": "学术蓝",
+      "kind": "json",
+      "source": "futuristic-tech-editorial-ppt-skill/references/style-system.md",
+      "pages": 0,
+      "layouts": [],
+      "palette": {
+        "text": "#2B2B2B",
+        "accent": "#2F6BFF",
+        "sub": "#6B6B6B",
+        "line": "#E6EAF2",
+        "soft": "#F7F9FC",
+        "accent_max_ratio": 0.1
+      },
+      "fonts": {
+        "latin": "Arial",
+        "ea": "微软雅黑",
+        "stack": [
+          "Arial",
+          "微软雅黑",
+          "sans-serif"
+        ]
+      },
+      "ok": true,
+      "degraded": []
+    },
+    {
+      "id": "演示文稿2",
+      "name": "演示文稿2",
+      "kind": "pptx",
+      "source": "ppt_template_6f8287f1cfa74e67809048600fd0acce.pptx",
+      "pages": 21,
+      "layouts": [
+        "空白"
+      ],
+      "palette": {
+        "text": "#000000",
+        "accent": "#004D73",
+        "accent2": "#3C7AAB",
+        "sub": "#616161",
+        "line": "#DBDBDB",
+        "soft": "#E0EAEE",
+        "accent_max_ratio": 0.1
+      },
+      "fonts": {
+        "latin": "Arial",
+        "ea": "微软雅黑",
+        "stack": [
+          "Arial",
+          "微软雅黑",
+          "sans-serif"
+        ]
+      },
+      "ok": true,
+      "degraded": [
+        "模板西文字体《等线 Light》本机没装 → 用 Arial",
+        "cover 字号 128px 超出规范区间 [56,76] → 夹到 76px",
+        "title 字号 88px 超出规范区间 [36,48] → 夹到 48px",
+        "body 字号 72px 超出规范区间 [18,24] → 夹到 24px",
+        "caption 字号 58.7px 超出规范区间 [12,15] → 夹到 15px"
+      ]
+    },
+    {
+      "id": "演示文稿2-170504",
+      "name": "演示文稿2",
+      "kind": "pptx",
+      "source": "ppt_template_9bf36cc1460242748f51b9b22f7db262.pptx",
+      "pages": 21,
+      "layouts": [
+        "空白"
+      ],
+      "palette": {
+        "text": "#000000",
+        "accent": "#004D73",
+        "accent2": "#3C7AAB",
+        "sub": "#616161",
+        "line": "#DBDBDB",
+        "soft": "#E0EAEE",
+        "accent_max_ratio": 0.1
+      },
+      "fonts": {
+        "latin": "Arial",
+        "ea": "微软雅黑",
+        "stack": [
+          "Arial",
+          "微软雅黑",
+          "sans-serif"
+        ]
+      },
+      "ok": true,
+      "degraded": [
+        "模板西文字体《等线 Light》本机没装 → 用 Arial",
+        "cover 字号 128px 超出规范区间 [56,76] → 夹到 76px",
+        "title 字号 88px 超出规范区间 [36,48] → 夹到 48px",
+        "body 字号 72px 超出规范区间 [18,24] → 夹到 24px",
+        "caption 字号 58.7px 超出规范区间 [12,15] → 夹到 15px"
+      ]
+    }
+  ],
+  "updated": "2026-09-29 17:05:04"
+}
