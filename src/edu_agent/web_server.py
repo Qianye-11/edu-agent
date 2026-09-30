@@ -36,7 +36,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from edu_agent import logsetup, pdf_upload, plan_html, planner, routing  # noqa: E402
-from edu_agent import capabilities, wps_export  # noqa: E402  能力开关 + WPS 导出
+from edu_agent import capabilities, care, greet, wps_export  # noqa: E402  能力开关 + 问候/情绪短路 + WPS 导出
 from edu_agent.config import load_settings  # noqa: E402
 from edu_agent.host.store import SessionStore  # noqa: E402
 from edu_agent.template_spec import (  # noqa: E402
@@ -310,6 +310,33 @@ def _chat_gen(req: ChatReq):
     yield {"t": "session", "id": sid,
            "title": (_store.get(sid) or {}).get("title", "新会话")}
 
+    # 纯问候短路（2026-09-27）：问候不是知识问题，不必走「检索教材 + 生成」。
+    # 实测：只发一句「你好」时，检索会拿回几段毫不相关的课文，本地模型于是
+    # 顺着它们编出一大段教材讲解（如「列车加速到 350km/h…S=350s…」整段复述）。
+    # 规则很克制：只有「整条消息就是一句问候」才会走到这里（见 edu_agent/greet.py）。
+    greet_text = greet.reply(text)
+    if greet_text:
+        yield {"t": "status", "text": "打个招呼～"}
+        yield {"t": "d", "text": greet_text}
+        _store.append(sid, "assistant", _tag("A") + greet_text,
+                      meta={"mode": "A", "citations": []})
+        yield {"t": "done", "mode": "A", "text": greet_text, "citations": []}
+        return
+
+    # 情绪关心（2026-09-27）：用户情绪低落时**先说人话**，而不是甩数学知识点。
+    # 只有「纯情绪 / 宣泄 / 自我否定」才在这里短路（不检索、不调模型，毫秒级）；
+    # 带具体学习请求的（如「好烦，这题还是不会，帮我讲讲单调性」）照常走答疑，
+    # 但会额外注入一条「先共情再作答」的提示 —— 见 _stream_coach 里的 care.study_hint()。
+    care_hit = care.reply(text)
+    if care_hit:
+        care_kind, comfort = care_hit
+        yield {"t": "status", "text": "先陪你说两句…"}
+        yield {"t": "d", "text": comfort}
+        _store.append(sid, "assistant", _tag("A") + comfort,
+                      meta={"mode": "A", "citations": [], "care": care_kind})
+        yield {"t": "done", "mode": "A", "text": comfort, "citations": []}
+        return
+
     if code == "auto":
         code = routing.decide(text)
 
@@ -343,15 +370,22 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
     acc = ""
     final_answer = ""
     citations = []
+    # 学生带着情绪提问时：**由平台侧先给出一句确定的安慰**，再照常答疑。
+    # 不能只靠提示词 —— 实测本地小模型会完全无视「先共情再作答」的要求，张口就讲知识点。
+    emp_line = care.empathy_line(text)
+    emp_prefix = (emp_line + "\n\n") if emp_line else ""
+    if emp_prefix:
+        yield {"t": "d", "text": emp_prefix}
     try:
         for ev in ask_stream(text, history=history, memory_prefix=prefix, source=src,
-                             persist_dir=pdir, collection=pcol):
+                             persist_dir=pdir, collection=pcol,
+                             empathy=care.study_hint(text)):
             ty = ev.get("type")
             if ty == "delta":
                 acc += ev.get("text", "")
                 yield {"t": "d", "text": ev.get("text", "")}
             elif ty == "done":
-                final_answer = ev.get("answer_md") or acc
+                final_answer = emp_prefix + (ev.get("answer_md") or acc)
                 citations = ev.get("citations") or []
                 record_sections("default", citations)
     except Exception as e:
@@ -620,12 +654,42 @@ def api_capabilities_toggle(body: dict):
                                     bool(body.get("enabled")))
 
 
+# ---------- Skill 调用：本机 Ollama 问答（skills/ollama-qa） ----------
+@app.post("/api/skill/ask")
+def api_skill_ask(body: dict):
+    """Skill「本机 Ollama 问答」：{"question": "..."} -> {"ok", "answer", "model", "ms"}。
+
+    平台只做转发，执行完整封在技能自己的脚本里（capabilities.ask_ollama_qa -> skills/ollama-qa）。
+    技能被关闭 -> {ok:false, gate:'capability'}；问题为空 -> {ok:false, error:'问题不能为空'}。
+    本函数是同步 def，FastAPI 会放到线程池里跑，所以慢推理不会卡住事件循环。
+    """
+    try:
+        return capabilities.ask_ollama_qa(str(body.get("question") or ""))
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
+
+
 @app.get("/api/mcp/status")
 def api_mcp_status():
     """右栏「运行状态」面板用的轻量快照（不做工具握手）。"""
     snap = capabilities.snapshot(deep=False)
     return {"mcp": snap["mcp"], "skills": snap["skills"],
             "wps_export_ready": capabilities.wps_available()[0]}
+
+
+# ---------- Skill 调用：通用入口（技能自带入口脚本，平台只转发） ----------
+@app.post("/api/skill/run")
+def api_skill_run(body: dict):
+    """通用技能调用：{"skill": "<技能id>", "args": {...}} -> 技能输出的结构化结果。
+
+    技能入口由各自 SKILL.md 的 `entry` 声明，所以**新增技能不需要新接口**
+    （往 skills/<id>/ 放一个 SKILL.md 就会被动态发现并出现在 Skill 市场）。
+    技能被关闭 -> {ok:false, gate:'capability'}。同步 def，FastAPI 丢线程池，慢技能不卡事件循环。
+    """
+    try:
+        return capabilities.run_skill(str(body.get("skill") or ""), body.get("args") or {})
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
 
 
 # ---------- WPS 导出（教案中心 -> .docx / .pptx） ----------

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -82,6 +83,23 @@ def wps_skills_dir() -> Path:
     return wps_root() / "skills"
 
 
+def local_skills_dir() -> Path:
+    """**本项目自带的** Skills 目录（<repo>/skills，随仓库版本管理）。
+
+    与第三方 wps-skills 的区别：这里的技能是我们自己写的、跟着 edu-agent 仓库走；
+    第三方技能仍在仓库外的 wps-skills 克隆里（不入库）。
+    """
+    return ROOT / "skills"
+
+
+def skill_dir(cid: str) -> Path:
+    """技能目录解析：**本项目优先**，其次第三方 wps-skills。"""
+    local = local_skills_dir() / cid
+    if (local / "SKILL.md").exists():
+        return local
+    return wps_skills_dir() / cid
+
+
 @dataclass(frozen=True)
 class McpSpec:
     id: str
@@ -108,8 +126,11 @@ class SkillSpec:
     desc: str
     category: str
     icon: str
-    mcp: str = ""             # 绑定的 MCP 服务 id
+    mcp: str = ""             # 绑定的 MCP 服务 id；留空 = 技能自带实现，不需要 MCP
     default_on: bool = True
+    vendor: str = ""          # 详情页那行来源小字（留空则用 WPS 的默认文案）
+    trial: str = ""           # 非空 = 详情页提供「试用」面板：ask（提问即答）/ workbench（工作台预览）
+    entry: str = "scripts/ask.py"   # 入口脚本（相对技能目录）；平台按它调用技能
 
 
 MCP_SPECS: tuple[McpSpec, ...] = (
@@ -146,12 +167,90 @@ SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(id="wps-office", name="WPS 跨应用助手", icon="O",
               desc="统一管理 Excel / Word / PPT，处理跨应用操作与通用功能",
               category="WPS Office", mcp="wps-office"),
+    # 本项目自带技能（<repo>/skills/ollama-qa）：内部封装本机 Ollama，不需要 MCP、不需要 API Key
+    SkillSpec(id="ollama-qa", name="本机 Ollama 问答", icon="Q",
+              desc="提问即答：把问题交给本机 Ollama 模型回答（免 API Key、可离线）",
+              category="通用能力", mcp="", trial="ask",
+              vendor="本工作区技能 · 内部封装本机 Ollama · MIT"),
 )
 
 _KIND_SPECS: dict[str, dict[str, McpSpec | SkillSpec]] = {
     "mcp": {s.id: s for s in MCP_SPECS},
     "skill": {s.id: s for s in SKILL_SPECS},
 }
+
+
+# ---------- 技能动态发现（Skill 市场无需改代码即可接入新技能） ----------
+def _parse_front_matter(path: Path) -> dict:
+    """读 SKILL.md 的 front-matter（只支持单行 `key: value`，零依赖、够用）。
+
+    注意：**不要**写 YAML 折叠块（`description: >`）—— 按行读会拿到字面量 `>`。
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return {}
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+    meta: dict[str, str] = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if not line.strip() or line.lstrip().startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip().lower()
+        value = value.strip().strip('"').strip("'")
+        if key and value:
+            meta[key] = value
+    return meta
+
+
+def discover_skills() -> tuple[SkillSpec, ...]:
+    """扫描本项目 `skills/*/SKILL.md`，**动态注册**技能。
+
+    也就是说：往 `<repo>/skills/<id>/` 放一个带 front-matter 的 SKILL.md，
+    Skill 市场里就会出现它 —— 不用改平台代码。识别字段：
+
+        name(技能 id) / title(显示名) / description / category / icon /
+        entry(入口脚本，默认 scripts/ask.py) / trial(试用面板类型) / vendor
+
+    （第三方 wps-skills 仍在仓库外，由 `SKILL_SPECS` 静态注册，不走这里。）
+    """
+    root = local_skills_dir()
+    if not root.is_dir():
+        return ()
+    found: list[SkillSpec] = []
+    for child in sorted(root.iterdir()):
+        skill_md = child / "SKILL.md"
+        if not child.is_dir() or not skill_md.exists():
+            continue
+        meta = _parse_front_matter(skill_md)
+        sid = (meta.get("name") or child.name).strip()
+        if not sid:
+            continue
+        found.append(SkillSpec(
+            id=sid,
+            name=(meta.get("title") or meta.get("name") or sid).strip(),
+            desc=(meta.get("description") or "").strip(),
+            category=(meta.get("category") or "通用能力").strip(),
+            icon=(meta.get("icon") or "S").strip()[:2],
+            mcp="",
+            vendor=(meta.get("vendor") or "本工作区技能 · 随仓库版本管理").strip(),
+            trial=(meta.get("trial") or "").strip().lower(),
+            entry=(meta.get("entry") or "scripts/ask.py").strip(),
+        ))
+    return tuple(found)
+
+
+def all_skill_specs() -> dict[str, SkillSpec]:
+    """静态注册的技能 + 动态发现的技能（**同名以静态为准**，便于单独覆盖）。"""
+    merged: dict[str, SkillSpec] = {s.id: s for s in SKILL_SPECS}
+    for spec in discover_skills():
+        merged.setdefault(spec.id, spec)
+    return merged
+
 
 _CACHE: dict[str, tuple[float, dict]] = {}
 
@@ -163,7 +262,8 @@ def mcp_spec(cid: str) -> McpSpec | None:
 
 
 def skill_spec(cid: str) -> SkillSpec | None:
-    return _KIND_SPECS["skill"].get(cid)
+    """按 id 取技能定义（含 skills/ 下动态发现的技能）。"""
+    return all_skill_specs().get(cid)
 
 
 def state_path() -> Path:
@@ -190,7 +290,7 @@ def _save_state(st: dict) -> None:
 
 
 def _default_on(kind: str, cid: str) -> bool:
-    spec = _KIND_SPECS.get(kind, {}).get(cid)
+    spec = skill_spec(cid) if kind == "skill" else _KIND_SPECS.get(kind, {}).get(cid)
     return bool(spec.default_on) if spec else False
 
 
@@ -204,7 +304,8 @@ def is_enabled(kind: str, cid: str) -> bool:
 
 
 def set_enabled(kind: str, cid: str, enabled: bool) -> dict:
-    if cid not in _KIND_SPECS.get(kind, {}):
+    known = all_skill_specs() if kind == "skill" else _KIND_SPECS.get(kind, {})
+    if cid not in known:
         return {"ok": False, "error": f"未知能力：{kind}/{cid}"}
     st = _load_state()
     st.setdefault(kind, {})[cid] = bool(enabled)
@@ -323,20 +424,22 @@ def _probe_mcp(spec: McpSpec, deep: bool = False) -> dict:
 
 
 def _skill_files(spec: SkillSpec) -> dict:
-    """读 skills/<id>/SKILL.md 的 front-matter（name/description）。"""
-    p = wps_skills_dir() / spec.id / "SKILL.md"
+    """读技能目录里 SKILL.md 的 front-matter（name/description/size）。
+
+    实现走 `_parse_front_matter`：**按行**读取，所以 SKILL.md 的 description 必须写成单行，
+    写成 YAML 折叠块（`description: >`）会被读成字面量 `>`。
+    """
+    p = skill_dir(spec.id) / "SKILL.md"
     info = {"path": str(p), "exists": p.exists(), "size": 0}
     if p.exists():
         try:
-            txt = p.read_text(encoding="utf-8", errors="replace")
-            info["size"] = len(txt)
-            for line in txt.splitlines()[:12]:
-                if line.startswith("name:"):
-                    info["name"] = line.split(":", 1)[1].strip()
-                elif line.startswith("description:"):
-                    info["desc"] = line.split(":", 1)[1].strip()
+            info["size"] = len(p.read_text(encoding="utf-8", errors="replace"))
         except Exception:
             pass
+        meta = _parse_front_matter(p)
+        for key, out_key in (("name", "name"), ("description", "desc"), ("title", "title")):
+            if meta.get(key):
+                info[out_key] = meta[key]
     return info
 
 
@@ -355,7 +458,7 @@ def snapshot(deep: bool = False) -> dict:
             "entry": str(spec.entry()), "entry_exists": spec.entry().exists(),
         })
     skill_rows = []
-    for spec in SKILL_SPECS:
+    for spec in all_skill_specs().values():
         en = is_enabled("skill", spec.id)
         files = _skill_files(spec)
         bound = spec.mcp
@@ -365,6 +468,7 @@ def snapshot(deep: bool = False) -> dict:
             "category": spec.category, "icon": spec.icon, "mcp": bound,
             "enabled": en, "active": en and bound_en,
             "installed": files["exists"], "size": files["size"], "path": files["path"],
+            "vendor": spec.vendor, "trial": spec.trial,
         })
     return {"mcp": mcp_rows, "skills": skill_rows,
             "wps_export_ready": wps_available()[0],
@@ -380,3 +484,125 @@ def wps_available() -> tuple[bool, str]:
     if not st.get("running"):
         return False, str(st.get("detail") or "WPS 桥接不可用")
     return True, "就绪"
+
+
+# ---------- Skill 执行：本机 Ollama 问答（skills/ollama-qa） ----------
+# 设计取舍：**平台不实现技能的业务逻辑，只负责转发**。执行全部封在技能自己的脚本里，
+# 所以技能能独立演进、也能脱离平台单独跑（skills/ollama-qa/scripts/ask.cmd）。
+# 解释器用 sys.executable —— 平台跑在 edu-agent 的 venv 里，天然就是正确的那个。
+_SKILL_TIMEOUT = 600.0        # 纯 CPU 推理慢，给足时间
+
+
+def run_skill_script(cid: str, args: list[str],
+                     timeout: float = _SKILL_TIMEOUT) -> dict:
+    """执行技能的入口脚本（由 SKILL.md 的 `entry` 指定，默认 scripts/ask.py）。
+
+    返回 {ok, stdout, stderr, code}（异常一律吞成 ok=False）。
+    """
+    spec = skill_spec(cid)
+    rel = (spec.entry if spec else "") or "scripts/ask.py"
+    d = skill_dir(cid)
+    script = d / rel
+    if not script.exists():
+        return {"ok": False, "error": "技能脚本缺失：" + str(script)}
+    # PYTHONIOENCODING=utf-8：Windows 上管道里的 stdout 默认是 GBK，
+    # 不强制的话技能输出的中文会被按 UTF-8 解码成乱码（实测踩过）。
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script)] + list(args),
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout, cwd=str(d), env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "技能执行超时（%.0f 秒）。纯 CPU 上大模型慢，换更小的模型或重试。" % timeout}
+    except Exception as e:                                    # noqa: BLE001
+        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
+    return {"ok": True, "stdout": proc.stdout or "", "stderr": proc.stderr or "",
+            "code": proc.returncode}
+
+
+def run_skill(cid: str, args: dict | None = None, timeout: float = _SKILL_TIMEOUT) -> dict:
+    """**通用**技能调用：`{参数名: 值}` -> 技能入口脚本的命令行参数 -> 技能输出的结构化 JSON。
+
+    约定（写在技能 SKILL.md 里）：入口脚本支持 `--json`，把结果打成一行 JSON 到 stdout。
+    参数转换：`{"stage": "初中"}` -> `--stage 初中`；值为 True -> 只加那个开关；空值跳过。
+    这样**任何放在 skills/<id>/ 下的技能都能被调起来**，不必为每个技能单独写接口。
+    """
+    spec = skill_spec(cid)
+    if spec is None:
+        known = "、".join(sorted(all_skill_specs())) or "（无）"
+        return {"ok": False, "error": "未知技能：%s（现有：%s）" % (cid, known)}
+    if not is_enabled("skill", cid):
+        return {"ok": False, "gate": "capability",
+                "error": "技能「%s」已在「MCP 服务」中被关闭" % spec.name}
+
+    cli: list[str] = []
+    for key, value in (args or {}).items():
+        if value is None or value is False or value == "":
+            continue
+        flag = "--" + str(key).strip().lstrip("-").replace("_", "-")
+        if value is True:
+            cli.append(flag)
+        else:
+            cli.extend([flag, str(value)])
+    cli.append("--json")
+
+    t0 = time.time()
+    res = run_skill_script(cid, cli, timeout=timeout)
+    if not res.get("ok"):
+        return {"ok": False, "skill": cid, "error": str(res.get("error") or "技能执行失败")}
+
+    raw = (res.get("stdout") or "").strip()
+    payload = raw
+    if payload and not payload.lstrip().startswith("{"):
+        # 兜底：脚本若在前面写了日志，取最后一行 JSON
+        for line in reversed(raw.splitlines()):
+            if line.strip().startswith("{"):
+                payload = line.strip()
+                break
+    try:
+        data = json.loads(payload)
+    except Exception:                                          # noqa: BLE001
+        return {"ok": False, "skill": cid, "error": "技能没有输出 JSON",
+                "raw": raw[-400:], "stderr": (res.get("stderr") or "")[-400:]}
+    if not isinstance(data, dict):
+        return {"ok": False, "skill": cid, "error": "技能输出的 JSON 不是对象"}
+    data.setdefault("ok", True)
+    data.setdefault("skill", cid)
+    data["ms"] = int((time.time() - t0) * 1000)
+    return data
+
+
+def ask_ollama_qa(question: str) -> dict:
+    """Skill「本机 Ollama 问答」入口：问题 -> {ok, answer, model, question, ms}。
+
+    技能被关掉时返回 gate=capability（与 WPS 导出的闸门语义一致）。
+    """
+    question = (question or "").strip()
+    if not question:
+        return {"ok": False, "error": "问题不能为空"}
+    if not is_enabled("skill", "ollama-qa"):
+        return {"ok": False, "gate": "capability",
+                "error": "技能「本机 Ollama 问答」已在「MCP 服务」中被关闭"}
+
+    t0 = time.time()
+    res = run_skill_script("ollama-qa", [question, "--json"])
+    if not res.get("ok"):
+        return {"ok": False, "error": str(res.get("error") or "技能执行失败")}
+
+    raw = (res.get("stdout") or "").strip()
+    try:
+        data = json.loads(raw)
+    except Exception:                                         # noqa: BLE001
+        return {"ok": False, "error": "技能返回了非 JSON 输出",
+                "raw": raw[-400:], "stderr": (res.get("stderr") or "")[-400:]}
+    if not data.get("ok"):
+        return {"ok": False, "error": str(data.get("error") or "技能执行失败"),
+                "stderr": (res.get("stderr") or "")[-400:]}
+    return {"ok": True,
+            "answer": data.get("answer", ""),
+            "model": data.get("model", ""),
+            "question": data.get("question", question),
+            "ms": int((time.time() - t0) * 1000)}

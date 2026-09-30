@@ -20,3 +20,7 @@ sympy                        # edu-math 服务的符号计算内核
 python-pptx                  # 教案中心 PPT：本地生成真 .pptx（WPS 演示的 COM 新建/存盘在本机不可用）
 # 可选：rerank 本地精排（RERANK_ON=1 时启用）需要 sentence-transformers
 # sentence-transformers
+
+# Skill：个性化工作台（skills/stage-workbench）用 Semantic Kernel 组织 KernelFunction
+# 说明：装了才有 Kernel 那一层编排；没装时技能自动降级为 direct 模式（直接调插件方法），功能不变
+semantic-kernel>=1.20,<2

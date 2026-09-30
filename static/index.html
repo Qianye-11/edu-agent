@@ -903,23 +903,163 @@ svg{display:block}
       capSyncDesignBtn();
     });
   }
-  /* Skill 市场：把真实 Skill（WPS 系列）插到最前面 */
+  /* Skill 市场：把真实 Skill（本项目自带 + 第三方）插到最前面，按分类分组 */
   function capSkillCards(filter){
     var list = (CAP.skills || []).filter(function(s){
       return !filter || ((s.name||'') + (s.desc||'') + (s.id||'')).indexOf(filter) > -1;
     });
     if(!list.length) return '';
-    var h = '<div class="mk-cat"><div class="mk-cat-name">WPS Office</div>'+
-      '<div class="mk-cat-desc">由 wps-office MCP 服务提供 · 与「MCP 服务」同一套开关状态。</div><div class="mk-grid">';
+    var groups = {}, order = [];
     list.forEach(function(s){
-      h += '<button class="skill-card" data-live-skill="'+escHtml(s.name)+'">'+
-        '<span class="check-orb">'+checkSvg+'</span>'+
-        '<div class="sc-top"><div class="skill-icon">'+escHtml(s.icon||'W')+'</div><div class="sc-title">'+escHtml(s.name)+'</div></div>'+
-        '<div class="sc-desc">'+escHtml(s.desc||'')+'</div>'+
-        '<div class="sc-desc" style="margin-top:8px;color:'+(s.active?'#16a34a':'var(--ink-400)')+'">'+
-          (s.active ? '已启用' : (s.enabled ? '依赖 MCP 未开启' : '已关闭'))+'</div></button>';
+      var c = s.category || '其他';
+      if(!groups[c]){ groups[c] = []; order.push(c); }
+      groups[c].push(s);
     });
-    return h + '</div></div>';
+    var h = '';
+    order.forEach(function(cat){
+      var sub = (cat === 'WPS Office')
+        ? '由 wps-office MCP 服务提供 · 与「MCP 服务」同一套开关状态。'
+        : '本工作区自带的 Skill · 与「MCP 服务」同一套开关状态。';
+      h += '<div class="mk-cat"><div class="mk-cat-name">'+escHtml(cat)+'</div>'+
+           '<div class="mk-cat-desc">'+sub+'</div><div class="mk-grid">';
+      groups[cat].forEach(function(s){
+        h += '<button class="skill-card" data-live-skill="'+escHtml(s.name)+'">'+
+          '<span class="check-orb">'+checkSvg+'</span>'+
+          '<div class="sc-top"><div class="skill-icon">'+escHtml(s.icon||'W')+'</div><div class="sc-title">'+escHtml(s.name)+'</div></div>'+
+          '<div class="sc-desc">'+escHtml(s.desc||'')+'</div>'+
+          '<div class="sc-desc" style="margin-top:8px;color:'+(s.active?'#16a34a':'var(--ink-400)')+'">'+
+            (s.active ? '已启用' : (s.enabled ? '依赖 MCP 未开启' : '已关闭'))+'</div></button>';
+      });
+      h += '</div></div>';
+    });
+    return h;
+  }
+  /* 带 trial==='ask' 的技能（本机 Ollama 问答）：详情页里的提问面板 */
+  function skillAskHtml(){
+    return '<div class="sd-sec"><div class="sd-sec-title">提问试试</div>'+
+      '<div class="sd-sec-desc">问题会交给<b>本机 Ollama 模型</b>回答（不检索教材、不需要 API Key）；'+
+      '答案来自本地小模型，重要结论请自行核实。</div>'+
+      '<div style="margin-top:14px;max-width:660px">'+
+      '<textarea id="oaQ" rows="3" placeholder="例如：什么是导数？请用两句话说明" '+
+      'style="width:100%;box-sizing:border-box;padding:11px 13px;border:.5px solid var(--line);border-radius:10px;font:inherit;font-size:13.5px;line-height:1.6;resize:vertical"></textarea>'+
+      '<div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">'+
+      '<button class="pill-btn dark" id="oaAsk">提问</button>'+
+      '<span style="font-size:12px;color:var(--ink-400)">Ctrl+Enter 也可提交</span>'+
+      '<span id="oaMeta" style="font-size:12px;color:var(--ink-400)"></span></div>'+
+      '<div id="oaAnsWrap" class="row-card" style="margin-top:14px;display:none">'+
+      '<div class="lrow"><div class="lm"><div class="t" id="oaAnsTitle">回答</div>'+
+      '<div class="s" id="oaAnsBody" style="white-space:pre-wrap;line-height:1.7"></div>'+
+      '</div></div></div></div></div>';
+  }
+  function wireSkillAsk(){
+    var box = document.getElementById('oaQ');
+    var btn = document.getElementById('oaAsk');
+    if(!box || !btn) return;
+    function run(){
+      var q = (box.value || '').trim();
+      var wrap = document.getElementById('oaAnsWrap');
+      var title = document.getElementById('oaAnsTitle');
+      var body = document.getElementById('oaAnsBody');
+      var meta = document.getElementById('oaMeta');
+      if(!q){ showToast('请先输入问题', false); return; }
+      wrap.style.display = '';
+      title.textContent = '正在问本机模型…';
+      body.textContent = '纯 CPU 推理，通常几秒到几十秒，请稍等。';
+      meta.textContent = '';
+      btn.disabled = true;
+      var t0 = Date.now();
+      spJson('/api/skill/ask', 'POST', {question:q, skill:'ollama-qa'}).then(function(r){
+        btn.disabled = false;
+        if(!r || r.ok === false){
+          title.textContent = '没答上来';
+          body.textContent = (r && (r.error || '技能调用失败')) || '技能调用失败';
+          meta.textContent = ((Date.now()-t0)/1000).toFixed(1) + ' 秒';
+          return;
+        }
+        title.textContent = '本机模型 ' + (r.model || '') + ' 的回答';
+        body.textContent = r.answer || '（模型返回空内容）';
+        meta.textContent = '耗时 ' + ((Date.now()-t0)/1000).toFixed(1) + ' 秒';
+      }).catch(function(){
+        btn.disabled = false;
+        title.textContent = '没答上来';
+        body.textContent = '请求失败（网关或技能异常）';
+      });
+    }
+    btn.addEventListener('click', run);
+    box.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); run(); }
+    });
+  }
+  /* 带 trial==='workbench' 的技能（个性化工作台，Semantic Kernel 实现）：
+     选学段 -> 技能返回结构化配置 -> 前端渲染出来 */
+  function skillWorkbenchHtml(){
+    return '<div class="sd-sec"><div class="sd-sec-title">工作台预览</div>'+
+      '<div class="sd-sec-desc">选一个学段，技能会按学段返回对应的工作台模块配置（结构化 JSON），下面是渲染结果。</div>'+
+      '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+      '<button class="pill-btn dark" data-wb-stage="初中">初中</button>'+
+      '<button class="pill-btn" data-wb-stage="高中">高中</button>'+
+      '<span id="wbMeta" style="font-size:12px;color:var(--ink-400)"></span></div>'+
+      '<div id="wbOut" style="margin-top:14px"></div></div>';
+  }
+  function wireSkillWorkbench(skillId){
+    var out = document.getElementById('wbOut');
+    if(!out) return;
+    function render(stage){
+      var meta = document.getElementById('wbMeta');
+      meta.textContent = '正在按「' + stage + '」生成配置…';
+      out.innerHTML = '';
+      spJson('/api/skill/run', 'POST', {skill:skillId, args:{stage:stage}}).then(function(r){
+        if(!r || r.ok === false){
+          var why = (r && (r.error || '技能调用失败')) || '技能调用失败';
+          meta.textContent = '没能生成';
+          out.innerHTML = '<div class="row-card"><div class="lrow"><div class="lm">'+
+            '<div class="t">没能生成工作台配置</div><div class="s">'+escHtml(why)+'</div></div></div></div>';
+          return;
+        }
+        var c = r.config || {};
+        var th = c.theme || {};
+        meta.textContent = (r.engine || '') + '　·　' + (c.module_count || (c.modules||[]).length) + ' 个模块';
+        var primary = th.primary || '#3b82f6';
+        var h = '<div class="row-card" style="border-left:3px solid '+escHtml(primary)+'">'+
+          '<div class="lrow"><div class="lm">'+
+          '<div class="t">'+escHtml(c.display_name || stage)+' 工作台 · '+escHtml(c.grade_hint || '')+'</div>'+
+          '<div class="s">'+escHtml(c.greeting || '')+'</div>'+
+          '<div class="s" style="margin-top:6px;font-size:11.5px;color:var(--ink-400)">风格：'+
+          escHtml(th.tone||'—')+'　圆角：'+escHtml(th.radius||'—')+'　密度：'+escHtml(th.density||'—')+
+          (c.layout ? '　布局：'+escHtml(String(c.layout.columns||3))+' 列' : '')+'</div>'+
+          '</div></div></div>';
+        h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:12px">';
+        (c.modules || []).forEach(function(m){
+          var tags = (m.tags || []).map(function(t){ return '<span class="r-tag" style="margin-right:6px">'+escHtml(t)+'</span>'; }).join('');
+          var acts = (m.actions || []).map(function(a){ return '<button class="pill-btn">'+escHtml(a.label)+'</button>'; }).join('');
+          h += '<div class="row-card"'+(m.size === 'large' ? ' style="grid-column:span 2"' : '')+'>'+
+               '<div class="lrow" style="align-items:flex-start"><div class="lm">'+
+               '<div class="t">'+escHtml(m.icon||'')+'　'+escHtml(m.title||'')+'</div>'+
+               '<div class="s">'+escHtml(m.desc||'')+'</div>'+
+               (tags ? '<div style="margin-top:8px">'+tags+'</div>' : '')+
+               (acts ? '<div class="side" style="margin-top:8px">'+acts+'</div>' : '')+
+               '</div></div></div>';
+        });
+        h += '</div>';
+        h += '<div class="row-card" style="margin-top:12px"><div class="lrow"><div class="lm">'+
+          '<div class="t">侧边栏 · 快捷动作</div>'+
+          '<div class="s">'+escHtml((c.sidebar||[]).map(function(x){ return x.title; }).join('  /  ') || '—')+'</div>'+
+          '<div class="s" style="margin-top:4px">'+escHtml((c.quick_actions||[]).map(function(x){ return x.label; }).join('  /  ') || '—')+'</div>'+
+          (c.notes ? '<div class="s" style="margin-top:6px;font-size:11.5px;color:var(--ink-400)">'+escHtml(c.notes)+'</div>' : '')+
+          '</div></div></div>';
+        out.innerHTML = h;
+      }).catch(function(){
+        meta.textContent = '请求失败';
+      });
+    }
+    document.querySelectorAll('[data-wb-stage]').forEach(function(b){
+      b.addEventListener('click', function(){
+        document.querySelectorAll('[data-wb-stage]').forEach(function(x){ x.classList.remove('dark'); });
+        b.classList.add('dark');
+        render(b.dataset.wbStage);
+      });
+    });
+    render('初中');   /* 默认先给初中 */
   }
   function openLiveSkill(name){
     var s = null;
@@ -933,7 +1073,7 @@ svg{display:block}
       (act?'<span class="tag installed">已启用</span>':'<span class="tag">已关闭</span>')+'</div>'+
       '<div class="sd-title">'+escHtml(s.name)+'</div>'+
       '<div class="sd-desc">'+escHtml(s.desc||'')+'</div>'+
-      '<div class="sd-author">wps-skills · MIT · 由 wps-office MCP 驱动</div></div></div>';
+      '<div class="sd-author">'+escHtml(s.vendor || 'wps-skills · MIT · 由 wps-office MCP 驱动')+'</div></div></div>';
     html += '<div class="sd-sec"><div class="sd-sec-title">开关</div>'+
       '<div class="sd-sec-desc">与「MCP 服务」页同一状态；关闭后该 Skill 不再注入 Agent 上下文。</div>'+
       '<div class="sd-row"><div class="r-icon">'+(s.icon||'W')+'</div><div class="r-main">'+
@@ -944,11 +1084,17 @@ svg{display:block}
       '<div class="r-desc" style="font-size:11.5px;word-break:break-all">'+escHtml(s.path||'')+'</div>'+
       '<div class="s" style="font-size:11.5px;color:var(--ink-400);margin-top:2px">'+escHtml(String(s.size||0))+' 字节</div></div></div>'+
       '<div class="sd-row"><div class="r-main"><div class="r-name">依赖 MCP</div>'+
-      '<div class="r-desc">'+escHtml(s.mcp||'—')+'</div></div><span class="r-tag">'+(capWps() && capWps().running ? '运行中' : '未就绪')+'</span></div>'+
+      '<div class="r-desc">'+escHtml(s.mcp||'—（技能自带实现，不需要 MCP）')+'</div></div>'+
+      (s.mcp ? '<span class="r-tag">'+(capWps() && capWps().running ? '运行中' : '未就绪')+'</span>'
+             : '<span class="r-tag">自包含</span>')+'</div>'+
       '</div></div>';
+    if(s.trial === 'ask'){ html += skillAskHtml(); }          /* 本机 Ollama 问答：详情页里就能直接提问 */
+    if(s.trial === 'workbench'){ html += skillWorkbenchHtml(); }  /* 个性化工作台：按学段预览配置 */
     document.getElementById('skillDetail').innerHTML = html;
     document.querySelector('.sd-back').addEventListener('click', function(){ switchView('market'); });
     capWireSwitches(document.getElementById('skillDetail'), function(){ openLiveSkill(name); });
+    if(s.trial === 'ask'){ wireSkillAsk(); }
+    if(s.trial === 'workbench'){ wireSkillWorkbench(s.id); }
     switchView('skill');
   }
 

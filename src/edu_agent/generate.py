@@ -346,15 +346,62 @@ def ask_turn(question: str, conversation=None, attempts: int = 3,
 
 _STREAM_MARK = "===JSON==="
 
+# ---------- 本地模型容错（2026-09-27）----------
+# 背景：prompts.STREAM_INSTR 要求模型在正文后输出**单独一行 ===JSON===**。
+# 实测换成 Ollama 本地小模型（qwen2.5:3b）后，它会：
+#   1) 把提示词里的「第 1 段：/第 2 段：/第 3 段：」当成正文照抄出来；
+#   2) 把 ===JSON=== 只写成一个 ===（或干脆不写）。
+# 标记一旦缺失，原逻辑会把 JSON 一起当正文流给用户、citations 恒为空。
+# 下面两个函数只在「标记缺失」时才起作用，云端模型（按协议输出）行为完全不变。
+_LABEL_RE = re.compile(r"^\s*第\s*[一二三四五六七八九十\d]+\s*段\s*[：:]\s*")
+_JSON_HEAD_RE = re.compile(r'\{\s*"citations"\s*:')
+# 落库时加的角色标记（**【Agent A · 课本教练（答疑）】**）——是元信息，喂回模型前要剥掉
+_TAG_PREFIX_RE = re.compile(r"^\s*\*\*【[^】]*】\*\*\s*")
+
+
+def _looks_labelled(text: str) -> bool:
+    """正文是否以「第 N 段：」开头 —— 判断模型是否在照抄提示词标签。"""
+    return bool(_LABEL_RE.match(text or ""))
+
+
+def _strip_labels(text: str) -> str:
+    """剥掉模型照抄的「第 N 段：」标签行与自成一行的 === 分隔线。"""
+    out = []
+    for line in (text or "").splitlines():
+        if re.fullmatch(r"\s*=+\s*", line):          # 光秃秃的分隔线
+            continue
+        stripped = _LABEL_RE.sub("", line)
+        if line.strip() and not stripped.strip():    # 标签行本身没有内容
+            continue
+        out.append(stripped)
+    return "\n".join(out)
+
+
+def _text_cut(raw: str) -> int | None:
+    """正文结束位置：优先严格标记，其次第一个 {"citations": 对象的起点。"""
+    i = raw.find(_STREAM_MARK)
+    if i >= 0:
+        return i
+    m = _JSON_HEAD_RE.search(raw)
+    return m.start() if m else None
+
 
 def _summarize_history(history, max_chars: int = 600) -> str:
-    """把最近几轮对话压成可注入的前情（只用于理解指代）。"""
+    """把最近几轮对话压成可注入的前情（只用于理解指代）。
+
+    注意：会话里存的 assistant 消息带着角色标记（如「**【Agent A · 课本教练（答疑）】**」，
+    由 web_server 落库时加的），那是**元信息不是正文**。不剥掉的话，本地小模型会把它当成
+    正文风格照抄进答案里（2026-09-27 实测，qwen2.5:3b 就会抄）。
+    """
     if not history:
         return ""
     lines = []
     for m in list(history)[-4:]:
         who = "学生" if m.get("role") == "user" else "教练"
-        t = (m.get("content") or "").replace("\n", " ").strip()
+        raw = m.get("content") or ""
+        if m.get("role") != "user":
+            raw = _TAG_PREFIX_RE.sub("", raw)
+        t = raw.replace("\n", " ").strip()
         lines.append(who + "：" + t[:160])
     s = "\n".join(lines)
     return s[:max_chars]
@@ -362,8 +409,12 @@ def _summarize_history(history, max_chars: int = 600) -> str:
 
 def ask_stream(question: str, history=None, memory_prefix: str = "",
                top_k: int = 3, snippet_len: int = 400,
-               source: str | None = None, persist_dir=None, collection: str | None = None):
+               source: str | None = None, persist_dir=None, collection: str | None = None,
+               empathy: str = ""):
     """流式问答生成器。
+
+    empathy（可选，2026-09-27 新增）：当学生带着情绪提问时，由 edu_agent.care 生成的一句
+    提示，插进提示词里要求模型**先接住情绪再讲题**。为空时行为与原来完全一致。
 
     依次 yield：
       {"type":"status","text":...}
@@ -387,6 +438,9 @@ def ask_stream(question: str, history=None, memory_prefix: str = "",
     if history:
         blocks.append("【最近对话（仅用于理解指代）】\n" + _summarize_history(history))
     blocks.append(_snippet_block(hits, snippet_len=snippet_len))
+    if empathy:
+        # 学生带着情绪提问：要求模型先接住情绪再讲题（只加一句指示，不改其它协议）
+        blocks.append("【情绪提示（务必遵守）】" + empathy)
     blocks.append("【学生问题】" + question)
     user = "\n\n".join(blocks) + "\n\n" + prompts.STREAM_INSTR
     messages = [{"role": "system", "content": prompts.SYSTEM_PROMPT}, {"role": "user", "content": user}]
@@ -394,45 +448,71 @@ def ask_stream(question: str, history=None, memory_prefix: str = "",
     yield {"type": "status", "text": "正在检索教材并作答…"}
     llm = get_chat_llm(max_tokens=1000, timeout=90)
     raw = ""
-    emitted = 0
+    emitted = 0              # 已发出的正文字符数（按「清洗后」的文本计）
     text_on = True
+    cut_at: int | None = None
+    tolerant = False         # 模型是否在照抄「第 N 段：」标签（决定要不要清洗）
+    tolerant_decided = False
     # ===JSON=== 可能被流式 chunk 边界拆开（如 "===JS"+"ON==="），
     # 不能只等完整标记：尾部若命中标记前缀，先扣住等下一 chunk 补齐，
     # 否则半截标记会泄漏成正文（2026-09-10 修复）。
     _mark_prefixes = sorted((_STREAM_MARK[:i] for i in range(1, len(_STREAM_MARK) + 1)),
                             key=len, reverse=True)
+
+    def _visible(text: str) -> str:
+        """应当展示的正文。tolerant 时剥标签 —— 调用方须保证传入的是完整行。"""
+        return _strip_labels(text) if tolerant else text
+
     for chunk in llm.stream(messages):
         raw += chunk.content or ""
-        if text_on:
-            if _STREAM_MARK in raw:
-                seg = raw[: raw.find(_STREAM_MARK)]
-                text_on = False
-            else:
-                hold = 0
-                for p in _mark_prefixes:
-                    if raw.endswith(p):
-                        hold = len(p)
-                        break
-                seg = raw if hold == 0 else raw[:-hold]
-            if len(seg) > emitted:
-                yield {"type": "delta", "text": seg[emitted:]}
-                emitted = len(seg)
+        if not tolerant_decided:
+            if len(raw) < 12:
+                # 还判断不出是不是「照抄标签」的模型：先一个字都不吐，
+                # 否则「第 1 段：」会在决策生效前就漏给用户（实测踩过）。
+                continue
+            tolerant_decided = True
+            tolerant = _looks_labelled(raw)
+        if not text_on:
+            continue
+        cut = _text_cut(raw)
+        if cut is not None:
+            cut_at, text_on = cut, False
+            seg = raw[:cut]
+        else:
+            hold = 0
+            for p in _mark_prefixes:
+                if raw.endswith(p):
+                    hold = len(p)
+                    break
+            seg = raw if hold == 0 else raw[:-hold]
+        if tolerant:
+            nl = seg.rfind("\n")          # 只清洗完整行，剥离后前缀才稳定
+            seg = seg[: nl + 1] if nl >= 0 else ""
+        seg = _visible(seg)
+        if len(seg) > emitted:
+            yield {"type": "delta", "text": seg[emitted:]}
+            emitted = len(seg)
 
-    # 冲刷流结束时仍被扣住的尾部（正文恰以标记前缀结尾等边界），避免丢字
-    if text_on and emitted < len(raw):
-        yield {"type": "delta", "text": raw[emitted:]}
+    # 冲刷尾部（流结束时仍被扣住的半截标记 / 最后一行没有换行）
+    tail = _visible(raw[:cut_at] if cut_at is not None else raw)
+    if emitted < len(tail):
+        yield {"type": "delta", "text": tail[emitted:]}
+        emitted = len(tail)
 
-    if _STREAM_MARK in raw:
-        text_part, json_part = raw.split(_STREAM_MARK, 1)
+    if cut_at is not None:
+        text_part, json_part = raw[:cut_at], raw[cut_at:]
     else:
         text_part, json_part = raw, ""
-    answer = plainify_math(text_part).strip()
+    answer = plainify_math(_visible(text_part)).strip()
     citations = []
     coverage = "medium"
     confidence = 0.5
-    if json_part.strip():
+    # JSON 段前面可能还留着「第 3 段：」标签或多余的 === 行（本地小模型常见），
+    # 所以只在这一段里定位第一个 {...} 对象再解析；严格按协议输出时是等价的。
+    _m_json = re.search(r"\{.*\}", json_part, re.S) if json_part.strip() else None
+    if _m_json:
         try:
-            obj = json.loads(json_part.strip())
+            obj = json.loads(_m_json.group(0))
             coverage = obj.get("coverage", "medium")
             confidence = float(obj.get("confidence", 0.5))
             allowed = {i + 1: h for i, h in enumerate(hits)}

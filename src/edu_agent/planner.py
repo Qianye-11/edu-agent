@@ -73,7 +73,14 @@ def build_messages(kp: str, goal: str, hits, template=None,
 def _parse(raw: str) -> PlanRecord:
     t = re.sub(r"^```(?:json)?\s*", "", (raw or "").strip())
     t = re.sub(r"\s*```$", "", t)
-    obj = json.loads(t)
+    try:
+        obj = json.loads(t)
+    except json.JSONDecodeError:
+        # 本机改用 Ollama 本地模型（qwen2.5:3b）后的实测：小模型常在 JSON 字符串里
+        # 直接换行（例如 "content": "1. …\n2. …"），而 JSON 规范不允许裸控制字符，
+        # 严格解析会整份失败并退化到「生成失败，请重试」。strict=False 允许控制字符，
+        # 能正常救回这类「只差一点」的输出；能严格解析时仍走严格路径。
+        obj = json.loads(t, strict=False)
     for c in obj.get("citations", []):
         c.setdefault("index", 0)
     rec = PlanRecord(**obj)
