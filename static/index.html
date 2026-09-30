@@ -2296,7 +2296,6 @@ svg{display:block}
     }
     buildTree();
   }).catch(function(){});
-})();
   /* ==========================================================================
      本工作区技能（本地部署追加 2026-09-27）
      --------------------------------------------------------------------------
@@ -2304,17 +2303,44 @@ svg{display:block}
      + all_skill_specs），这段把它渲染进 Skill 市场，并在技能详情页挂上技能自带的试用面板：
          trial = "ask"        -> 提问即答（skills/ollama-qa：内部封装本机 Ollama，免 key）
          trial = "workbench"  -> 工作台预览（skills/stage-workbench：Semantic Kernel 按学段出配置）
-     纯追加：不改上面的静态 marketData 目录；buildMarket 被包一层，搜索/重渲染后自动补回本节。
+
+     注意：本段必须放在宿主 IIFE **内部**（宿主整段脚本包在 (function(){ ... })() 里，
+     在外面拿不到 buildMarket / switchView 这些闭包内函数 —— 之前就是栽在这里：
+     `var x = buildMarket` 直接 ReferenceError，后续代码全不执行）。
+     为降低耦合，这里自带请求与转义工具，只对 switchView / showToast 做「有就用」的可选调用。
      ========================================================================== */
   var LOCAL_CAP = null;
+  function _lsq(url, method, body){
+    var opt = {method: method || 'GET', headers: {}};
+    if(body){ opt.headers['Content-Type'] = 'application/json; charset=utf-8'; opt.body = JSON.stringify(body); }
+    return fetch(url, opt).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+  function _lse(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function _lst(msg){
+    try{ if(typeof showToast === 'function'){ showToast(msg, false); return; } }catch(e){}
+    try{ console.log('[本工作区技能]', msg); }catch(e){}
+  }
+  function _lsSkillDir(){
+    try{
+      var g = document.getElementById('marketBody');
+      return g ? '' : '';
+    }catch(e){ return ''; }
+  }
   function localCapLoad(force){
     if(LOCAL_CAP && !force) return Promise.resolve(LOCAL_CAP);
-    return spJson('/api/capabilities').then(function(d){ LOCAL_CAP = d || {skills:[]}; return LOCAL_CAP; })
-                                      .catch(function(){ LOCAL_CAP = {skills:[]}; return LOCAL_CAP; });
+    return _lsq('/api/capabilities').then(function(d){ LOCAL_CAP = d || {skills:[]}; return LOCAL_CAP; })
+                                    .catch(function(){ LOCAL_CAP = {skills:[]}; return LOCAL_CAP; });
   }
   function localSkillRows(filter){
     return ((LOCAL_CAP||{}).skills || [])
-      .filter(function(s){ return s && !s.builtin; })          /* 内置能力由静态目录呈现，这里只列 skills/ 下的实体技能 */
+      .filter(function(s){ return s && !s.builtin; })     /* 内置能力由宿主静态目录呈现，这里只列 skills/ 下的实体技能 */
       .filter(function(s){ return !filter || ((s.name||'')+(s.desc||'')+(s.id||'')).indexOf(filter) > -1; });
   }
   function localSkillCardsHtml(filter){
@@ -2328,13 +2354,13 @@ svg{display:block}
     });
     var h = '';
     order.forEach(function(cat){
-      h += '<div class="mk-cat"><div class="mk-cat-name">'+escHtml(cat)+'</div>'+
+      h += '<div class="mk-cat"><div class="mk-cat-name">'+_lse(cat)+'</div>'+
            '<div class="mk-cat-desc">本工作区技能 · 放进 skills/&lt;技能id&gt;/ 就会被自动发现（与「MCP 服务」同一套开关）</div>'+
            '<div class="mk-grid">';
       groups[cat].forEach(function(s){
-        h += '<button class="skill-card" data-local-skill="'+escHtml(s.id)+'">'+
-             '<div class="sc-top"><div class="skill-icon">'+escHtml(s.icon||'S')+'</div><div class="sc-title">'+escHtml(s.name)+'</div></div>'+
-             '<div class="sc-desc">'+escHtml(s.desc||'')+'</div>'+
+        h += '<button class="skill-card" data-local-skill="'+_lse(s.id)+'">'+
+             '<div class="sc-top"><div class="skill-icon">'+_lse(s.icon||'S')+'</div><div class="sc-title">'+_lse(s.name)+'</div></div>'+
+             '<div class="sc-desc">'+_lse(s.desc||'')+'</div>'+
              '<div class="sc-desc" style="margin-top:8px;color:'+(s.active?'#16a34a':'var(--ink-400)')+'">'+
                (s.active ? '已启用' : '已关闭')+'</div></button>';
       });
@@ -2346,13 +2372,14 @@ svg{display:block}
     return localCapLoad().then(function(){
       var box = document.getElementById('marketBody');
       if(!box) return;
+      if(box.querySelector('[data-local-skill]')) return;      /* 已注入过就不重复插 */
       var extra = localSkillCardsHtml(filter);
       if(!extra) return;
       box.insertAdjacentHTML('afterbegin', extra);
       box.querySelectorAll('[data-local-skill]').forEach(function(c){
         c.addEventListener('click', function(){ openLocalSkill(c.dataset.localSkill); });
       });
-    });
+    }).catch(function(){});
   }
   /* ---- 试用面板 1：提问即答（trial === 'ask'） ---- */
   function localAskHtml(){
@@ -2374,7 +2401,7 @@ svg{display:block}
     if(!box || !btn) return;
     function run(){
       var q = (box.value||'').trim();
-      if(!q){ showToast('请先输入问题', false); return; }
+      if(!q){ _lst('请先输入问题'); return; }
       var wrap = document.getElementById('lqAskOut'), title = document.getElementById('lqAskTitle');
       var body = document.getElementById('lqAskBody'), meta = document.getElementById('lqAskMeta');
       wrap.style.display = '';
@@ -2383,7 +2410,7 @@ svg{display:block}
       meta.textContent = '';
       btn.disabled = true;
       var t0 = Date.now();
-      spJson('/api/skill/ask', 'POST', {question:q}).then(function(r){
+      _lsq('/api/skill/ask', 'POST', {question: q}).then(function(r){
         btn.disabled = false;
         if(!r || r.ok === false){
           title.textContent = '没答上来';
@@ -2393,10 +2420,10 @@ svg{display:block}
           body.textContent = r.answer || '（模型返回空内容）';
         }
         meta.textContent = '耗时 ' + ((Date.now()-t0)/1000).toFixed(1) + ' 秒';
-      }).catch(function(){
+      }).catch(function(e){
         btn.disabled = false;
         title.textContent = '没答上来';
-        body.textContent = '请求失败（网关或技能异常）';
+        body.textContent = '请求失败：' + (e && e.message ? e.message : e);
       });
     }
     btn.addEventListener('click', run);
@@ -2421,31 +2448,31 @@ svg{display:block}
       var meta = document.getElementById('lwbMeta');
       meta.textContent = '正在按「' + stage + '」生成配置…';
       out.innerHTML = '';
-      spJson('/api/skill/run', 'POST', {skill:skillId, args:{stage:stage}}).then(function(r){
+      _lsq('/api/skill/run', 'POST', {skill: skillId, args: {stage: stage}}).then(function(r){
         if(!r || r.ok === false){
           var why = (r && (r.error || '技能调用失败')) || '技能调用失败';
           meta.textContent = '没能生成';
           out.innerHTML = '<div class="row-card"><div class="lrow"><div class="lm"><div class="t">没能生成工作台配置</div>'+
-                          '<div class="s">'+escHtml(why)+'</div></div></div></div>';
+                          '<div class="s">'+_lse(why)+'</div></div></div></div>';
           return;
         }
         var c = r.config || {}, th = c.theme || {};
         meta.textContent = (r.engine||'') + '　·　' + (c.module_count || (c.modules||[]).length) + ' 个模块';
-        var h = '<div class="row-card" style="border-left:3px solid '+escHtml(th.primary||'#3b82f6')+'">'+
+        var h = '<div class="row-card" style="border-left:3px solid '+_lse(th.primary||'#3b82f6')+'">'+
           '<div class="lrow"><div class="lm">'+
-          '<div class="t">'+escHtml(c.display_name||stage)+' 工作台 · '+escHtml(c.grade_hint||'')+'</div>'+
-          '<div class="s">'+escHtml(c.greeting||'')+'</div>'+
-          '<div class="s" style="margin-top:6px;font-size:11.5px;color:var(--ink-400)">风格：'+escHtml(th.tone||'—')+
-          '　圆角：'+escHtml(th.radius||'—')+'　密度：'+escHtml(th.density||'—')+
-          (c.layout ? '　布局：'+escHtml(String(c.layout.columns||3))+' 列' : '')+'</div></div></div></div>';
+          '<div class="t">'+_lse(c.display_name||stage)+' 工作台 · '+_lse(c.grade_hint||'')+'</div>'+
+          '<div class="s">'+_lse(c.greeting||'')+'</div>'+
+          '<div class="s" style="margin-top:6px;font-size:11.5px;color:var(--ink-400)">风格：'+_lse(th.tone||'—')+
+          '　圆角：'+_lse(th.radius||'—')+'　密度：'+_lse(th.density||'—')+
+          (c.layout ? '　布局：'+_lse(String(c.layout.columns||3))+' 列' : '')+'</div></div></div></div>';
         h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:12px">';
         (c.modules||[]).forEach(function(m){
-          var tags = (m.tags||[]).map(function(t){ return '<span class="r-tag" style="margin-right:6px">'+escHtml(t)+'</span>'; }).join('');
-          var acts = (m.actions||[]).map(function(a){ return '<button class="pill-btn">'+escHtml(a.label)+'</button>'; }).join('');
+          var tags = (m.tags||[]).map(function(t){ return '<span class="r-tag" style="margin-right:6px">'+_lse(t)+'</span>'; }).join('');
+          var acts = (m.actions||[]).map(function(a){ return '<button class="pill-btn">'+_lse(a.label)+'</button>'; }).join('');
           h += '<div class="row-card"'+(m.size==='large'?' style="grid-column:span 2"':'')+'>'+
                '<div class="lrow" style="align-items:flex-start"><div class="lm">'+
-               '<div class="t">'+escHtml(m.icon||'')+'　'+escHtml(m.title||'')+'</div>'+
-               '<div class="s">'+escHtml(m.desc||'')+'</div>'+
+               '<div class="t">'+_lse(m.icon||'')+'　'+_lse(m.title||'')+'</div>'+
+               '<div class="s">'+_lse(m.desc||'')+'</div>'+
                (tags?'<div style="margin-top:8px">'+tags+'</div>':'')+
                (acts?'<div class="side" style="margin-top:8px">'+acts+'</div>':'')+
                '</div></div></div>';
@@ -2453,12 +2480,12 @@ svg{display:block}
         h += '</div>';
         h += '<div class="row-card" style="margin-top:12px"><div class="lrow"><div class="lm">'+
           '<div class="t">侧边栏 · 快捷动作</div>'+
-          '<div class="s">'+escHtml((c.sidebar||[]).map(function(x){return x.title;}).join('  /  ')||'—')+'</div>'+
-          '<div class="s" style="margin-top:4px">'+escHtml((c.quick_actions||[]).map(function(x){return x.label;}).join('  /  ')||'—')+'</div>'+
-          (c.notes?'<div class="s" style="margin-top:6px;font-size:11.5px;color:var(--ink-400)">'+escHtml(c.notes)+'</div>':'')+
+          '<div class="s">'+_lse((c.sidebar||[]).map(function(x){return x.title;}).join('  /  ')||'—')+'</div>'+
+          '<div class="s" style="margin-top:4px">'+_lse((c.quick_actions||[]).map(function(x){return x.label;}).join('  /  ')||'—')+'</div>'+
+          (c.notes?'<div class="s" style="margin-top:6px;font-size:11.5px;color:var(--ink-400)">'+_lse(c.notes)+'</div>':'')+
           '</div></div></div>';
         out.innerHTML = h;
-      }).catch(function(){ meta.textContent = '请求失败'; });
+      }).catch(function(e){ meta.textContent = '请求失败：' + (e && e.message ? e.message : e); });
     }
     document.querySelectorAll('[data-lwb-stage]').forEach(function(b){
       b.addEventListener('click', function(){ render(b.dataset.lwbStage); });
@@ -2469,56 +2496,65 @@ svg{display:block}
   function openLocalSkill(id){
     var s = null;
     ((LOCAL_CAP||{}).skills||[]).forEach(function(x){ if(x.id === id) s = x; });
-    if(!s){ showToast('技能未找到，刷新页面后重试', false); return; }
+    if(!s){ _lst('技能未找到，刷新页面后重试'); return; }
     var act = !!s.active;
     var html = '<button class="sd-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>返回 Skill 市场</button>';
     html += '<div class="sd-hero"><div class="sd-hero-icon"><svg viewBox="0 0 52 52" fill="none"><rect x="6" y="6" width="40" height="40" rx="14" fill="#0f766e"/><path d="M18 20h16M18 28h16M18 36h10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></div>'+
-      '<div><div class="sd-tags"><span class="tag">'+escHtml(s.category||'通用能力')+'</span>'+
+      '<div><div class="sd-tags"><span class="tag">'+_lse(s.category||'通用能力')+'</span>'+
       '<span class="tag installed">'+(s.installed?'已安装':'文件缺失')+'</span>'+
       (act?'<span class="tag installed">已启用</span>':'<span class="tag">已关闭</span>')+'</div>'+
-      '<div class="sd-title">'+escHtml(s.name)+'</div>'+
-      '<div class="sd-desc">'+escHtml(s.desc||'')+'</div>'+
-      '<div class="sd-author">'+escHtml(s.vendor || '本工作区技能 · 随仓库版本管理')+'</div></div></div>';
+      '<div class="sd-title">'+_lse(s.name)+'</div>'+
+      '<div class="sd-desc">'+_lse(s.desc||'')+'</div>'+
+      '<div class="sd-author">'+_lse(s.vendor || '本工作区技能 · 随仓库版本管理')+'</div></div></div>';
     html += '<div class="sd-sec"><div class="sd-sec-title">开关</div>'+
       '<div class="sd-sec-desc">与「MCP 服务」页同一状态；关闭后调用会被直接短路（gate: capability）。</div>'+
-      '<div class="sd-row"><div class="r-icon">'+escHtml(s.icon||'S')+'</div><div class="r-main">'+
-      '<div class="r-name">'+escHtml(s.name)+'</div><div class="r-desc">'+escHtml(s.desc||'')+'</div></div>'+
+      '<div class="sd-row"><div class="r-icon">'+_lse(s.icon||'S')+'</div><div class="r-main">'+
+      '<div class="r-name">'+_lse(s.name)+'</div><div class="r-desc">'+_lse(s.desc||'')+'</div></div>'+
       '<button class="switch'+(s.enabled?' on':'')+'" id="lqSwitch"></button></div></div>';
     html += '<div class="sd-sec"><div class="sd-sec-title">文件</div><div class="sd-list">'+
       '<div class="sd-row"><div class="r-main"><div class="r-name">SKILL.md</div>'+
-      '<div class="r-desc" style="font-size:11.5px;word-break:break-all">'+escHtml(s.path||'')+'</div>'+
-      '<div class="s" style="font-size:11.5px;color:var(--ink-400);margin-top:2px">'+escHtml(String(s.size||0))+' 字节</div></div></div>'+
+      '<div class="r-desc" style="font-size:11.5px;word-break:break-all">'+_lse(s.path||'')+'</div>'+
+      '<div class="s" style="font-size:11.5px;color:var(--ink-400);margin-top:2px">'+_lse(String(s.size||0))+' 字节</div></div></div>'+
       '<div class="sd-row"><div class="r-main"><div class="r-name">依赖 MCP</div>'+
-      '<div class="r-desc">'+escHtml(s.mcp || '—（技能自带实现，不需要 MCP）')+'</div></div>'+
+      '<div class="r-desc">'+_lse(s.mcp || '—（技能自带实现，不需要 MCP）')+'</div></div>'+
       '<span class="r-tag">'+(s.mcp?'见「MCP 服务」':'自包含')+'</span></div></div></div>';
     if(s.trial === 'ask'){ html += localAskHtml(); }
     if(s.trial === 'workbench'){ html += localWorkbenchHtml(); }
-    document.getElementById('skillDetail').innerHTML = html;
-    document.querySelector('.sd-back').addEventListener('click', function(){ switchView('market'); });
+    var host = document.getElementById('skillDetail');
+    if(!host){ _lst('找不到技能详情容器 #skillDetail'); return; }
+    host.innerHTML = html;
+    var back = document.querySelector('.sd-back');
+    if(back){ back.addEventListener('click', function(){ if(typeof switchView === 'function') switchView('market'); }); }
     var sw = document.getElementById('lqSwitch');
     if(sw){
       sw.addEventListener('click', function(){
         var next = !sw.classList.contains('on');
-        spJson('/api/capabilities/toggle','POST',{kind:'skill',id:s.id,enabled:next}).then(function(r){
-          if(r && r.ok === false){ showToast(r.error || '切换失败', false); return; }
+        _lsq('/api/capabilities/toggle', 'POST', {kind:'skill', id:s.id, enabled:next}).then(function(r){
+          if(r && r.ok === false){ _lst(r.error || '切换失败'); return; }
           sw.classList.toggle('on', next);
-          LOCAL_CAP = null;                       /* 让下次回到市场时状态是新的 */
-          showToast((next?'已开启　':'已关闭　')+s.name);
-        }).catch(function(){ showToast('切换失败', false); });
+          LOCAL_CAP = null;
+          _lst((next?'已开启　':'已关闭　')+s.name);
+        }).catch(function(){ _lst('切换失败'); });
       });
     }
     if(s.trial === 'ask'){ localWireAsk(); }
     if(s.trial === 'workbench'){ localWireWorkbench(s.id); }
-    switchView('skill');
+    if(typeof switchView === 'function') switchView('skill');
   }
-  /* 包一层 buildMarket：搜索/重渲染后把本工作区技能补回市场顶部 */
-  var _localOrigBuildMarket = buildMarket;
-  buildMarket = function(f){
-    _localOrigBuildMarket(f);
-    renderLocalSkills(f || '');
-  };
-  if(document.getElementById('marketBody')){ renderLocalSkills(''); }
-
+  /* 初始化：包一层 buildMarket（搜索/重渲染后补回本节）+ 首次注入 */
+  try{
+    var _localOrigBuildMarket = (typeof buildMarket === 'function') ? buildMarket : null;
+    if(_localOrigBuildMarket){
+      buildMarket = function(f){
+        _localOrigBuildMarket(f);
+        renderLocalSkills(f || '');
+      };
+    }
+    if(document.getElementById('marketBody')){ renderLocalSkills(''); }
+  }catch(e){
+    try{ console.log('[本工作区技能] 初始化失败:', e); }catch(e2){}
+  }
+})();
 </script>
 
 
