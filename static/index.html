@@ -72,7 +72,6 @@ button{font-family:var(--font);cursor:pointer}
 button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 svg{display:block}
 .hidden{display:none!important}
-
 /* ===== Window frame / top tabs ===== */
 .win{display:flex;flex-direction:column;height:100vh}
 .titlebar{display:flex;align-items:center;gap:2px;padding:6px 10px 0;background:#fff;position:relative}
@@ -86,7 +85,6 @@ svg{display:block}
 .wctl:hover{background:var(--bg-hover)}
 .wctl.close:hover{background:#e5484d;color:#fff}
 .wctl svg{width:14px;height:14px}
-
 /* ===== Shell ===== */
 .shell{display:flex;flex:1;min-height:0;background:var(--bg)}
 .sidebar{width:252px;flex:none;background:var(--bg-soft) !important;border-right:.5px solid var(--line);display:flex;flex-direction:column;min-height:0;transition:width 0.2s, background 0.3s}
@@ -155,12 +153,10 @@ svg{display:block}
 .ai-chip{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:var(--r-pill);border:.5px solid var(--line);font-size:12px;color:var(--ink-600)}
 .ai-chip b{font-weight:600}
 .ai-chip .arrow{width:11px;height:11px;color:var(--ink-500)}
-
 /* ===== Scroll region ===== */
 .scroll{flex:1;min-height:0;overflow-y:auto}
 .view{display:none;height:100%}
 .view.active{display:flex;flex-direction:column}
-
 /* ===== Home / greeting / input ===== */
 .home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 48px 120px;text-align:center}
 .home-mark{width:64px;height:64px;margin-bottom:28px}
@@ -189,7 +185,6 @@ svg{display:block}
 .home-chips{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;justify-content:center}
 .hchip{height:30px;padding:0 14px;border-radius:var(--r-pill);background:var(--bg-soft);border:.5px solid var(--line);font-size:13px;color:var(--ink-600)}
 .hchip:hover{background:var(--bg-hover)}
-
 /* ===== Import card / skill market cards ===== */
 .mk-head{padding:22px 34px 0}
 .mk-title{font-size:26px;font-weight:600;letter-spacing:-.02em}
@@ -217,7 +212,6 @@ svg{display:block}
 .skill-card .sc-desc{font-size:12.5px;color:var(--ink-500);margin-top:10px;line-height:1.55;text-align:left}
 .check-orb{position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:var(--r-pill);background:var(--green-500);color:#fff;display:flex;align-items:center;justify-content:center}
 .check-orb svg{width:12px;height:12px}
-
 /* ===== Skill detail ===== */
 .sd{padding:26px 48px 50px}
 .sd-back{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;font-size:13px;color:var(--ink-600);margin-bottom:20px}
@@ -243,7 +237,6 @@ svg{display:block}
 .sd-row .r-name{font-size:13.5px;font-weight:500}
 .sd-row .r-desc{font-size:12px;color:var(--ink-500);margin-top:2px}
 .sd-row .r-tag{font-size:12px;color:var(--ink-600);background:var(--bg-soft);border:.5px solid var(--line);padding:4px 10px;border-radius:var(--r-pill)}
-
 /* ===== Generic list rows (textbook / API / table) ===== */
 .row-card{border:.5px solid var(--line);border-radius:var(--r-md);overflow:hidden}
 .lrow{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:.5px solid var(--line)}
@@ -275,7 +268,6 @@ svg{display:block}
 .ghost-btn{height:32px;padding:0 12px;border-radius:var(--r-sm);border:none;background:var(--bg-soft);color:var(--ink-700);font-size:13px;display:inline-flex;align-items:center;gap:5px}
 .ghost-btn:hover{background:var(--bg-hover)}
 .ghost-btn svg{width:14px;height:14px}
-
 /* ===== Section title rows ===== */
 .view-sec{padding:22px 34px 0}
 .view-h1{font-size:24px;font-weight:600;letter-spacing:-.02em}
@@ -283,14 +275,12 @@ svg{display:block}
 .sec-h{margin-top:26px}
 .sec-h h3{font-size:15px;font-weight:600}
 .sec-h p{font-size:12.5px;color:var(--ink-500);margin-top:3px}
-
 /* ===== Toggle switch ===== */
 .switch{width:46px;height:26px;border-radius:var(--r-pill);background:var(--line-strong);position:relative;border:none;transition:background .18s;flex:none}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:var(--r-pill);background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .18s}
 .switch.on{background:var(--orange)}
 .switch.on::after{transform:translateX(20px)}
 .switch.blue.on{background:var(--blue)}
-
 /* ===== Settings sections ===== */
 .set-body{padding:22px 40px 60px;max-width:860px}
 .set-body .close-x{position:absolute;top:18px;right:22px}
@@ -329,9 +319,9 @@ svg{display:block}
 .gdot{width:8px;height:8px;border-radius:var(--r-pill);background:#fff;border:2px solid var(--blue);flex:none}
 .gdot.gray{border-color:var(--ink-400)}
 .tag-pill{font-size:11px;background:var(--bg-hover);border:.5px solid var(--line);padding:2px 8px;border-radius:var(--r-pill);color:var(--ink-600)}
-.diff-pos{color:var(--green)} .diff-neg{color:var(--red)}
+.diff-pos{color:var(--green)}
+.diff-neg{color:var(--red)}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--ink-500)}
-
 /* ===== Popover / modal ===== */
 .pop{position:absolute;background:#fff;border:.5px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-md);z-index:60;overflow:hidden}
 .pop-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:.5px solid var(--line)}
@@ -361,7 +351,6 @@ svg{display:block}
 .m-check{display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:13px;color:var(--ink-700)}
 .m-check .ck{display:flex;align-items:center;gap:8px}
 .m-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:22px}
-
 /* ===== Side panel (right quadrant) ===== */
 .sidepanel{width:300px;flex:none;border-left:.5px solid var(--line);background:var(--bg);display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:18px 16px;min-height:0}
 .sp-title{font-size:15px;font-weight:600}
@@ -386,7 +375,6 @@ svg{display:block}
 .sp-kv .v{color:var(--ink-900);font-weight:500;text-align:right;word-break:break-all}
 .sp-empty{color:var(--ink-400);font-size:12.5px;text-align:center;padding:24px 10px;line-height:1.7}
 .sp-act{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-
 /* small buttons inside content */
 .icon-ghost{width:28px;height:28px;border-radius:var(--r-sm);border:none;background:transparent;color:var(--ink-500);display:inline-flex;align-items:center;justify-content:center}
 .icon-ghost:hover{background:var(--bg-hover);color:var(--ink-900)}
@@ -616,6 +604,7 @@ svg{display:block}
               <div class="lrow"><div class="lm"><div class="t">当前进度 · 必修二 空间几何（第 1/3 课时）</div><div class="s">薄弱知识点：三视图还原、组合体体积计算</div></div><div class="side"><button class="pill-btn dark">继续学习</button><button class="pill-btn">生成学习计划</button><button class="pill-btn">错题本</button></div></div>
             </div>
           </div>
+          <div class="wz-statusbar" id="wzStatusBar"></div>
         </div>
 
         <!-- ===== Question ===== -->

@@ -379,12 +379,15 @@ def audit_page(theme: dict, svg: str, layout: str, page_no: int = 1,
 # ---------------------------------------------------------------- 整册审计
 
 def audit_pages(theme_id: str, pages: list[str], layouts: list[str] | None = None,
-                custom: list[dict] | None = None) -> dict:
+                custom: list[dict] | None = None, tokens: dict | None = None) -> dict:
     """审一组已经渲染好的 SVG（负样本就是这么喂进来的）。
 
     `custom` 与 `pages` 同长（R15）：第 i 页老师自己改过的字号/字体，用来把"偏离阶梯"降级成提示。
+
+    `tokens`（R27c）：**直接用这份数值**审 —— 给 `design` 通道用（渲染吃的是解析出来的 tokens，
+    审计必须吃同一份，否则"预览=导出"会在审计这一环断掉）。
     """
-    theme = slide_deck.theme(theme_id)
+    theme = tokens if tokens else slide_deck.theme(theme_id)
     lays = list(layouts or ["bullets"] * len(pages))
     cust = list(custom or [])
     rows = [audit_page(theme, svg, lays[i] if i < len(lays) else "bullets", i + 1,

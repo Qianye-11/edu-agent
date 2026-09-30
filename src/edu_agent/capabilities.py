@@ -32,15 +32,25 @@ _TOOLS_CACHE_TTL = 300.0  # MCP 工具清单缓存（要起子进程，慢）
 
 
 # ---------- 第三方 WPS MCP（wps-skills）安装位置解析 ----------
-# 交接约定（docs/09-WPS接入交接要求.md）：第三方源码/node_modules **不入库**，
-# 由 deploy/setup_wps_mcp.cmd 克隆到仓库外的固定位置。解析优先级：
+# 交接约定（docs/09-WPS接入交接要求.md）：第三方源码/node_modules **不入库**。
+# 2026-09-25 起**优先装在项目内 `.deps/`**（老师 C 盘紧张，把第三方与缓存都收进项目盘）；
+# 解析优先级：
 #   1) 环境变量 WPS_MCP_ENTRY（直接指向 dist/index.js）
 #   2) 环境变量 WPS_MCP_DIR（wps-skills 克隆目录）
 #   3) data/wps_mcp.json（安装脚本写的运行时配置）
-#   4) 默认 %LOCALAPPDATA%\edu-agent\deps\wps-skills
+#   4) 项目内 <repo>/.deps/wps-skills（推荐）
+#   5) 旧位置 %LOCALAPPDATA%\edu-agent\deps\wps-skills（兼容老安装）
+def _project_deps_root(name: str) -> Path:
+    """项目内 `.deps/<name>`（仓库根 = 本文件的上两级）。"""
+    return Path(__file__).resolve().parents[2] / ".deps" / name
+
+
 def _default_wps_root() -> Path:
     import os
 
+    local = _project_deps_root("wps-skills")
+    if local.exists():
+        return local
     base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~")
     return Path(base) / "edu-agent" / "deps" / "wps-skills"
 
@@ -188,6 +198,21 @@ SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(id="ppt-master", name="课件生成（原生 PPTX）", icon="P",
               desc="教材内容 → 原生可编辑 PPTX：单个形状可选中拖动、中文字体正确、不依赖 Office",
               category="文档", builtin=True, probe=lambda: _ppt_engine_probe()),
+    # ---- 以下两个技能来自 feat/ppt-view 分支（合并时两边各自新增 → 都保留） ----
+    # 2026-09-23：PPT 优化（读已有 .pptx → 体检 → 保守原地统一 → 内容零丢失校验）
+    # **默认关闭**：它会在任务目录写中间文件、并改写老师的稿，属于"要显式开"的能力。
+    SkillSpec(id="ppt-polish", name="PPT 优化", icon="P",
+              desc="在右侧面板里读入已有 .pptx：体检（页数/字体/字号/密度）、统一字体与字号层级、清理动画，"
+                   "并在导出后逐页校验内容没被改动",
+              category="文档", builtin=True, default_on=False),
+    # 2026-09-27（老师：「启用联网功能，因为计划与 agent 相连」）：联网取图。
+    # 它做的是"把一个公网图片 URL 取回 data/uploads/ 并挂到某一页"——同事的教案 agent 给 URL，
+    # 我们取图/内联/导出带图；**不需要任何图源 key**。搜索类（openverse/pexels…）缺 key 时如实报。
+    # 默认开：老师明确要求启用；关掉它 = 图标/取图入口整体不可用（预览与导出不受影响）。
+    SkillSpec(id="web-image", name="联网取图", icon="N",
+              desc="允许把公网图片 URL 取回本地（data/uploads/）并挂到幻灯片某一页；"
+                   "同事的 agent 可以直接给图 URL。只认 http/https 公网地址，拒内网，单张 ≤10MB",
+              category="素材", builtin=True, default_on=True),
 )
 
 _KIND_SPECS: dict[str, dict[str, McpSpec | SkillSpec]] = {
@@ -526,12 +551,32 @@ def snapshot(deep: bool = False) -> dict:
     return {"mcp": mcp_rows, "skills": skill_rows, "skills_local": local_rows,
             "wps_export_ready": wps_available()[0],
             "session_doc_preview_ready": session_preview_ready(),
+            "ppt_polish_ready": ppt_polish_ready(),
             "state_file": str(state_path())}
 
 
 def session_preview_ready() -> bool:
     """会话内文档预览是否启用（只影响会话页右侧预览面板的渲染，不影响任何导出）。"""
     return is_enabled("skill", "doc-session-preview")
+
+
+def ppt_polish_enabled() -> bool:
+    """PPT 优化开关（默认关）。开不开都不影响 WPS 导出与教案生成。"""
+    return is_enabled("skill", "ppt-polish")
+
+
+def ppt_polish_ready() -> bool:
+    """PPT 优化是否可用 = 开关开着 **且** ppt-master 装好（脚本齐 + 依赖齐）。
+
+    任何一项不满足，面板上的「优化」按钮就该灰显并说明原因——比"点了报错"友好。
+    """
+    if not ppt_polish_enabled():
+        return False
+    try:
+        from edu_agent import ppt_polish  # 延迟导入：没装也不该拖慢能力快照
+        return bool(ppt_polish.status().get("intake_ready"))
+    except Exception:  # noqa: BLE001 自检失败=不可用，不抛
+        return False
 
 
 def wps_available() -> tuple[bool, str]:

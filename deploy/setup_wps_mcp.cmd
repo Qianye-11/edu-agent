@@ -12,7 +12,8 @@ set "REPO=%~dp0.."
 for %%I in ("%REPO%") do set "REPO=%%~fI"
 
 set "DEPS=%EDU_DEPS_DIR%"
-if "%DEPS%"=="" set "DEPS=%LOCALAPPDATA%\edu-agent\deps"
+rem 2026-09-25：默认装到项目内 .deps（老师 C 盘紧张）；仍可用 WPS_DEPS 环境变量覆盖
+if "%DEPS%"=="" set "DEPS=%~dp0..\.deps"
 if not "%~1"=="" set "DEPS=%~1"
 set "DIR=%DEPS%\wps-skills"
 

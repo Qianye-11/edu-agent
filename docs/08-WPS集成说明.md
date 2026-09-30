@@ -34,14 +34,14 @@
 | 安装脚本 / 桥接补丁 | `deploy/setup_wps_mcp.cmd`、`deploy/patch_wps_mcp.ps1` |
 | 适配层测试 | `tests/test_wps_tools.py` |
 | 交接文档与证据 | `tools/wps_spike/`（`README.md` + `evidence/`） |
-| **第三方（不在仓库里）** | `%LOCALAPPDATA%\edu-agent\deps\wps-skills`（由安装脚本克隆；`WPS_MCP_DIR` / `data/wps_mcp.json` 可改） |
+| **第三方（不在仓库里）** | `<repo>\.deps\wps-skills`（装项目内、不入库；`WPS_MCP_DIR` / `data/wps_mcp.json` 可改；旧位置 `%LOCALAPPDATA%\edu-agent\deps` 仍兼容） |
 | 运行态开关 | `data/capabilities.json`（不入库；删掉即回到「全默认开启」） |
 | 导出产物 | 默认 `content/plans/<课题>.docx|.pptx`，可在预览面板「位置」里改目录 |
 
 安装/重装第三方（克隆到仓库外 + `npm ci` + `tsc` + 打补丁 + 写配置）：
 
 ```powershell
-deploy\setup_wps_mcp.cmd              # 默认装到 %LOCALAPPDATA%\edu-agent\deps\wps-skills
+deploy\setup_wps_mcp.cmd              # 默认装到 <repo>\.deps\wps-skills（2026-09-25 起）
 deploy\setup_wps_mcp.cmd D:\deps      # 或指定位置
 ```
 

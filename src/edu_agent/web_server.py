@@ -19,9 +19,13 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -1409,6 +1413,19 @@ def api_session_doc_preview(body: DocPreviewReq):
             slides = slides or []
         if not blocks:
             blocks = _plan_blocks(md)
+    # 老师在面板里改过幻灯片 → 以改过的那份为准；但**正文后来被重出过**就不闷头用旧的：
+    # 改用新正文，并把"你的修改还在会话里、只是没盖上来"这件事告诉前端（docs/19 §12 的不静默覆盖）。
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    saved_doc = _store.get_session_doc(sid)
+    slides_stale = False
+    if saved_doc.get("slides"):
+        saved_sig, cur_sig = saved_doc.get("md_sig") or "", (_md_sig(md) if md.strip() else "")
+        if saved_sig and cur_sig and saved_sig != cur_sig:
+            slides_stale = True
+        elif not (payload.get("slides") if isinstance(payload.get("slides"), list) else None):
+            slides = saved_doc["slides"]
+            title = title or str(saved_doc.get("title") or "")
+    slides_edited = bool(saved_doc.get("slides"))
     # 标题优先级：payload 标题 > 正文首个标题 > 占位
     # （历史会话兜底进来的正文原本带「**【Agent B · 教案 Agent】**」标签，
     #   已由 _strip_agent_tag 摘掉，否则这里只会取到标签、退化成「未命名文档」）
@@ -1429,10 +1446,827 @@ def api_session_doc_preview(body: DocPreviewReq):
         "markdown": md,                                    # 原样回传（Markdown Tab 的输入）
         "blocks": blocks,
         "slides": slides,
+        "slides_edited": slides_edited,                    # 手动改过？前端据此提示，不静默覆盖
+        "slides_stale": slides_stale,                      # 改过、但正文又变了（这次按新正文出）
         "stats": {"chars": len(md), "blocks": len(blocks),
                   "slides": len(slides), "minutes": minutes},
         "note": "内存预览：不落盘、不调用 WPS；需要落盘请走 /api/wps/export",
     }
+
+
+@app.get("/api/slide/fill/plan")
+def api_slide_fill_plan(template_id: str = Query(""), session_id: str = Query(""), title: str = Query("")):
+    """**给外部 agent 的读端**：模板槽位清单 + 我们的内容 + 确定性草案（docs/24 的契约）。
+
+    不做 skill、不设开关：这是"另一个会生成教案的 agent"接入我们出 PPT 的接口。
+    """
+    from edu_agent import slide_fill
+
+    tid = str(template_id or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "缺少 template_id"}, status_code=400)
+    slides = _store.get_session_doc(str(session_id or "").strip() or (_store.current_id() or "")).get("slides") or []
+    try:
+        return slide_fill.plan_payload(tid, slides, title=str(title or ""))
+    except (FileNotFoundError, ValueError) as exc:
+        return JSONResponse({"ok": False, "schema": slide_fill.SCHEMA, "error": str(exc)}, status_code=400)
+
+
+class SlideDeckReq(BaseModel):
+    """**外部 agent 的写端（一步到位）**：一份教案结构 → 直接出 pptx。"""
+
+    lesson: dict | None = None            # {"title": "...", "slides": [{name, bullets[], minutes}]}
+    template_id: str = ""                 # 给了就"按模板填充"；不给就按主题生成
+    theme_id: str = ""
+    outDir: str = ""
+    confirm: bool = False
+    session_id: str = ""
+    #: R27c：**设计规格**（视觉风格 / 沟通模式 / 品牌 / 数值覆盖 / 逐页版式）。
+    #: 不给 = 与以前完全一致（向后兼容）；给了就用它解析出的 tokens 渲染 **同一份 SVG**（预览=导出不变）。
+    design: dict | None = None
+
+
+class SlideDesignPreviewReq(BaseModel):
+    """**R27c 的预览端**：给一份 `design`（可带 slides 或让服务端用会话里那份）→ 立刻出预览 SVG。
+
+    只读、不落盘 —— 所以不需要 `confirm`（与 `/api/slide/render` 同一档）。
+    """
+
+    design: dict | None = None
+    slides: list[dict] | None = None
+    title: str = ""
+    session_id: str = ""
+    annotate: bool = True                 # 默认带可编辑盒子（预览要能点着改）
+
+
+class SlideAuditReq(BaseModel):
+    """**R27c 的自查端**：把一份 `slides` 跑一遍审计，回"哪一页、哪一条、怎么改"。
+
+    只读、不落盘。给了 `design` 就用它解析出的数值审（与渲染同一份口径）。
+    """
+
+    slides: list[dict] | None = None
+    session_id: str = ""
+    design: dict | None = None
+    theme_id: str = ""
+
+
+@app.get("/api/slide/spec")
+def api_slide_spec():
+    """**给 agent 的规格包**（`docs/24` §7.4 的那一个）：我这边认什么、有什么可选、红线在哪。
+
+    与 `/api/slide/design/catalog` 的区别：那个讲"**设计上可调什么**"（风格/品牌/版式），
+    这个讲"**内容上怎么交**"（认哪些键、密度上限、版式白名单、返回里哪些字段要读）。
+    """
+    from edu_agent import design_spec as _ds
+    from edu_agent import layout_data as _ld
+    from edu_agent import slide_deck as _sd
+
+    base = _ds.base_tokens()
+    cat = _ds.catalog()
+    usable = list(_ld.ids())          # 16:9 且**去重**（跨族重名只算一次，与 slide_deck.LAYOUTS 一致）
+    return {
+        "ok": True,
+        "schema": "edu-agent.slide-spec.v1",
+        "endpoints": {
+            "spec": "GET /api/slide/spec（本文）",
+            "design_catalog": "GET /api/slide/design/catalog?full=true（视觉风格/模式/品牌/版式 与它们的规则）",
+            "preview": "POST /api/slide/design/preview（按 design 出预览，不落盘）",
+            "audit": "POST /api/slide/audit（自查：error/warn + 怎么改）",
+            "save": "POST /api/slide/save（把 slides 存回会话）",
+            "deck": "POST /api/slide/deck（出 pptx，落盘要 confirm）",
+            "fill_plan": "GET /api/slide/fill/plan（模板槽位 + 草案）",
+            "fill": "POST /api/slide/fill（按 mapping 填模板）",
+            "object": "POST /api/slide/object（自由层对象 add/patch/delete/up/down/set）",
+            "image_attach": "POST /api/slide/image/attach（给个图片 URL 挂到某页）",
+        },
+        "accepted_keys": list(_sd.SLIDE_KEYS),
+        "dropped_silently": ["不认识的键会被丢掉（不报错）—— 只认上面这些"],
+        "limits": {"chars_per_block": 400, "notes_chars": 2000, "objects_per_page": 30,
+                   "image_mb": 10, "svg_override_bytes": 200_000},
+        "density": base["density"],
+        "canvas": base["canvas"],
+        "type_steps": {k: base["type"][k] for k in ("cover", "title", "label", "body", "caption")},
+        "ranges": base["ranges"],
+        "layouts": {"core": list(_sd.ppt_svg.LAYOUTS), "usable_from_registry": usable,
+                    "total_usable": len(_sd.LAYOUTS),
+                    "custom_prefix": "reg:<id>"},
+        "must_read_in_response": ["warnings[]（越界夹回 / 密度提示 —— 界面不显示，必须自己读）",
+                                 "checks[]（导出后的硬验收结论）",
+                                 "adjustments[]（模板填充时的压缩留痕）"],
+        "locked": _ds.locked(),
+        "hints": ["先 GET /api/slide/spec 看认什么，再 GET /api/slide/design/catalog 挑风格与版式，",
+                  "改完 POST /api/slide/audit 自查（error 必须为 0），最后 POST /api/slide/deck 出稿。"],
+    }
+
+
+@app.post("/api/slide/audit")
+def api_slide_audit(body: SlideAuditReq):
+    """把一份 `slides` 跑一遍审计（只读）：回 `errors/warnings/infos`，每条都带"怎么改"。"""
+    from edu_agent import design_spec as _ds
+    from edu_agent import slide_audit as _sa
+    from edu_agent import slide_deck as _sd
+
+    slides_in = body.slides
+    if not slides_in:
+        doc = _store.get_session_doc(str(body.session_id or "").strip() or (_store.current_id() or ""))
+        slides_in = doc.get("slides") or []
+    slides = _sd.clean_slides(slides_in)
+    if not slides:
+        return JSONResponse({"ok": False, "schema": "edu-agent.slide-audit.v1",
+                             "error": "没有可审的页：给 slides，或先让会话里有一份教案"}, status_code=400)
+    r = _ds.resolve(body.design) if isinstance(body.design, dict) and body.design else None
+    if r:
+        slides = _ds.apply_to_slides(slides, r)
+    tokens = r.as_tokens() if r else None
+    theme_id = r.visual_style if r else (body.theme_id or "tech-editorial")
+    built = _sd.build_deck(theme_id, slides, tokens=tokens)
+    rep = _sa.audit_pages(theme_id, built["pages"], layouts=built["layouts"], tokens=tokens)
+    return {
+        "ok": rep["ok"],
+        "schema": "edu-agent.slide-audit.v1",
+        "theme_id": rep.get("theme_id"),
+        "stats": rep["stats"],
+        "errors": rep["errors"], "warnings": rep["warnings"], "infos": rep["infos"],
+        "pages": [{"page": i + 1, "layout": built["layouts"][i], "findings": row["findings"]}
+                  for i, row in enumerate(rep["pages"])],
+        "design": ({"visual_style": r.visual_style, "applied": r.applied, "warnings": r.warnings}
+                   if r else None),
+        "hints": ["error 必须清零再出稿；warning 可以留，但要逐条判断是不是有意的。",
+                  "每条 findings 都带 `fix`（怎么改）—— 别拿「删内容」当解法，宁可拆页。"],
+    }
+
+
+@app.post("/api/slide/design/preview")
+def api_slide_design_preview(body: SlideDesignPreviewReq):
+    """按设计规格出**预览**（R27c）：`design` → 解析数值 → 渲染每页 SVG（不落盘）。
+
+    返回 `{ok, pages, boxes, layouts, resolved, applied, warnings, checks}`：
+    * `resolved` 是最终生效的数值（palette/type/geometry/density/逐页版式）—— agent 据此知道自己调成了什么；
+    * `warnings` 里是"越界被夹/不认识的风格/版式"这类说明（**界面不显示，agent 必须读**）；
+    * `pages` 与导出用的是**同一份渲染**（`slide_deck.build_deck`），所以"预览=导出"没被破坏。
+    """
+    from edu_agent import design_spec as _ds
+    from edu_agent import slide_deck as _sd
+
+    slides_in = body.slides
+    if not slides_in:
+        doc = _store.get_session_doc(str(body.session_id or "").strip() or (_store.current_id() or ""))
+        slides_in = doc.get("slides") or []
+    slides = _sd.clean_slides(slides_in)
+    if not slides:
+        return JSONResponse({"ok": False, "schema": "edu-agent.design-preview.v1",
+                             "error": "没有可渲染的页：给 slides，或先让会话里有一份教案"},
+                            status_code=400)
+    r = _ds.resolve(body.design)
+    slides = _ds.apply_to_slides(slides, r)
+    tokens = r.as_tokens()
+    built = _sd.build_deck(r.visual_style or body.title or "design", slides,
+                           title=str(body.title or "").strip(), tokens=tokens,
+                           annotate=bool(body.annotate))
+    if not built.get("ok"):
+        return JSONResponse({"ok": False, "schema": "edu-agent.design-preview.v1",
+                             "error": built.get("error") or "渲染失败"}, status_code=200)
+    return {"ok": True, "schema": "edu-agent.design-preview.v1",
+            "pages": built["pages"], "layouts": built["layouts"],
+            "boxes": built.get("boxes") or [], "canvas": built.get("canvas"),
+            "fonts": built.get("fonts"), "stats": built.get("stats"),
+            "resolved": r.summary(), "applied": r.applied,
+            "warnings": list(r.warnings) + list(built.get("warnings") or []),
+            "locked": _ds.locked()}
+
+
+@app.post("/api/slide/deck")
+def api_slide_deck(body: SlideDeckReq):
+    """一步出稿：`lesson` → pptx（有模板走填充，没模板走我们的版式；`design` 给了就按规格渲染）。"""
+    from edu_agent import permissions
+    from edu_agent import slide_fill
+
+    blocked = permissions.guard("export_pptx", bool(body.confirm))
+    if blocked:
+        return blocked
+    lesson = body.lesson if isinstance(body.lesson, dict) else {}
+    slides = [s for s in (lesson.get("slides") or []) if isinstance(s, dict)]
+    title = str(lesson.get("title") or "").strip()
+    if not slides:
+        return JSONResponse({"ok": False, "schema": slide_fill.SCHEMA,
+                             "error": "lesson.slides 为空：至少要有一个环节"}, status_code=400)
+    out_dir = (body.outDir or "").strip() or None
+    tid = str(body.template_id or "").strip()
+    if tid:
+        out = slide_fill.fill_pptx(tid, slides, title=title, out_dir=out_dir)
+    else:
+        tokens = None
+        if isinstance(body.design, dict) and body.design:
+            from edu_agent import design_spec as _ds
+            from edu_agent import slide_deck as _sd
+
+            r = _ds.resolve(body.design)
+            slides = _ds.apply_to_slides(_sd.clean_slides(slides), r)
+            tokens = r.as_tokens()
+            out = _sd.export_deck_pptx(body.theme_id, slides, title=title, out_dir=out_dir,
+                                       tokens=tokens)
+            out["design"] = {"resolved": r.summary(), "applied": r.applied,
+                             "warnings": list(r.warnings)}
+        else:
+            out = slide_deck.export_deck_pptx(body.theme_id, slides, title=title, out_dir=out_dir)
+    # 契约（docs/24 §7）说成功响应里带 `checks[]`：导出内核把它放在 `verify.checks`，
+    # 这里**拉平一层**（agent 不必知道我们的内部结构）。
+    if isinstance(out, dict) and "checks" not in out:
+        out["checks"] = (out.get("verify") or {}).get("checks") or []
+    out["schema"] = slide_fill.SCHEMA
+    return out
+
+
+# ---------- 幻灯片渲染收口（docs/22 D13 / docs/23 M1） ----------
+#   · /api/slide/themes：内置主题清单（面板的下拉用），不设门禁；
+#   · /api/slide/render：会话数据 → 每页 SVG，**纯内存**；面板只做等比缩放与翻页。
+#   渲染与导出共用同一份 SVG（导出见 M3 的 kind="pptx-deck"），所以"预览 = 导出"成立。
+class SlideRenderReq(BaseModel):
+    theme_id: str = ""               # 空 = 用默认主题
+    template_id: str = ""            # 导入的演示模板（借它的配色/字体；给了就压过 theme_id）
+    slides: list[dict] | None = None  # 会话里那份幻灯片数据（可为空 → 由 markdown 派生）
+    title: str = ""
+    markdown: str = ""               # 没给 slides 时的兜底来源
+    session_id: str = ""
+    annotate: bool = False           # True = 给文字槽打 data-slot 并回 boxes（**页内编辑用**；导出不传）
+
+
+class SlideSlotReq(BaseModel):
+    """页内编辑一格：改哪个槽、改成什么（槽位命名见 `slide_deck.apply_slot`）。
+
+    `patch`（R14）是"这一格被拖动/改过大小/改过层级/被删掉"的样子：
+    `{dx, dy, dw, dh, size, color, align, lh, z, hidden}` —— 与 `text` 可以一起给，也可以只给一个。
+    """
+
+    session_id: str = ""
+    index: int = 0                   # 第几页（0 起）
+    slot: str = ""                   # 如 title / block:1 / left:bullet:0
+    text: str | None = None          # 不给 = 只改样子（拖动/改大小/层级/删除）
+    patch: dict | None = None        # R14：几何/样式/层级/删除（只给 patch 就是"只挪字不改字"）
+    slides: list[dict] | None = None  # 不给就取会话里那份
+    title: str = ""
+
+
+class SlideSaveReq(BaseModel):
+    session_id: str = ""
+    slides: list[dict] | None = None
+    title: str = ""
+    markdown: str = ""              # 存的时候记下"当时对着哪份教案正文改的"
+
+
+class SlideFillReq(BaseModel):
+    template_id: str = ""
+    session_id: str = ""
+    slides: list[dict] | None = None
+    title: str = ""
+    outDir: str = ""
+    confirm: bool = False           # 落盘类操作，先过权限闸门
+
+
+class SlideImageReq(BaseModel):
+    """联网取图（R18 前置）：把一个图片地址取回本地并挂到某一页。
+
+    `url` = 同事的 agent / 老师给的公网图片地址；`index` = 挂到第几页（0 起）；
+    `slot` = 这一页的哪个位置（现在只有 `media` 版式有图位，默认就是它）。
+    `action`：`attach`（取图并挂上）/ `detach`（卸下这一页的图）。
+    """
+
+    action: str = "attach"
+    session_id: str = ""
+    index: int = 0
+    url: str = ""
+    alt: str = ""
+    credit: str = ""
+    slides: list[dict] | None = None
+    title: str = ""
+    confirm: bool = False           # 取图要落盘（data/uploads/），先过权限闸门
+
+
+def _md_sig(md: str) -> str:
+    """教案正文的指纹：用来判断"改幻灯片之后，正文有没有被重出过"。"""
+    return hashlib.sha1((md or "").encode("utf-8")).hexdigest()[:12]
+
+
+class SlideFindReq(BaseModel):
+    """跨页查找 / 替换（R18）：与页内编辑**同一条写路径**（`slide_deck.apply_slot`）。
+
+    `scope`：`all`（整册，默认）/ `page`（只当前页）；`slots` 给了就只动那几个槽（"只替换这一处"）。
+    `replace` 给空串 = 删除匹配（WPS 允许空替换）。`query` 按**字面**找，不当正则。
+    """
+
+    session_id: str = ""
+    query: str = ""
+    replace: str = ""
+    index: int = 0
+    scope: str = "all"
+    slots: list[str] | None = None
+    case_sensitive: bool = False
+    do: str = "find"                # find | replace
+    slides: list[dict] | None = None
+    title: str = ""
+
+
+@app.post("/api/slide/find")
+def api_slide_find(body: SlideFindReq):
+    """**跨页查找 / 替换**：查找只读；替换走 `slide_deck.replace_text`（内部用 `apply_slot`）后落库。
+
+    为什么单开一个接口而不是前端循环调 `/api/slide/slot`：一次替换可能命中十几处、跨好几页，
+    循环调用会写十几次会话（还可能中途失败留下半成品）。这里一次算完、一次落库。
+    """
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not slides:
+        slides = [s for s in (_store.get_session_doc(sid).get("slides") or []) if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可查找的幻灯片（先有教案内容）"}, status_code=400)
+    query = str(body.query or "")
+    if not query.strip():
+        return {"ok": True, "hits": [], "changed": 0, "slides": slides, "query": "", "session_id": sid}
+    pages = None if str(body.scope or "all") == "all" else [int(body.index or 0)]
+    if str(body.do or "find").lower() != "replace":
+        hits = slide_deck.find_text(slides, query, case_sensitive=bool(body.case_sensitive),
+                                    pages=pages)
+        return {"ok": True, "query": query, "hits": hits,
+                "hit_pages": sorted({h["index"] for h in hits}), "changed": 0,
+                "slides": slides, "session_id": sid}
+    out = slide_deck.replace_text(slides, query, str(body.replace or ""),
+                                  case_sensitive=bool(body.case_sensitive), pages=pages,
+                                  slots=body.slots)
+    cleaned = slide_deck.clean_slides(out["slides"])
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    if str(body.title or "").strip():
+        cur["title"] = str(body.title).strip()
+    _store.set_session_doc(sid, cur)
+    return {"ok": True, "query": query, "replace": str(body.replace or ""),
+            "hits": out["hits"], "changed": out["changed"], "pages": out["pages"],
+            "page_count": len(out["pages"]), "slides": cleaned, "session_id": sid}
+
+
+@app.post("/api/slide/save")
+def api_slide_save(body: SlideSaveReq):
+    """把面板里改过的幻灯片**存回会话**（`session_docs` 表；老库不需要迁移）。
+
+    存的只是一份数据（页 / 版式 / 文字），渲染仍由 `/api/slide/render` 现场出 SVG ——
+    所以"改完预览与导出同时变"是结构保证，不需要额外同步。
+    同时记下当时正文的指纹：正文后来被重出过的话，预览会改用新正文并把这件事告诉前端（见 doc-preview）。
+    """
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not sid:
+        return JSONResponse({"ok": False, "error": "没有会话可存（先新建/选择会话）"}, status_code=400)
+    slides = slide_deck.clean_slides(body.slides)
+    md = str(body.markdown or "")
+    doc = {"slides": slides, "title": str(body.title or "").strip(),
+           "md_sig": _md_sig(md) if md.strip() else "",   # 没给正文就不记指纹（也就无从"过期"）
+           "slides_edited": True}
+    _store.set_session_doc(sid, doc)
+    return {"ok": True, "session_id": sid, "slides": slides, "slides_edited": True,
+            "warnings": slide_deck.length_warnings(slides), "pages": len(slides)}
+
+
+@app.get("/api/slide/themes")
+def api_slide_themes():
+    """内置主题清单 + 本机字体是否可用（面板提前提示，不用等到导出才发现）。"""
+    try:
+        items = slide_deck.themes()
+    except Exception as exc:  # noqa: BLE001 主题文件坏掉不该把面板打死
+        return {"ok": False, "enabled": capabilities.session_preview_ready(),
+                "error": f"读主题失败：{exc}", "default": "", "themes": []}
+    return {"ok": True, "enabled": capabilities.session_preview_ready(),
+            "default": slide_deck.default_theme_id(), "themes": items}
+
+
+@app.get("/api/slide/template/align")
+def api_slide_template_align(template_id: str = Query("")):
+    """槽位对齐的**读端**：每种结构给一个代表页 + 每个文本框的当前角色（老师据此改）。"""
+    from edu_agent import slide_template
+
+    tid = str(template_id or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "缺少 template_id"}, status_code=400)
+    return slide_template.align_overview(tid)
+
+
+class AlignReq(BaseModel):
+    template_id: str = ""
+    signature: str = ""
+    roles: dict = {}                      # {shape_index: title|body|decoration}
+
+
+@app.post("/api/slide/template/align")
+def api_slide_template_align_save(body: AlignReq):
+    """槽位对齐的**写端**：老师标一次，所有同结构页都按它填。"""
+    from edu_agent import slide_template
+
+    tid = str(body.template_id or "").strip()
+    if not tid or not str(body.signature or "").strip():
+        return JSONResponse({"ok": False, "error": "缺少 template_id 或 signature"}, status_code=400)
+    data = slide_template.save_align(tid, body.signature, body.roles or {})
+    return {"ok": True, "template_id": tid, "signature": body.signature,
+            "roles": (data.get("pages") or {}).get(body.signature) or {}}
+
+
+@app.get("/api/slide/templates")
+def api_slide_templates():
+    """演示模板清单：内置（数值）+ 导入的 `.pptx`（**只借配色/字体/槽位**）。"""
+    from edu_agent import slide_template
+
+    try:
+        items = slide_template.list_templates()
+    except Exception as exc:  # noqa: BLE001 模板库坏了不该把面板打死
+        return {"ok": False, "error": f"读模板库失败：{exc}", "templates": []}
+    return {"ok": True, "enabled": capabilities.session_preview_ready(),
+            "builtin": [t for t in items if t["kind"] == "json"],
+            "imported": [t for t in items if t["kind"] == "pptx"]}
+
+
+@app.post("/api/slide/template/delete")
+def api_slide_template_delete(body: dict):
+    """**软删**一份导入的演示模板（移进 `content/ppt_templates/_trash/`，老师能找回来）。
+
+    为什么补这个入口：老师导错一份 .pptx 就再也去不掉了（R8 清理体检残留时只能直接调库函数），
+    内置的三套数值模板**不允许删**。
+    边界：只动 `content/ppt_templates/` 下这一个模板目录，原稿在 `_trash` 里保留。
+    """
+    from edu_agent import slide_template
+
+    tid = str((body or {}).get("template_id") or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "没给模板 id"}, status_code=400)
+    try:
+        out = slide_template.delete_template(tid)
+    except Exception as exc:  # noqa: BLE001 删失败要说清楚，别让按钮点了没反应
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
+@app.post("/api/slide/template/import")
+async def api_slide_template_import(file: UploadFile = File(...), name: str = Query("")):
+    """导入一份 `.pptx` 当演示模板（原稿收进模板库、**只读**；抽不出槽位就退化成只借配色）。"""
+    from edu_agent import slide_template
+
+    fname = (file.filename or "template.pptx").lower()
+    if not fname.endswith((".pptx", ".pptm", ".potx")):
+        return JSONResponse({"ok": False, "error": "只支持 .pptx（含 .pptm/.potx）"}, status_code=400)
+    tmp = Path(tempfile.mkdtemp(prefix="tplup_")) / (file.filename or "template.pptx")
+    try:
+        tmp.write_bytes(await file.read())
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"读上传文件失败：{exc}"}
+    out = slide_template.import_pptx(tmp, name=name or Path(file.filename or "").stem)
+    shutil.rmtree(tmp.parent, ignore_errors=True)
+    return out
+
+
+@app.post("/api/slide/fill")
+def api_slide_fill(body: SlideFillReq):
+    """把会话内容填进模板（产物在 `data/ppt_out/`；模板原稿只读）。"""
+    from edu_agent import permissions
+    from edu_agent import slide_fill
+
+    blocked = permissions.guard("export_pptx", bool(body.confirm))
+    if blocked:
+        return blocked
+    tid = str(body.template_id or "").strip()
+    if not tid:
+        return JSONResponse({"ok": False, "error": "先选一个导入的演示模板"}, status_code=400)
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    if not slides:
+        sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+        slides = (_store.get_session_doc(sid).get("slides") or [])
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可填的内容（先有教案正文或幻灯片）"}, status_code=400)
+    out = slide_fill.fill_pptx(tid, slides, title=str(body.title or ""),
+                              out_dir=(body.outDir or "").strip() or None)
+    return out
+
+
+@app.post("/api/slide/render")
+def api_slide_render(body: SlideRenderReq):
+    """会话数据 → 每页 SVG。**不落盘、不联网、不依赖 WPS**。"""
+    if not capabilities.session_preview_ready():
+        return {"ok": True, "enabled": False, "pages": [], "warnings": [], "layouts": [],
+                "theme_id": body.theme_id or "", "stats": {"pages": 0}}
+
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    title = str(body.title or "").strip()
+    if not slides:
+        sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+        saved = _store.get_session_doc(sid)            # 老师在面板里改过 → 以改过的为准
+        md_now = str(body.markdown or "")
+        saved_sig, cur_sig = saved.get("md_sig") or "", (_md_sig(md_now) if md_now.strip() else "")
+        if saved.get("slides") and not (saved_sig and cur_sig and saved_sig != cur_sig):
+            slides = saved["slides"]
+            title = title or str(saved.get("title") or "")
+    if not slides:
+        md = _strip_agent_tag(str(body.markdown or ""))
+        if not md.strip():
+            md = _last_plan_markdown(str(body.session_id or "").strip() or (_store.current_id() or ""))
+        if md.strip():
+            try:
+                data = wps_export.slides_from_markdown(md)
+                slides = data.get("slides") or []
+                title = title or str(data.get("title") or "")
+            except Exception:  # noqa: BLE001 纯预览，解析失败就当没有页
+                slides = []
+    try:
+        tokens = None
+        if str(body.template_id or "").strip():        # 导入模板：借它的配色/字体渲染
+            from edu_agent import slide_template
+
+            tokens = slide_template.theme_for(body.template_id)
+        out = slide_deck.build_deck(body.theme_id, slides, title=title, tokens=tokens,
+                                    annotate=bool(body.annotate))
+    except (FileNotFoundError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    out["enabled"] = True
+    out["note"] = "内存渲染：这份 SVG 就是导出要转换的那一份（同一份源）"
+    return out
+
+
+@app.post("/api/slide/slot")
+def api_slide_slot(body: SlideSlotReq):
+    """**页内编辑一格**：`{index, slot, text}` → 落进会话里那份 slides，返回收干净的整册。
+
+    为什么不让前端自己改字段：槽位→字段的映射只在 `slide_deck.apply_slot` 里维护一份
+    （两边各写一套迟早漂；改字段名时 Python 单测会红，前端只认 slot 字符串）。
+    这里**不落盘**：写会话库与 `/api/slide/save` 是同一条路。
+    """
+    from edu_agent import slide_deck as _deck
+
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not slides:
+        slides = [s for s in (_store.get_session_doc(sid).get("slides") or []) if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可改的幻灯片（先有教案内容）"}, status_code=400)
+    idx = int(body.index if isinstance(body.index, int) else -1)
+    if not (0 <= idx < len(slides)):
+        return JSONResponse({"ok": False, "error": f"页号越界：第 {idx + 1} 页（共 {len(slides)} 页）"},
+                            status_code=400)
+    if body.text is None and not body.patch:
+        return JSONResponse({"ok": False, "error": "要给我 text（改字）或 patch（改样子）"}, status_code=400)
+    res: dict = {"ok": True, "slot": str(body.slot or "")}
+    if body.text is not None:                  # ⚠️ 没给 text ≠ 给空 text：空 text 是"清空/删除这一格"
+        res = _deck.apply_slot(slides[idx], str(body.slot or ""), str(body.text))
+        if not res.get("ok"):
+            return JSONResponse(res, status_code=400)
+    if body.patch:
+        # R14：拖动/改大小/层级/删除走 `slots` 覆盖（与改文字分开落，互不干扰）
+        pres = _deck.apply_override(slides[idx], str(body.slot or ""), dict(body.patch))
+        if not pres.get("ok"):
+            return JSONResponse(pres, status_code=400)
+        res["slots"] = pres.get("slots") or {}
+    cleaned = _deck.clean_slides(slides)
+    # ⚠️ 读-改-写：`set_session_doc` 是**整份替换**，直接塞 {"slides":…} 会把 title / markdown /
+    #    md_sig / slides_edited 一起抹掉（"正文改过没"的判断就废了）。
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    title = str(body.title or "").strip()
+    if title:
+        cur["title"] = title
+    _store.set_session_doc(sid, cur)
+    warnings = _deck.length_warnings(cleaned)
+    return {"ok": True, "slot": res.get("slot"), "index": idx, "slides": cleaned,
+            "pages": len(cleaned), "warnings": warnings, "session_id": sid}
+
+
+@app.get("/api/slide/design/catalog")
+def api_slide_design_catalog(full: bool = False):
+    """R27a：**设计规格目录** —— 告诉 agent（与面板）"有哪些可调的东西"。
+
+    内容：视觉风格 18（纪律 + 我们给的默认数值）· 沟通模式 5 · 品牌 21（色板）· 版式 7 族 86 个 ·
+    可覆盖的数值键与硬边界 · **锁死清单**（画布/安全边距/元素白名单/预览=导出/审计 error 0/落盘红线）。
+
+    `?full=true` 才带上规则全文与版式槽位几何（默认只给 id 与一句话，别让目录接口吐 200KB 出去）。
+    注册表是**自包含**的（`content/ppt_templates/_design/*.json`，由 `tools/compile_design_registry.py`
+    从 `.deps` 编译而来）—— 两份 skill 不在场也照常可用（`docs/29` §1.2 红线）。
+    """
+    from edu_agent import design_spec as _ds
+
+    try:
+        return _ds.catalog(full=bool(full))
+    except FileNotFoundError as exc:                     # 注册表没编译过：说清怎么修，不 500
+        return JSONResponse({"ok": False, "error": f"设计规格注册表未就绪：{exc}",
+                             "hint": "跑 .venv\\Scripts\\python.exe tools\\compile_design_registry.py"},
+                            status_code=200)
+
+
+@app.get("/api/slide/image/providers")
+def api_slide_image_providers():
+    """联网取图的状态：先把"现在能不能搜图、缺什么"说清楚（不假装能搜）。"""
+    from edu_agent import capabilities as _caps
+    from edu_agent import slide_image as _si
+
+    enabled = _caps.is_enabled("skill", "web-image")
+    st = _si.provider_status()
+    st.update({"enabled": enabled, "uploads": str(_si.uploads_root())})
+    if not enabled:
+        st["hint"] = "「联网取图」这个 skill 现在是关的 —— 到「Skill 市场 → 素材」打开它"
+    return st
+
+
+@app.post("/api/slide/image/attach")
+def api_slide_image_attach(body: SlideImageReq):
+    """**联网取图**：把 `url` 取回 `data/uploads/` 并挂到第 `index` 页（预览与导出都带图）。
+
+    为什么要过权限闸门：这是**落盘 + 出网**的动作（老师要求"联网功能"要能看见边界）。
+    红线：只写 `data/uploads/`（`content/plans/` 一个字不写）；只认公网 http/https（拒内网）；
+    单张 ≤10MB；类型白名单。搜索类图源缺 key 时**如实报**，并提示"让同事的 agent 直接给 URL"。
+    """
+    from edu_agent import capabilities as _caps
+    from edu_agent import slide_image as _si
+
+    if not _caps.is_enabled("skill", "web-image"):
+        return JSONResponse({"ok": False, "gate": "skill", "skill": "web-image",
+                             "error": "「联网取图」这个 skill 是关的（到 Skill 市场打开它）"},
+                            status_code=200)
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    slides = [s for s in (body.slides or []) if isinstance(s, dict)]
+    if not slides:
+        slides = [s for s in (_store.get_session_doc(sid).get("slides") or []) if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可挂图的幻灯片（先有教案内容）"}, status_code=400)
+    idx = int(body.index if isinstance(body.index, int) else -1)
+    if not (0 <= idx < len(slides)):
+        return JSONResponse({"ok": False, "error": f"页号越界：第 {idx + 1} 页（共 {len(slides)} 页）"},
+                            status_code=400)
+    if str(body.action or "attach").lower() == "detach":
+        slides[idx].pop("image", None)
+        cleaned = slide_deck.clean_slides(slides)
+        cur = dict(_store.get_session_doc(sid) or {})
+        cur["slides"] = cleaned
+        cur["slides_edited"] = True
+        _store.set_session_doc(sid, cur)
+        return {"ok": True, "action": "detach", "index": idx, "slides": cleaned, "session_id": sid}
+
+    # 先把"这个地址本身行不行"说清楚（协议/主机），再谈权限与下载 —— 顺序反了会让空地址也走成权限提示
+    check = _si.check_url(str(body.url or ""))
+    if not check.get("ok"):
+        return JSONResponse({"ok": False, "error": check.get("error")}, status_code=400)
+    if not body.confirm:
+        return JSONResponse({"ok": False, "gate": "permission", "action": "web_image_fetch",
+                             "need": "confirm",
+                             "hint": f"这一步会：联网把这张图取回来存到 data/uploads/ 并挂到第 {idx + 1} 页。"},
+                            status_code=200)
+    got = _si.fetch_url(str(body.url or ""), sid)
+    if not got.get("ok"):
+        return {"ok": False, "error": got.get("error") or "取图失败", "providers": _si.provider_status()}
+    pic = {"src": got["path"]}
+    if str(body.alt or "").strip():
+        pic["alt"] = str(body.alt).strip()[:80]
+    credit = str(body.credit or "").strip() or (("来源：" + str(body.url).split("/")[2]) if body.url else "")
+    if credit:
+        pic["credit"] = credit[:40]
+    slides[idx]["image"] = pic
+    cleaned = slide_deck.clean_slides(slides)
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    if str(body.title or "").strip():
+        cur["title"] = str(body.title).strip()
+    _store.set_session_doc(sid, cur)
+    return {"ok": True, "action": "attach", "index": idx, "image": pic, "slides": cleaned,
+            "bytes": got.get("bytes"), "sha256": got.get("sha256"), "file": got.get("file"),
+            "session_id": sid,
+            "detail": f"已把这张图挂到第 {idx + 1} 页（{got.get('bytes', 0) // 1024} KB，存在 data/uploads/）"}
+
+
+@app.post("/api/slide/image/upload")
+async def api_slide_image_upload(file: UploadFile = File(...), session_id: str = Form(""),
+                                 treat: str = Form("1")):
+    """**本地上传一张图**（R22）：落到 `data/uploads/<会话>/`，太大就先缩一版（`image_treat --fit`）。
+
+    与联网取图同一套红线：只写 uploads（`content/plans` 一个字不写）、类型白名单（按文件头兜底）、
+    体积上限 20MB。返回的是**相对 uploads 的路径** —— 前端拿它去 `POST /api/slide/object`
+    加一个 `kind:"image"` 的对象（这样图能像形状一样拖/缩放，而不是只能放"图文"版式的固定槽）。
+    """
+    from edu_agent import slide_image as _si
+
+    data = await file.read()
+    sid = str(session_id or "").strip() or (_store.current_id() or "")
+    got = _si.save_upload(data, file.filename or "upload.png", sid)
+    if not got.get("ok"):
+        return JSONResponse({"ok": False, "error": got.get("error") or "上传失败"}, status_code=400)
+    out = dict(got)
+    out.pop("file", None)
+    if str(treat or "1") not in ("0", "false", ""):
+        opt = _si.optimize(got["path"])
+        if opt.get("ok") and opt.get("path") != got["path"]:
+            out.update({"path": opt["path"], "from": got["path"], "treated": opt.get("treated") or "",
+                        "width": (opt.get("info") or {}).get("width", out.get("width")),
+                        "height": (opt.get("info") or {}).get("height", out.get("height"))})
+        if opt.get("note"):
+            out["note"] = opt["note"]
+    out.update({"session_id": sid, "detail": "图已收到（存在 data/uploads/）" + ("；" + out["note"] if out.get("note") else "")})
+    return out
+
+
+class SlideObjectReq(BaseModel):
+    """自由层对象（R21）：插入 / 改 / 删 / 上下移一个**老师自己造的**文本框或形状。
+
+    `action`：`add`（要 `kind`/`shape`）、`patch`（要 `id` + `patch`）、`delete`（要 `id`）、
+    `up`/`down`（换数组位置 = 上移/下移一层）、`set`（整份对象数组，撤销/重做走这条）。
+    几何是**绝对设计像素**（`x/y/w/h`），不是槽位那套增量；`theme_id` 只影响新对象的默认配色。
+    """
+
+    session_id: str = ""
+    index: int = 0
+    action: str = "add"
+    id: str = ""
+    kind: str = "shape"
+    shape: str = "rect"
+    patch: dict | None = None
+    objects: list[dict] | None = None
+    slides: list[dict] | None = None
+    title: str = ""
+    theme_id: str = ""
+    src: str = ""                    # kind="image" 用：uploads 下的相对路径
+
+
+@app.post("/api/slide/object")
+def api_slide_object(body: SlideObjectReq):
+    """**自由层**：插入 / 改 / 删 / 上下移一个文本框或形状（改完立刻整册存回会话）。
+
+    为什么单独一个接口而不是塞进 `/api/slide/slot`：槽位是**版式给的**（`apply_slot` 只认那套名字），
+    自由层对象是**老师自己造的**、几何是绝对值、还能增删 —— 混在一个接口里两边都会变糊。
+    """
+    slides = [dict(s) for s in (body.slides or []) if isinstance(s, dict)]
+    sid = str(body.session_id or "").strip() or (_store.current_id() or "")
+    if not slides:
+        slides = [dict(s) for s in (_store.get_session_doc(sid).get("slides") or [])
+                  if isinstance(s, dict)]
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可编辑的幻灯片（先有教案内容）"}, status_code=400)
+    idx = int(body.index or 0)
+    if not (0 <= idx < len(slides)):
+        return JSONResponse({"ok": False, "error": f"页号越界：第 {idx + 1} 页（共 {len(slides)} 页）"},
+                            status_code=400)
+    page = slides[idx]
+    objs = slide_deck.clean_objects(page.get("objects"))
+    act = str(body.action or "add").lower()
+    detail, focus = "", ""
+    if act == "add":
+        oid = slide_deck.next_object_id(objs)
+        focus = oid
+        pic = None
+        if str(body.kind) == "image":
+            from edu_agent import slide_image as _si
+            info = _si.probe(_si.uploads_root() / str(body.src or "x"))
+            if info.get("width") and info.get("height"):
+                pic = (float(info["width"]), float(info["height"]))
+        objs = objs + [slide_deck.new_object(body.kind, body.shape, canvas=(1280, 720),
+                                             theme=slide_deck.theme(body.theme_id), oid=oid,
+                                             src=str(body.src or ""), pic=pic)]
+        if len(objs) > slide_deck.MAX_OBJECTS:
+            return {"ok": False, "error": f"一页最多 {slide_deck.MAX_OBJECTS} 个对象（先删几个）"}
+        detail = ("加了一个" + {"text": "文本框", "image": "图片"}.get(str(body.kind), "形状"))
+    elif act == "patch":
+        got = slide_deck.patch_object(objs, body.id, body.patch)
+        if not got.get("ok"):
+            return {"ok": False, "error": got.get("error") or "改不动这个对象"}
+        objs, focus = got["objects"], body.id
+    elif act == "delete":
+        keep = [o for o in objs if str(o.get("id")) != str(body.id)]
+        if len(keep) == len(objs):
+            return {"ok": False, "error": f"这一页没有对象 {body.id}"}
+        objs = keep
+        detail = "删掉了这个对象"
+    elif act in ("up", "down"):
+        ids = [str(o.get("id")) for o in objs]
+        if body.id not in ids:
+            return {"ok": False, "error": f"这一页没有对象 {body.id}"}
+        i = ids.index(body.id)
+        j = i + (1 if act == "up" else -1)
+        if not (0 <= j < len(objs)):
+            return {"ok": False, "error": "已经在最上面了" if act == "up" else "已经在最下面了"}
+        objs[i], objs[j] = objs[j], objs[i]
+        focus = body.id
+        detail = "上移一层" if act == "up" else "下移一层"
+    elif act == "set":
+        objs = slide_deck.clean_objects(body.objects)
+        detail = "对象已更新"
+    else:
+        return JSONResponse({"ok": False, "error": f"不认识的动作：{act}"}, status_code=400)
+
+    if objs:
+        page["objects"] = objs
+    else:
+        page.pop("objects", None)
+    slides[idx] = page
+    cleaned = slide_deck.clean_slides(slides)
+    cur = dict(_store.get_session_doc(sid) or {})
+    cur["slides"] = cleaned
+    cur["slides_edited"] = True
+    if str(body.title or "").strip():
+        cur["title"] = str(body.title).strip()
+    _store.set_session_doc(sid, cur)
+    return {"ok": True, "action": act, "index": idx, "id": focus,
+            "objects": (cleaned[idx].get("objects") or []), "slides": cleaned,
+            "count": len(cleaned[idx].get("objects") or []), "session_id": sid, "detail": detail}
 
 
 def _plan_blocks(md: str) -> list[dict]:
@@ -1947,7 +2781,9 @@ def api_mcp_status():
     return {"mcp": snap["mcp"], "skills": snap["skills"],
             "wps_export_ready": capabilities.wps_available()[0],
             # 会话内文档预览是否启用（skill: doc-session-preview；只影响会话页右侧预览面板）
-            "session_doc_preview_ready": capabilities.session_preview_ready()}
+            "session_doc_preview_ready": capabilities.session_preview_ready(),
+            # PPT 优化可用性（skill: ppt-polish 开关 ∧ ppt-master 装好；见 docs/19-PPT优化与幻灯片编辑.md）
+            "ppt_polish_ready": capabilities.ppt_polish_ready()}
 
 
 # ---------- Skill 调用：通用入口（技能自带入口脚本，平台只转发） ----------
@@ -1966,21 +2802,223 @@ def api_skill_run(body: dict):
 
 
 # ---------- WPS 导出（教案中心 -> .docx / .pptx） ----------
+def _export_media(body: dict) -> dict:
+    """导出 PNG / JPEG / PDF（R23）：**每页 SVG → Edge 无头截图 → Pillow 拼**。
+
+    与 pptx 同源（`slide_deck.build_deck` 出的那份 SVG），所以"预览=导出"在图片/PDF 上也成立。
+    产物落在 `data/ppt_out/<标题>_<kind>_<时间戳>/`（与 pptx 一个地方，老师找得到）。
+    """
+    from edu_agent import ppt_polish, slide_deck, slide_media
+
+    kind = str(body.get("kind") or "png").lower()
+    slides = [s for s in (body.get("slides") or []) if isinstance(s, dict)]
+    theme_id = str(body.get("theme_id") or "").strip()
+    title = str(body.get("title") or "").strip() or "教案"
+    sid = str(body.get("session_id") or "").strip()
+    if not slides and sid:
+        saved = _store.get_session_doc(sid)
+        if saved.get("slides"):
+            slides = saved["slides"]
+            title = str(body.get("title") or "").strip() or str(saved.get("title") or "") or title
+    if not slides:
+        return JSONResponse({"ok": False, "error": "没有可导出的幻灯片（先在面板里生成教案）"},
+                            status_code=400)
+    built = slide_deck.build_deck(theme_id or slide_deck.DEFAULT_THEME, slides, title)
+    pages = built.get("pages") or []
+    if not pages:
+        return JSONResponse({"ok": False, "error": "这份稿没有可导出的页面"}, status_code=400)
+    safe = re.sub(r'[\\/:*?"<>|\s]+', "_", title)[:40] or "教案"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    base = Path(str(body.get("outDir") or "").strip() or ppt_polish.outdir())
+    out_dir = base / f"{safe}_{kind}_{stamp}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    shots = slide_media.render_png(pages, out_dir / "_png", prefix=safe)
+    if not shots.get("ok"):
+        return {"ok": False, "error": shots.get("error") or "截图失败",
+                "edge": shots.get("edge") or ""}
+    pngs = shots["files"]
+    stats = [slide_media.png_stats(p) for p in pngs]
+    sizes = {(s.get("width"), s.get("height")) for s in stats}
+    inks = [float(s.get("ink") or 0) for s in stats]
+    checks = [
+        {"name": "每页尺寸 1280×720", "ok": sizes == {(1280, 720)}, "detail": str(sorted(sizes))},
+        {"name": "每页都有内容（不是空白）", "ok": all(i > 0.005 for i in inks),
+         "detail": "墨迹占比 " + "、".join(f"{i:.3f}" for i in inks)},
+        {"name": "页数与幻灯片一致", "ok": len(pngs) == len(pages),
+         "detail": f"{len(pngs)} 张 / {len(pages)} 页"},
+    ]
+    if kind == "jpeg":
+        made = slide_media.make_jpegs(pngs, out_dir, prefix=safe)
+        if not made.get("ok"):
+            return {"ok": False, "error": made.get("error") or "转 JPEG 失败"}
+        files, filename = made["files"], f"{safe}.jpg（{len(made['files'])} 张）"
+        for p in pngs:                                   # JPEG 交付时不必留中间 PNG
+            Path(p).unlink(missing_ok=True)
+        try:
+            (out_dir / "_png").rmdir()
+        except OSError:
+            pass
+    elif kind == "pdf":
+        made = slide_media.make_pdf(pngs, out_dir / f"{safe}.pdf")
+        if not made.get("ok"):
+            return {"ok": False, "error": made.get("error") or "拼 PDF 失败"}
+        files, filename = [made["file"]], Path(made["file"]).name
+    else:
+        files, filename = pngs, f"{safe}.png（{len(pngs)} 张）"
+    ok = all(c["ok"] for c in checks)
+    out = {"ok": ok, "kind": kind, "filename": filename, "outDir": str(out_dir), "files": files,
+           "pages": len(pages), "size": shots.get("size"), "checks": checks,
+           "browser": Path(shots.get("edge") or "").name,
+           "download_url": "/api/wps/download?path=" + urllib.parse.quote(str(out_dir)),
+           "detail": (f"已导出 {len(pages)} 页（{kind.upper()} · 1280×720）· " +
+                      "；".join(("✅ " if c["ok"] else "⚠️ ") + c["name"] for c in checks))}
+    if str(body.get("delivery") or "") in ("1", "true", "yes"):
+        out["delivery"] = _delivery_check(str(out_dir / f"{safe}.pptx"))
+    return out
+
+
+def _delivery_check(pptx_path: str) -> dict:
+    """产物交付体检（R23）：ppt-master 的 `pptx_delivery_check.py`，**只读**。
+
+    为什么值得跑：老师要拿去上课、发给学生；字体缺失/外链/媒体缺失这类问题在 WPS 里
+    未必当场看得出来，这个脚本一次列出来。我们只把摘要写进结果条，**不阻断导出**。
+    """
+    if not pptx_path or not Path(pptx_path).is_file():
+        return {"ok": False, "error": "没有 pptx 可体检"}
+    from edu_agent import ppt_polish
+
+    tool = ppt_polish.scripts_dir() / "pptx_delivery_check.py"
+    if not tool.is_file():
+        return {"ok": False, "error": "ppt-master 不在（跑不了交付体检）"}
+    try:
+        proc = subprocess.run([sys.executable, str(tool), str(pptx_path)],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": f"体检没跑成：{type(exc).__name__}"}
+    raw = (proc.stdout or "").strip()
+    data: dict = {}
+    if raw:
+        try:
+            data = json.loads(raw[raw.find("{"):raw.rfind("}") + 1] or "{}")
+        except Exception:                             # noqa: BLE001 不是 JSON 就只留原文尾巴
+            data = {}
+    risks = data.get("risks") or data.get("issues") or data.get("findings") or []
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    return {"ok": True, "exit": proc.returncode, "risks": risks,
+            "risk_count": len(risks) if isinstance(risks, list) else summary.get("total", 0),
+            "summary": summary or {k: v for k, v in data.items()
+                                   if k in ("status", "ok", "passed", "warnings", "errors")},
+            "raw_tail": "" if data else raw[-400:]}
+
+
+def _export_pptx_deck(body: dict) -> dict:
+    """幻灯片导出：**同一份 SVG**（面板预览用的那份）→ 原生可编辑 pptx。
+
+    `docs/22` D15 双轨：默认走 `slide_deck.export_deck_pptx`（ppt-master 转换）；
+    转换没通过硬验收、或设了 `EDU_PPT_EXPORT=legacy` ⇒ **自动回退**旧的 `pptx_native`，
+    并在响应里带 `fallback/reason`（面板会明示，不静默降级）。
+    """
+    from edu_agent import slide_deck
+
+    slides = [s for s in (body.get("slides") or []) if isinstance(s, dict)]
+    theme_id = str(body.get("theme_id") or "").strip()
+    title = str(body.get("title") or "").strip()
+    out_dir = (body.get("outDir") or "").strip() or None
+    md = _strip_agent_tag(str(body.get("markdown") or ""))
+    sid = str(body.get("session_id") or "").strip()
+    if not slides and sid:                       # **明确给了会话**才用会话里那份（不猜"当前会话"）
+        saved = _store.get_session_doc(sid)
+        if saved.get("slides"):
+            slides = saved["slides"]
+            title = title or str(saved.get("title") or "")
+    if not slides and not md.strip():            # 既没幻灯片也没正文：明确报错，别静默导出别人的稿
+        return JSONResponse({"ok": False,
+                             "error": "没有可导出的内容（既没有幻灯片，也没有教案正文；"
+                                      "先在面板里生成教案，或带上 session_id）"},
+                            status_code=400)
+
+    def _legacy(reason: str) -> dict:
+        from edu_agent import wsl_docx
+
+        # 新版式这条线的产物目录是 data/ppt_out；回退时**别**把稿子写进老师的 content/plans
+        # （旧版式导出从面板走时仍按它原来的默认行为，这里只改新版式的回退）
+        fallback_dir = out_dir or str(ppt_polish.outdir())
+        r = wsl_docx.export_best(body.get("payload") or {}, markdown=md, kind="pptx",
+                                 out_dir=fallback_dir)
+        r = dict(r or {})
+        r["fallback"] = True
+        r["reason"] = reason
+        r["backend"] = f"legacy（{r.get('backend') or 'pptx_native'}）"
+        if r.get("ok"):
+            r["detail"] = (r.get("detail") or "已用旧版式导出") + f"　（回退原因：{reason}）"
+        return r
+
+    if slide_deck.export_backend() == "legacy":
+        return _legacy("设置了 EDU_PPT_EXPORT=legacy")
+
+    theme_ok = True
+    try:                                  # 主题不合法（文件被改坏）也算回退理由，别直接 500
+        slide_deck.theme(theme_id)
+    except Exception as exc:  # noqa: BLE001
+        theme_ok = False
+        theme_reason = f"主题不可用：{exc}"
+
+    if not theme_ok:
+        return _legacy(theme_reason)
+
+    out = slide_deck.export_deck_pptx(theme_id, slides, title=title, out_dir=out_dir)
+    if not out.get("ok"):
+        if out.get("gate") == "install":
+            return {"ok": False, "gate": "install", "error": out.get("error") or "ppt-master 未就绪"}
+        return _legacy(f"新版式导出没通过验收：{out.get('error') or '未知原因'}")
+
+    v = out.get("verify") or {}
+    notes_n = int(out.get("notes_written") or 0)
+    dcheck = _delivery_check(out["file"])           # R23：产物交付体检（只读，不阻断导出）
+    dc_note = ""
+    if dcheck.get("ok"):
+        n = int(dcheck.get("risk_count") or 0)
+        dc_note = ("· 交付体检：无风险" if not n else f"· 交付体检：{n} 条待看")
+        if n:
+            dc_note += "（" + "、".join(str((r or {}).get("code") or (r or {}).get("name") or r)[:28]
+                                      for r in (dcheck.get("risks") or [])[:3]) + "）"
+    elif dcheck.get("error"):
+        dc_note = "· 交付体检没跑成：" + str(dcheck["error"])[:40]
+    return {"ok": True, "backend": "native", "filename": out["filename"], "outDir": out["outDir"],
+            "file": out["file"], "pages": out["pages"], "theme_id": out["theme_id"],
+            "fallback": False,
+            "notes_written": notes_n, "postcheck": out.get("postcheck") or {},
+            "delivery": dcheck,
+            "detail": f"已导出 {out['pages']} 页（原生可编辑）" +
+                      (f" · {notes_n} 页带讲稿备注" if notes_n else "") + " · " + "；".join(
+                f"{'✅' if c['ok'] else '❌'} {c['name']}" for c in (v.get("checks") or [])) + dc_note,
+            "verify": v, "download_url": "/api/wps/download?path=" + str(out["file"])}
+
+
 @app.post("/api/wps/export")
 def api_wps_export(body: dict):
     """教案 -> WPS 文件。payload=教案中心 DZ 模型；markdown=Agent B 教案时改用。
 
-    body: {"payload": {...}, "markdown": "...", "kind": "docx"|"pptx", "outDir": "F:\\导出目录"}
+    body: {"payload": {...}, "markdown": "...", "kind": "docx"|"pptx"|"pptx-deck",
+           "slides": [...], "theme_id": "...", "outDir": "F:\\导出目录"}
+    · `pptx-deck` = **新版式导出**（面板「幻灯片」页签看到的那份，原生可编辑）；
+    · `pptx` = 旧版式导出（保留，回退与兼容都用它）。
     能力关闭时返回 {ok:false, gate:'capability'}，与 MCP/skill 开关状态一致。
     """
     try:
         from edu_agent import permissions
 
         _kind = str(body.get("kind") or "docx").lower()
-        blocked = permissions.guard("export_pptx" if _kind in ("pptx", "ppt") else "export_docx",
+        blocked = permissions.guard("export_pptx" if _kind.startswith("ppt")
+                                    or _kind in ("png", "jpeg", "jpg", "pdf") else "export_docx",
                                     bool(body.get("confirm")))      # 落盘 = 有副作用，先过权限闸门
         if blocked:
             return blocked
+        if _kind in ("pptx-deck", "pptx-native"):
+            return _export_pptx_deck(body)
+        if _kind in ("png", "jpeg", "jpg", "pdf"):
+            return _export_media(body)
         # WPS 可用 → 照旧；WPS 不可用且本机有 WSL 后路 → 改道 WSL 渲染（见 edu_agent/wsl_docx.py）
         from edu_agent import wsl_docx
 
@@ -2560,6 +3598,113 @@ def api_permissions_set(body: dict):
     r = permissions.set_policy(str(body.get("id") or ""), str(body.get("policy") or ""))
     r["actions"] = permissions.list_policies()
     return r
+
+
+# ---------- PPT 优化（2026-09-23，一期：体检 / 保守原地统一 / 内容零丢失校验）----------
+# 与「WPS 落盘导出」是两条独立链路：
+#   · 本组接口：读**别人的** .pptx → 体检 → 原地保守统一 → 逐页校验内容没被改 → 下载新文件；
+#   · /api/wps/export：把**我们的**教案落到 docx/pptx。
+# 共同点：真正落盘都在服务端，进程里不碰 WPS COM。
+class PptPolishReq(BaseModel):
+    job_id: str = ""
+    actions: list[str] = []          # font / size / strip-anim
+    target_ea: str = ""              # 中文字体（默认 微软雅黑）
+    target_latin: str = ""           # 西文字体（默认 Calibri）
+    size_anchors: list[float] = []   # 字号层级锚（默认 44/32/28/24/20/18/16/14/12）
+
+
+def _ppt_gate():
+    """门禁：skill 关 → 403；没装 → 424（并带上自检，前端好提示怎么装）。"""
+    from edu_agent import capabilities
+
+    if not capabilities.ppt_polish_enabled():
+        return JSONResponse({"ok": False, "gate": "capability",
+                             "error": "「PPT 优化」已关闭（设置 → Skill 市场 → PPT 优化）"}, status_code=403)
+    st = ppt_polish.status()
+    if not st.get("intake_ready"):
+        return JSONResponse({"ok": False, "gate": "install", "error": "ppt-master 未就绪",
+                             "hint": "跑 deploy/setup_ppt_master.cmd（或设 PPT_MASTER_HOME）",
+                             "status": st}, status_code=424)
+    return None
+
+
+@app.get("/api/ppt/status")
+def api_ppt_status():
+    """安装自检 + 开关状态（**不设门禁**：面板要靠它决定按钮可不可点）。"""
+    from edu_agent import capabilities
+
+    st = ppt_polish.status()
+    return {"ok": True, "enabled": capabilities.ppt_polish_enabled(),
+            "ready": capabilities.ppt_polish_ready(), "install": st,
+            "actions": [{"id": k, "label": v} for k, v in ppt_polish._ACTION_LABELS.items()]}
+
+
+@app.post("/api/ppt/intake")
+async def api_ppt_intake(file: UploadFile = File(...)):
+    """上传一份 .pptx → 落任务目录（原文件只读）→ 体检报告。"""
+    gate = _ppt_gate()
+    if gate:
+        return gate
+    name = (file.filename or "deck.pptx").lower()
+    if not name.endswith((".pptx", ".pptm", ".ppsx", ".potx")):
+        return JSONResponse({"ok": False, "error": "只支持 .pptx（含 .pptm/.ppsx/.potx）"}, status_code=400)
+    tmp = Path(tempfile.mkdtemp(prefix="pptup_")) / (file.filename or "deck.pptx")
+    try:
+        tmp.write_bytes(await file.read())
+        job = ppt_polish.new_job(tmp)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"落盘失败：{type(e).__name__}: {e}"}, status_code=500)
+    finally:
+        shutil.rmtree(tmp.parent, ignore_errors=True)
+    rep = ppt_polish.intake(job)
+    rep["job_id"] = job["job_id"]
+    return rep
+
+
+@app.post("/api/ppt/polish")
+def api_ppt_polish(body: PptPolishReq):
+    """在任务目录里做保守原地统一（原稿不动），返回逐项报告。"""
+    gate = _ppt_gate()
+    if gate:
+        return gate
+    if not body.job_id:
+        return JSONResponse({"ok": False, "error": "缺 job_id（先 /api/ppt/intake）"}, status_code=400)
+    job = {"job_id": body.job_id, "dir": str(ppt_polish.job_dir(body.job_id)),
+           "source": str(ppt_polish.job_dir(body.job_id) / "source.pptx"), "name": "source.pptx"}
+    if not Path(job["source"]).exists():
+        return JSONResponse({"ok": False, "error": "任务不存在或已过期"}, status_code=404)
+    rep = ppt_polish.polish(job, body.actions, target_ea=body.target_ea,
+                            target_latin=body.target_latin,
+                            size_anchors=body.size_anchors or None)
+    if rep.get("ok"):
+        rep["verify"] = ppt_polish.verify(job, Path(rep["file"]))
+    return rep
+
+
+@app.post("/api/ppt/cancel")
+def api_ppt_cancel(body: dict):
+    """取消 = 删任务目录（源文件与中间产物一起清）。"""
+    jid = str(body.get("job_id") or "")
+    if not jid:
+        return {"ok": False, "error": "缺 job_id"}
+    ppt_polish.cleanup_job(jid)
+    return {"ok": True, "job_id": jid}
+
+
+@app.get("/api/ppt/download")
+def api_ppt_download(job_id: str = ""):
+    """下载优化后的文件（先复制到 data/ppt_out，保留给老师）。"""
+    if not job_id:
+        return JSONResponse({"ok": False, "error": "缺 job_id"}, status_code=400)
+    src = ppt_polish.job_dir(job_id) / "polished.pptx"
+    if not src.is_file():
+        return JSONResponse({"ok": False, "error": "还没有优化结果"}, status_code=404)
+    dst = ppt_polish.outdir() / f"优化_{job_id}.pptx"
+    try:
+        shutil.copy2(src, dst)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"复制失败：{e}"}, status_code=500)
+    return FileResponse(str(dst), filename=dst.name)
 
 
 # ---------- 启动预热（自 api.py 移植：embedding + rerank 常驻） ----------

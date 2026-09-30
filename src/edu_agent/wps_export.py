@@ -294,6 +294,17 @@ def slides_from_markdown(md: str) -> dict:
     return {"title": title, "slides": slides, "source": source}
 
 
+def _put_note(slide, text) -> None:
+    """把一页讲稿写进 pptx 备注（R16）；空的不建备注页，写不进去也不抛（不该拖垮导出）。"""
+    t = str(text or "").strip()
+    if not t:
+        return
+    try:
+        slide.notes_slide.notes_text_frame.text = t
+    except Exception:  # noqa: BLE001 备注页结构异常（个别模板）
+        pass
+
+
 def pptx_native(title: str, grade: str, steps: list[dict], out_path: Path,
                 markdown: str = "") -> dict:
     """用 python-pptx 本地生成 .pptx（不依赖 WPS COM）。
@@ -354,6 +365,7 @@ def pptx_native(title: str, grade: str, steps: list[dict], out_path: Path,
                 para.text = b
                 for r in para.runs:
                     r.font.size = Pt(20)
+        _put_note(slide, s.get("notes"))          # R16：这一页的讲稿进备注（WPS 备注栏能看到）
 
     if not steps:
         slide = prs.slides.add_slide(prs.slide_layouts[1])
@@ -382,6 +394,7 @@ def pptx_native(title: str, grade: str, steps: list[dict], out_path: Path,
                     para.text = b
                     for r in para.runs:
                         r.font.size = Pt(20)
+            _put_note(slide, s.get("notes"))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(out_path))
