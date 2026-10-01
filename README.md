@@ -1,5 +1,42 @@
 # edu-agent：课本教练（Agent A）× 教案 Agent（Agent B）× 总指挥（Agent S）
 
+> ## 🍎 本仓库 = 「启思教育 agent」本机在用版（启思 · CHESS，苹果风 UI）
+>
+> **clone / fork 下来就是本机实际在用的那一版，不需要再切分支。**
+> 前端是单文件自包含的苹果风 UI（`static/index.html` 内联设计层），
+> 界面跑在 **5181** 端口（`start-qisi.bat` 设置 `EDU_WEB_PORT=5181`；后端默认值仍是 5174）。
+>
+> ### 🚀 跑起来（三步）
+>
+> ```bash
+> git clone https://github.com/Clayqi/edu-agent.git
+> cd edu-agent
+> ```
+>
+> 1. 双击 **`setup.cmd`** —— 建 `.venv` + 装 `requirements.txt` + 由 `.env.example` 生成 `.env`
+>    （需 Python 3.11+；`setup.ps1` 是 PowerShell 外包装）
+> 2. 编辑 `.env` 填 `DEEPSEEK_API_KEY`（申请 https://platform.deepseek.com/api_keys ）；
+>    并装本机 Ollama 的 embedding 模型：`ollama pull bge-m3`，然后启动 Ollama
+> 3. 双击 **`start-qisi.bat`** → 浏览器自动打开 http://127.0.0.1:5181
+>    停止用 `stop_ui.cmd`；换端口设 `EDU_WEB_PORT`
+>
+> `start_ui.cmd` / `start_web.cmd` / `启动课本教练.bat` / `run_ui.ps1` 都是等价别名
+> （原来硬编码 `D:\edu-agent` 与 5174，会启动成另一个应用，已改成基于 `%~dp0` 的可移植写法）。
+>
+> ### 仓库带了什么 / 没带什么
+>
+> | | 内容 |
+> |---|---|
+> | ✅ 已入库 | `src/edu_agent/`（全部后端：Agent A/B/S、检索、host 层、教案/课件/PPT、知识库、权限等）、`static/`（苹果风 UI 单文件 + `kg.html` + vendor）、`content/`（教材切节文本 5 章 52 节 + 教案模板 + 知识图谱 + PPT 模板）、**`chroma_db/`（预建向量库，clone 后即可检索）**、`tests/`、`deploy/`、`scripts/`、`eval/`、`legacy/`、`mcp_servers/` |
+> | ❌ 未入库 | `.env`（密钥）、`data/`（会话库／上传／日志／页图缓存，首次启动自动创建）、`.venv/`（`setup.cmd` 一键重建）、`model_cache/`（rerank 模型约 2.2GB，可选） |
+> | ⚠️ 未随仓库分发 | 教材源 PDF（人教A版必修第一册，174MB：版权文件 + 超 GitHub 单文件 100MB 上限）。**教材知识已预建在 `chroma_db` 里，答疑／教案／课件照常可用**；仅「翻教材原文页」跳转会 404 |
+>
+> ### 📦 历史备份（需要时可随时取回）
+>
+> 上传前 `main` 上的两版工作都完整留在 ref 里，各有同名 tag：
+> `main-backup-20260930`（`b53541d3`，9/30 的知识库 + 教学工作台）与
+> `main-backup-20260928`（`a7060c03`，9/24 主线 tip）。
+
 以教材为**唯一事实来源**的高中数学多 Agent 项目（施工版）：
 **Agent A 课本教练**（学生答疑）、**Agent B 教案 Agent**（老师备课）与 **Agent S 总指挥**
 （监督派单）是相互独立、各自完整的 Agent（独立性红线见 [docs/05-多Agent协作计划书.md](./docs/05-多Agent协作计划书.md) §0），

@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高中数学知识星图</title>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    background: #0d0d0d; 
+    height: 100vh; 
+    display: flex; 
+    flex-direction: column; 
+    color: #fff; 
+    overflow: hidden;
+  }
+  /* 星空背景 */
+  .stars {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .stars::before, .stars::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-image: 
+      radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+      radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+      radial-gradient(1px 1px at 50px 160px, #fff, transparent),
+      radial-gradient(2px 2px at 90px 40px, rgba(255,255,255,0.9), transparent),
+      radial-gradient(1px 1px at 130px 80px, #fff, transparent),
+      radial-gradient(2px 2px at 160px 120px, rgba(255,255,255,0.7), transparent),
+      radial-gradient(1px 1px at 200px 50px, #fff, transparent),
+      radial-gradient(2px 2px at 240px 180px, rgba(255,255,255,0.8), transparent),
+      radial-gradient(1px 1px at 70px 200px, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 180px 220px, #fff, transparent),
+      radial-gradient(2px 2px at 280px 90px, rgba(255,255,255,0.7), transparent),
+      radial-gradient(1px 1px at 320px 150px, #fff, transparent);
+    background-size: 350px 350px;
+    animation: twinkle 4s ease-in-out infinite;
+  }
+  .stars::after {
+    background-size: 200px 200px;
+    background-position: 100px 50px;
+    opacity: 0.5;
+    animation-delay: 2.5s;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 0.4; }
+  }
+
+  .header { 
+    background: rgba(13, 13, 13, 0.8); 
+    backdrop-filter: blur(10px);
+    padding: 16px 24px; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    position: relative;
+    z-index: 10;
+  }
+  .header h1 { font-size: 18px; color: #fff; text-shadow: none; }
+  .header .back { color: #fff; text-decoration: none; font-size: 14px; }
+  .progress-bar { display: flex; align-items: center; gap: 12px; }
+  .progress-bar .label { font-size: 13px; color: #aaa; }
+  .progress-bar .bar { width: 160px; height: 8px; background: rgba(255, 255, 255, 0.12); border-radius: 4px; overflow: hidden; }
+  .progress-bar .fill { height: 100%; background: linear-gradient(90deg, #ccc, #fff); transition: width 0.3s; box-shadow: none; }
+  .progress-bar .percent { font-size: 13px; color: #fff; font-weight: 600; }
+
+  .search-box { 
+    padding: 12px 24px; 
+    background: rgba(13, 13, 13, 0.6); 
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex; 
+    gap: 16px; 
+    align-items: center;
+    position: relative;
+    z-index: 10;
+  }
+  .search-box input { 
+    flex: 1; 
+    max-width: 400px; 
+    padding: 8px 12px; 
+    border: 1px solid rgba(255, 255, 255, 0.2); 
+    border-radius: 6px; 
+    font-size: 14px; 
+    outline: none; 
+    background: #1a1a1a; 
+    color: #fff; 
+  }
+  .search-box input:focus { border-color: #fff; box-shadow: none; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #aaa; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+  
+  #chart { flex: 1; width: 100%; position: relative; z-index: 5; animation: kgPop .55s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes kgPop { from { opacity: 0; transform: scale(.965); } to { opacity: 1; transform: scale(1); } }
+  
+  .info-panel { 
+    position: absolute; 
+    top: 140px; 
+    right: 24px; 
+    background: rgba(20, 20, 20, 0.96); 
+    backdrop-filter: blur(15px);
+    padding: 16px; 
+    border-radius: 12px; 
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5); 
+    width: 280px; 
+    display: none; 
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    z-index: 20;
+  }
+  .info-panel h3 { font-size: 16px; margin-bottom: 12px; color: #fff; text-shadow: none; }
+  .info-panel .prereq-title { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .info-panel .prereq-item { 
+    padding: 6px 8px; 
+    background: rgba(255, 255, 255, 0.08); 
+    border-radius: 6px; 
+    margin: 4px 0; 
+    font-size: 13px; 
+    color: #fff; 
+    cursor: pointer; 
+    transition: all 0.2s;
+  }
+  .info-panel .prereq-item:hover { background: rgba(255, 255, 255, 0.15); box-shadow: none; }
+  .info-panel .close { position: absolute; top: 8px; right: 12px; cursor: pointer; color: #888; font-size: 18px; }
+  .mark-btn { 
+    width: 100%; 
+    padding: 10px; 
+    border: none; 
+    border-radius: 8px; 
+    background: #fff; 
+    color: #111; 
+    font-size: 13px; 
+    cursor: pointer; 
+    margin-top: 12px;
+    transition: all 0.2s;
+  }
+  .mark-btn:hover { background: #ccc; box-shadow: none; }
+  .mark-btn.learned { background: #222; color: #fff; }
+</style>
+</head>
+<body>
+  <div class="stars"></div>
+  
+  <div class="header">
+    <h1>✨ 高中数学知识星图</h1>
+    <div class="progress-bar">
+      <span class="label">点亮进度</span>
+      <div class="bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+      <span class="percent" id="progressPercent">0/0</span>
+    </div>
+    <a href="/" class="back">← 返回主页</a>
+  </div>
+  
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="搜索知识点，如：函数、集合、单调性...">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#fff"></div>集合</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ddd"></div>函数</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#bbb"></div>不等式</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#999"></div>指数函数</div>
+    </div>
+  </div>
+  
+  <div id="chart"></div>
+  
+  <div class="info-panel" id="infoPanel">
+    <span class="close" onclick="closeInfo()">×</span>
+    <h3 id="nodeName"></h3>
+    <div style="font-size:11px;color:#888;margin-bottom:10px">
+      <span id="nodeChapter"></span> · <span id="nodeDegree"></span> 个连接
+    </div>
+    <div class="prereq-title">📚 前置知识点（学这个之前要先会）：</div>
+    <div id="prereqList" style="margin-bottom:12px"></div>
+    <div class="prereq-title">🎯 后继知识点（学完这个可以学）：</div>
+    <div id="successorList"></div>
+    <button class="mark-btn" id="markBtn" onclick="toggleLearn()">⭐ 点亮这颗星</button>
+  </div>
+
+<script>
+let network = null, nodesDS = null, edgesDS = null;
+let graphData = { nodes: [], links: [] };
+let learnedSet = new Set(JSON.parse(localStorage.getItem('kg_learned') || '[]'));
+let currentNodeId = null;
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 星座配色
+const constellationColors = {
+  '第一章': '#ffffff',
+  '第二章': '#ddd',
+  '第三章': '#bbb',
+  '第四章': '#999',
+  '初中衔接': '#777'
+};
+
+// vis-network 配置（forceAtlas2Based 布局 + 连续贝塞尔曲线 + 节点自动避让）
+const DEFAULT_VIS_OPTIONS = {
+  physics: {
+    enabled: true,
+    solver: 'forceAtlas2Based',
+    forceAtlas2Based: {
+      gravitationalConstant: -120,
+      centralGravity: 0.002,
+      springLength: 160,
+      springConstant: 0.04,
+      damping: 0.5,
+      avoidOverlap: 0.8
+    },
+    stabilization: { iterations: 50, fit: true },
+    maxVelocity: 30,
+    minVelocity: 0.15
+  },
+  interaction: {
+    hover: true,
+    tooltipDelay: 300,
+    navigationButtons: false,
+    keyboard: false,
+    dragNodes: true,
+    zoomView: true,
+    dragView: true,
+    hoverConnectedEdges: false,
+    selectConnectedEdges: false
+  },
+  nodes: { shape: 'dot', borderWidth: 1, scaling: { min: 2, max: 12 } },
+  edges: {
+    smooth: { type: 'continuous', roundness: 0.4 },
+    selectionWidth: 2,
+    hoverWidth: 1.8,
+    arrows: { to: { enabled: true, scaleFactor: 0.3 } }
+  }
+};
+
+// 深色主题配色
+const KG_DARK = {
+  nodeDimColor: '#444',
+  nodeLabel: '#ffffff',
+  nodeDimLabel: '#888',
+  linkOn: 'rgba(255, 255, 255, 0.55)',
+  linkOff: 'rgba(255, 255, 255, 0.14)',
+  emLine: '#ffffff',
+  defColor: '#ffffff',
+  succBg: 'rgba(255,255,255,0.08)',
+  succText: '#ffffff',
+  empty: '#666',
+  loading: '#888'
+};
+
+// 加载图谱数据
+fetch('/api/kg/graph')
+  .then(r => r.json())
+  .then(data => {
+    // 检查URL参数，按教材过滤
+    const urlParams = new URLSearchParams(window.location.search);
+    const bookFilter = urlParams.get('book');
+    
+    if (bookFilter) {
+      // 按教材过滤节点（这里简单按章节名匹配，后面完善）
+      const bookChapterMap = {
+        '必修一': ['第一章', '第二章', '第三章', '第四章']
+      };
+      const allowedChapters = bookChapterMap[bookFilter] || [];
+      
+      const filteredNodes = data.nodes.filter(n => allowedChapters.includes(n.category));
+      const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+      const filteredLinks = data.links.filter(l => 
+        filteredNodeIds.has(l.source) && filteredNodeIds.has(l.target)
+      );
+      
+      graphData = { nodes: filteredNodes, links: filteredLinks };
+      document.querySelector('h1').textContent = '✨ ' + bookFilter + ' 知识星图';
+    } else {
+      graphData = data;
+      document.querySelector('h1').textContent = '✨ 总知识星图';
+    }
+    
+    updateProgress();
+    renderGraph(graphData.nodes, graphData.links, null, 40);
+  })
+  .catch(err => {
+    document.getElementById('chart').innerHTML = '<div style="padding:40px;text-align:center;color:#999">星图加载失败</div>';
+  });
+
+function saveLearned() {
+  localStorage.setItem('kg_learned', JSON.stringify([...learnedSet]));
+}
+
+function updateProgress() {
+  const total = graphData.nodes.length;
+  const learned = learnedSet.size;
+  const percent = total > 0 ? Math.round(learned / total * 100) : 0;
+  document.getElementById('progressFill').style.width = percent + '%';
+  document.getElementById('progressPercent').textContent = `${learned}/${total}`;
+}
+
+// 自适应稳定迭代：节点越多迭代越少，避免大图渲染卡顿
+function adaptIts(nodes, iters) {
+  const n = (nodes && nodes.length) || 0;
+  if (n >= 300) return Math.min(iters, 40);
+  if (n >= 150) return Math.min(iters, 70);
+  if (n >= 80)  return Math.min(iters, 100);
+  return iters;
+}
+function renderGraph(nodes, links, focusNode = null, iters = 130) {
+  if (!network) return;
+  const its = (typeof iters === 'number' && iters > 0) ? iters : 0;
+  // 动态弹开模式：全图/首次/重新布局时，节点先从画布中心聚成“星核”，再被力导向整体弹开
+  const isBurst = its > 0 && !focusNode && nodes.length >= 2 && nodes.length <= 40;
+  let burstCenter = null;
+  if (isBurst) {
+    const chartEl = document.getElementById('chart');
+    const cw = (chartEl && chartEl.clientWidth) || 800;
+    const ch = (chartEl && chartEl.clientHeight) || 600;
+    try { burstCenter = network.DOMtoCanvas({ x: cw / 2, y: ch / 2 }); } catch(e) {}
+    if (!burstCenter) burstCenter = { x: cw / 2, y: ch / 2 };
+  }
+  const nodeItems = nodes.map((n, i) => {
+    const isLearned = learnedSet.has(n.id);
+    const color = constellationColors[n.category] || KG_DARK.defColor;
+    // 根据度数自动计算大小（度数越高越大，核心节点更突出）
+    const degree = n.degree || 1;
+    let baseSize = isLearned ? (5 + Math.min(degree * 1.2, 7)) : (2 + Math.min(degree * 0.8, 3)); // 点亮大，未点亮小
+    if (focusNode === n.id) baseSize += 4;
+    let px, py;
+    if (burstCenter) {
+      if (nodes.length <= 40) {
+        const ang = (i % 6) * (Math.PI / 3) + Math.random() * 0.4;
+        const rad = 1 + Math.random() * 5;
+        px = burstCenter.x + Math.cos(ang) * rad;
+        py = burstCenter.y + Math.sin(ang) * rad;
+      } else {
+        px = burstCenter.x + (Math.random() - 0.5) * 800;
+        py = burstCenter.y + (Math.random() - 0.5) * 600;
+      }
+    }
+    
+    const lowSpec = nodes.length > 80; // 大图低配：关阴影
+    const item = {
+      id: n.id,
+      label: String(n.name || n.id),
+      title: `<b>${escHtml(n.name)}</b><br>${isLearned ? '✨ 已点亮' : '⭕ 未点亮'}<br>章节：${escHtml(n.category || '-')}<br>${degree} 个连接`,
+      shape: 'dot',
+      size: baseSize,
+      color: {
+        background: isLearned ? color : KG_DARK.nodeDimColor,
+        border: isLearned ? color : KG_DARK.nodeDimColor,
+        highlight: { background: '#fff', border: color },
+        hover: { background: '#fff', border: color }
+      },
+      font: { size: 11, color: isLearned ? KG_DARK.nodeLabel : KG_DARK.nodeDimLabel, face: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+      shadow: (!lowSpec && isLearned) ? { enabled: true, color: color, size: degree > 5 ? 10 : 6, x: 0, y: 0 } : { enabled: false },
+      _degree: degree,
+      _category: n.category || '',
+      _shadowBase: (!lowSpec && isLearned) ? (degree > 5 ? 14 : 8) : 0,
+      _catColor: color
+    };
+    if (burstCenter) { item.x = px; item.y = py; }
+    return item;
+  });
+
+  // 同一对节点之间的多条边：roundness 逐条错开，曲线自然散开互不重叠
+  const pairCount = {};
+  links.forEach(l => {
+    const k = l.source < l.target ? l.source + '~' + l.target : l.target + '~' + l.source;
+    pairCount[k] = (pairCount[k] || 0) + 1;
+  });
+  const pairIdx = {};
+  const lowSpecEdge = links.length > 150; // 大图低配：直线渲染
+  const edgeItems = links.map((l, idx) => {
+    const bothLearned = learnedSet.has(l.source) && learnedSet.has(l.target);
+    const k = l.source < l.target ? l.source + '~' + l.target : l.target + '~' + l.source;
+    const i = pairIdx[k] || 0;
+    pairIdx[k] = i + 1;
+    const roundness = pairCount[k] > 1 ? 0.8 + i * 0.3 : 0.8;
+    const rel = l.relation || '关联';
+    return {
+      id: 'e' + idx,
+      from: l.source,
+      to: l.target,
+      title: escHtml(rel) + (bothLearned ? '（已点亮）' : '未点亮'),
+      width: bothLearned ? 1.8 : 1.2,
+      color: bothLearned ? { color: KG_DARK.linkOn, highlight: KG_DARK.emLine, hover: KG_DARK.emLine }
+                         : { color: KG_DARK.linkOff, highlight: KG_DARK.emLine, hover: KG_DARK.emLine },
+      dashes: rel === '前置知识点' ? [6, 4] : (rel === '可推导' ? [2, 3] : false),
+      smooth: lowSpecEdge ? false : { type: 'continuous', roundness: roundness, forceDirection: 'none' }
+    };
+  });
+
+  nodesDS = new vis.DataSet(nodeItems);
+  edgesDS = new vis.DataSet(edgeItems);
+  if (isBurst) {
+    // 弹开模式：进入可视化动画（非隐藏的定点迭代），先配置好再喂数据，保证从“星核”开始弹
+    const optB = Object.assign({}, DEFAULT_VIS_OPTIONS);
+    optB.physics.enabled = true;
+    optB.physics.stabilization.enabled = false;
+    optB.physics.stabilization.fit = false;
+    optB.physics.forceAtlas2Based.gravitationalConstant = -110; // 更强的互相排斥 → 弹开更明显
+    optB.physics.forceAtlas2Based.centralGravity = 0.002;
+    optB.physics.maxVelocity = 80;
+    optB.physics.minVelocity = 0.1;
+    network.setOptions(optB);
+  }
+  network.setData({ nodes: nodesDS, edges: edgesDS });
+  function settle() {
+    if (focusNode) {
+      network.selectNodes([focusNode]);
+      setTimeout(() => {
+        try { network.focus(focusNode, { scale: 1.3, animation: { duration: 400, easingFunction: 'easeInOutQuad' } }); } catch(e) {}
+      }, 120);
+    } else {
+      try { network.fit({ animation: { duration: 400 } }); } catch(e) {}
+    }
+  }
+  if (its > 0) {
+    if (isBurst) {
+      // ===== 动态弹开：节点聚成“星核”后被力导向整体弹开，稳定瞬间回弹适配 =====
+      let burstDone = false, burstTimer = null;
+      const finishBurst = () => {
+        if (burstDone) return;
+        burstDone = true;
+        if (burstTimer) clearTimeout(burstTimer);
+        lockPhysics();
+        if (focusNode) {
+          try { network.selectNodes([focusNode]); } catch(e) {}
+          setTimeout(() => {
+            try { network.focus(focusNode, { scale: 1.3, animation: { duration: 400, easingFunction: 'easeInOutQuad' } }); } catch(e) {}
+          }, 120);
+        } else {
+          try { network.fit({ animation: { duration: 600, easingFunction: 'easeOutQuint' } }); } catch(e) {}
+        }
+      };
+      network.once('stabilized', finishBurst);
+      burstTimer = setTimeout(finishBurst, nodes.length > 60 ? 1500 : 2000); // 兜底：动画期间一定收敛
+    } else {
+      // 大图/聚焦局部刷新：快速稳定迭代（按节点量自适应），稳定后关闭物理，图静止不卡
+      const opt = Object.assign({}, DEFAULT_VIS_OPTIONS);
+      opt.physics.stabilization.iterations = adaptIts(nodes, its);
+      opt.physics.stabilization.fit = true;
+      network.setOptions(opt);
+      network.once('stabilizationIterationsDone', () => {
+        lockPhysics();
+        settle();
+      });
+    }
+  } else {
+    lockPhysics();
+    settle();
+  }
+}
+
+function updateNodeColors() {
+  if (!nodesDS || !edgesDS) return;
+  const upd = [];
+  nodesDS.get().forEach(n => {
+    const isLearned = learnedSet.has(n.id);
+    const color = constellationColors[n._category] || KG_DARK.defColor;
+    upd.push({
+      id: n.id,
+      color: {
+        background: isLearned ? color : KG_DARK.nodeDimColor,
+        border: isLearned ? color : KG_DARK.nodeDimColor,
+        highlight: { background: '#fff', border: color },
+        hover: { background: '#fff', border: color }
+      },
+      font: { size: 11, color: isLearned ? KG_DARK.nodeLabel : KG_DARK.nodeDimLabel, face: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+      shadow: isLearned ? { enabled: true, color: color, size: (n._degree && n._degree > 5) ? 14 : 8, x: 0, y: 0 } : { enabled: false },
+      _shadowBase: isLearned ? ((n._degree && n._degree > 5) ? 14 : 8) : 0,
+      _catColor: color
+    });
+  });
+  nodesDS.update(upd);
+  const updE = [];
+  edgesDS.get().forEach(e => {
+    const bothLearned = learnedSet.has(e.from) && learnedSet.has(e.to);
+    updE.push({
+      id: e.id,
+      color: bothLearned ? { color: KG_DARK.linkOn, highlight: KG_DARK.emLine, hover: KG_DARK.emLine }
+                         : { color: KG_DARK.linkOff, highlight: KG_DARK.emLine, hover: KG_DARK.emLine },
+      width: bothLearned ? 1.8 : 1.2
+    });
+  });
+  edgesDS.update(updE);
+  try { network.redraw(); } catch(e) {}
+}
+
+// 初始化 vis-network（进入页面即渲染）
+network = new vis.Network(document.getElementById('chart'), { nodes: [], edges: [] }, DEFAULT_VIS_OPTIONS);
+startBreathe();
+
+// 性能优先：布局收敛后彻底关闭物理引擎（停止力导向仿真与动画渲染循环），
+// 图静止不卡；拖动时临时开启物理联动，松手后短稳定并再次关闭
+let draggingNow = false;
+let breatheTimer = null;
+function lockPhysics() {
+  // 不关闭物理引擎，让节点持续轻微浮动
+  try {
+    network.setOptions({
+      physics: {
+        enabled: true,
+        solver: 'forceAtlas2Based',
+        forceAtlas2Based: {
+          gravitationalConstant: -80,
+          centralGravity: 0.001,
+          springLength: 160,
+          springConstant: 0.02,
+          damping: 0.9,
+          avoidOverlap: 0.8
+        },
+        stabilization: { enabled: false },
+        maxVelocity: 8,
+        minVelocity: 0.01
+      }
+    });
+  } catch(e) {}
+  // 用 moveNode 手动给节点加正弦浮动，平滑不跳
+  if (window._floatInterval) clearInterval(window._floatInterval);
+  let _ft = 0;
+  window._floatInterval = setInterval(() => {
+    if (!network || draggingNow || !nodesDS) return;
+    _ft += 0.02;
+    try {
+      const all = nodesDS.get();
+      if (all.length > 80) return; // 大图不浮动，避免卡
+      const upd = [];
+      for (let i = 0; i < all.length; i++) {
+        const n = all[i];
+        const dx = Math.sin(_ft + i * 0.5) * 0.8;
+        const dy = Math.cos(_ft * 0.7 + i * 0.3) * 0.6;
+        if (n.x === undefined) continue;
+        upd.push({ id: n.id, x: n.x + dx, y: n.y + dy });
+      }
+      if (upd.length) nodesDS.update(upd);
+    } catch(e) {}
+  }, 50);
+}
+// 轻量光晕呼吸：只对「已点亮」节点脉动光晕（不移动节点、不触发物理引擎），
+// 视觉上有星星呼吸闪烁的活感；节点过多时自动休眠。相比之前的 moveNode 涟漪几乎零 CPU 开销
+function startBreathe() {
+  if (breatheTimer) return;
+  let t = 0;
+  breatheTimer = setInterval(() => {
+    t++;
+    if (!network || !nodesDS || draggingNow) return;
+    const all = nodesDS.get();
+    // 大图（>60）自动休眠呼吸动画，避免持续重绘卡顿
+    if (!all.length || all.length > 60) return;
+    const upd = [];
+    for (let i = 0; i < all.length; i++) {
+      const n = all[i];
+      if (!learnedSet.has(n.id)) continue;
+      let base = (typeof n._shadowBase === 'number') ? n._shadowBase : 10;
+      let s = base + Math.sin(t * 0.4) * 1.5;
+      if (s < 3) s = 3;
+      upd.push({ id: n.id, shadow: { enabled: true, color: n._catColor || '#888', size: s, x: 0, y: 0 } });
+    }
+    if (upd.length) {
+      try { nodesDS.update(upd); } catch(e) {}
+      // 用 requestAnimationFrame 节流重绘，避免 setInterval 满负荷 redraw
+      if (!window._kgRedrawPending) {
+        window._kgRedrawPending = true;
+        requestAnimationFrame(() => {
+          window._kgRedrawPending = false;
+          try { network.redraw(); } catch(e) {}
+        });
+      }
+    }
+  }, 2600);
+}
+
+// 点击节点
+network.on('dragStart', () => {
+  draggingNow = true;
+  try {
+    network.setOptions({ physics: {
+      enabled: true,
+      solver: 'forceAtlas2Based',
+      forceAtlas2Based: {
+        gravitationalConstant: -120, centralGravity: 0.002,
+        springLength: 160, springConstant: 0.04,
+        damping: 0.4, avoidOverlap: 0.8
+      },
+      stabilization: { enabled: false },
+      timestep: 0.5, adaptiveTimestep: true,
+      maxVelocity: 60, minVelocity: 0.12
+    } });
+  } catch(e) {}
+});
+network.on('dragEnd', () => {
+  draggingNow = false;
+  try { lockPhysics(); } catch(e) {}
+});
+network.on('dragging', () => {
+  try { network.unselectAll(); } catch(e) {}
+});
+network.on('click', params => {
+  if (params.nodes && params.nodes.length) {
+    const id = params.nodes[0];
+    const node = nodesDS.get(id);
+    if (!node) return;
+    currentNodeId = id;
+    showNodeInfo(id, node.label);
+    fetch(`/api/kg/related/${id}?hops=1`)
+      .then(r => r.json())
+      .then(data => renderGraph(data.nodes, data.links, id, 60));
+  }
+});
+
+function showNodeInfo(id, name) {
+  document.getElementById('nodeName').textContent = name;
+  document.getElementById('prereqList').innerHTML = '<div style="color:#666">加载中...</div>';
+  document.getElementById('successorList').innerHTML = '';
+  document.getElementById('nodeChapter').textContent = '';
+  document.getElementById('nodeDegree').textContent = '';
+  document.getElementById('infoPanel').style.display = 'block';
+  
+  const markBtn = document.getElementById('markBtn');
+  if (learnedSet.has(id)) {
+    markBtn.textContent = '💫 取消点亮';
+    markBtn.classList.add('learned');
+  } else {
+    markBtn.textContent = '⭐ 点亮这颗星';
+    markBtn.classList.remove('learned');
+  }
+
+  fetch(`/api/kg/node/${id}`)
+    .then(r => r.json())
+    .then(data => {
+      // 章节和连接数
+      document.getElementById('nodeChapter').textContent = data.chapter || '';
+      document.getElementById('nodeDegree').textContent = data.degree || 0;
+      
+      // 前置知识点
+      const prereqList = document.getElementById('prereqList');
+      if (!data.prerequisites || data.prerequisites.length === 0) {
+        prereqList.innerHTML = '<div style="color:#555;font-size:13px">无前置知识点</div>';
+      } else {
+        prereqList.innerHTML = data.prerequisites.map(p => {
+          const learned = learnedSet.has(p.id) ? ' ✨' : '';
+          return `<div class="prereq-item" onclick="jumpToNode('${p.id}', '${p.name}')">${p.name}${learned}</div>`;
+        }).join('');
+      }
+      
+      // 后继知识点
+      const succList = document.getElementById('successorList');
+      if (!data.successors || data.successors.length === 0) {
+        succList.innerHTML = '<div style="color:#555;font-size:13px">这是末端知识点，后面没有了</div>';
+      } else {
+        succList.innerHTML = data.successors.map(p => {
+          const learned = learnedSet.has(p.id) ? ' ✨' : '';
+          return `<div class="prereq-item" style="background:rgba(255,255,255,0.08);color:#fff" onclick="jumpToNode('${p.id}', '${p.name}')">${p.name}${learned}</div>`;
+        }).join('');
+      }
+    });
+}
+
+function toggleLearn() {
+  if (!currentNodeId) return;
+  if (learnedSet.has(currentNodeId)) {
+    learnedSet.delete(currentNodeId);
+  } else {
+    learnedSet.add(currentNodeId);
+  }
+  saveLearned();
+  updateProgress();
+  showNodeInfo(currentNodeId, document.getElementById('nodeName').textContent);
+  updateNodeColors();
+}
+
+function closeInfo() {
+  document.getElementById('infoPanel').style.display = 'none';
+  renderGraph(graphData.nodes, graphData.links, null, 30);
+}
+
+function jumpToNode(id, name) {
+  showNodeInfo(id, name);
+  fetch(`/api/kg/related/${id}?hops=1`)
+    .then(r => r.json())
+    .then(d => renderGraph(d.nodes, d.links, id, 60));
+}
+
+// 搜索
+let _searchTimer = null;
+document.getElementById('searchInput').addEventListener('input', function(e) {
+  const q = e.target.value.trim();
+  if (_searchTimer) clearTimeout(_searchTimer);
+  if (!q) {
+    renderGraph(graphData.nodes, graphData.links, null, 30);
+    return;
+  }
+  _searchTimer = setTimeout(() => {
+  fetch(`/api/kg/search?q=${encodeURIComponent(q)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.results.length > 0) {
+        const first = data.results[0];
+        showNodeInfo(first.id, first.name);
+        fetch(`/api/kg/related/${first.id}?hops=1`)
+          .then(r => r.json())
+          .then(d => renderGraph(d.nodes, d.links, first.id, 60));
+      }
+    });
+  }, 350);
+});
+
+// vis-network 自动监听窗口大小变化，无需手动 redraw
+</script>
+</body>
+</html>

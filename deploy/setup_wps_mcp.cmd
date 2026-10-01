@@ -3,9 +3,9 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 echo ============================================================
-echo  WPS Office MCP ÒÀÀµ°²×°£¨µÚÈý·½ wps-skills£¬×°ÔÚ²Ö¿âÍâ£©
+echo  WPS Office MCP ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ wps-skillsï¿½ï¿½×°ï¿½Ú²Ö¿ï¿½ï¿½â£©
 echo ============================================================
-echo  ²Ö¿âÀïÖ»·Å±¾ÏîÄ¿µÄÊÊÅä²ã£»µÚÈý·½Ô´ÂëÓë node_modules Ò»ÂÉ²»Èë¿â¡£
+echo  ï¿½Ö¿ï¿½ï¿½ï¿½Ö»ï¿½Å±ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã£»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ node_modules Ò»ï¿½É²ï¿½ï¿½ï¿½â¡£
 echo.
 
 set "REPO=%~dp0.."
@@ -16,55 +16,55 @@ if "%DEPS%"=="" set "DEPS=%LOCALAPPDATA%\edu-agent\deps"
 if not "%~1"=="" set "DEPS=%~1"
 set "DIR=%DEPS%\wps-skills"
 
-echo  ²Ö¿â      : %REPO%
-echo  °²×°Î»ÖÃ  : %DIR%
+echo  ï¿½Ö¿ï¿½      : %REPO%
+echo  ï¿½ï¿½×°Î»ï¿½ï¿½  : %DIR%
 echo.
 
-where git >nul 2>nul || (echo [´íÎó] Î´ÕÒµ½ git & pause & exit /b 1)
-where node >nul 2>nul || (echo [´íÎó] Î´ÕÒµ½ node£¨Ðè Node 18+£© & pause & exit /b 1)
-where npm >nul 2>nul || (echo [´íÎó] Î´ÕÒµ½ npm & pause & exit /b 1)
-where powershell >nul 2>nul || (echo [´íÎó] Î´ÕÒµ½ powershell£¨COM ÇÅÐèÒª£© & pause & exit /b 1)
+where git >nul 2>nul || (echo [ï¿½ï¿½ï¿½ï¿½] Î´ï¿½Òµï¿½ git & pause & exit /b 1)
+where node >nul 2>nul || (echo [ï¿½ï¿½ï¿½ï¿½] Î´ï¿½Òµï¿½ nodeï¿½ï¿½ï¿½ï¿½ Node 18+ï¿½ï¿½ & pause & exit /b 1)
+where npm >nul 2>nul || (echo [ï¿½ï¿½ï¿½ï¿½] Î´ï¿½Òµï¿½ npm & pause & exit /b 1)
+where powershell >nul 2>nul || (echo [ï¿½ï¿½ï¿½ï¿½] Î´ï¿½Òµï¿½ powershellï¿½ï¿½COM ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ & pause & exit /b 1)
 
 if exist "%DIR%\wps-office-mcp\package.json" (
-  echo [1/5] ÒÑ´æÔÚ£¬Ìø¹ý¿ËÂ¡
+  echo [1/5] ï¿½Ñ´ï¿½ï¿½Ú£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¡
 ) else (
-  echo [1/5] ¿ËÂ¡ wps-skills µ½²Ö¿âÍâ ...
+  echo [1/5] ï¿½ï¿½Â¡ wps-skills ï¿½ï¿½ï¿½Ö¿ï¿½ï¿½ï¿½ ...
   if not exist "%DEPS%" mkdir "%DEPS%"
   git clone --depth 1 https://github.com/lc2panda/wps-skills "%DIR%"
-  if errorlevel 1 (echo [´íÎó] ¿ËÂ¡Ê§°Ü£º¹úÄÚÍøÂçÇëÏÈ¿ª GitHub ¼ÓËÙÆ÷»òÉèÖÃ´úÀí & pause & exit /b 1)
+  if errorlevel 1 (echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½Â¡Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¿ï¿½ GitHub ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã´ï¿½ï¿½ï¿½ & pause & exit /b 1)
 )
 
 pushd "%DIR%\wps-office-mcp"
-echo [2/5] °²×°ÒÀÀµ npm ci ...
+echo [2/5] ï¿½ï¿½×°ï¿½ï¿½ï¿½ï¿½ npm ci ...
 call npm ci
-if errorlevel 1 (echo [´íÎó] npm ci Ê§°Ü & popd & pause & exit /b 1)
+if errorlevel 1 (echo [ï¿½ï¿½ï¿½ï¿½] npm ci Ê§ï¿½ï¿½ & popd & pause & exit /b 1)
 
-echo [3/5] ¹¹½¨ npm run build ...
+echo [3/5] ï¿½ï¿½ï¿½ï¿½ npm run build ...
 call npm run build
-if errorlevel 1 (echo [´íÎó] npm run build Ê§°Ü & popd & pause & exit /b 1)
+if errorlevel 1 (echo [ï¿½ï¿½ï¿½ï¿½] npm run build Ê§ï¿½ï¿½ & popd & pause & exit /b 1)
 popd
 
 if not exist "%DIR%\wps-office-mcp\dist\index.js" (
-  echo [´íÎó] ¹¹½¨Íê³Éµ«Î´²ú³ö dist\index.js & pause & exit /b 1
+  echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éµï¿½Î´ï¿½ï¿½ï¿½ï¿½ dist\index.js & pause & exit /b 1
 )
 
-echo [4/5] ´ò±¾µØ²¹¶¡£¨WPS ´°¿Ú¿É¼ûÐÔ / Word ´æÅÌ¸ñÊ½ / »î¶¯ÎÄ¸å»ØÂä£©...
+echo [4/5] ï¿½ò±¾µØ²ï¿½ï¿½ï¿½ï¿½ï¿½WPS ï¿½ï¿½ï¿½Ú¿É¼ï¿½ï¿½ï¿½ / Word ï¿½ï¿½ï¿½Ì¸ï¿½Ê½ / ï¿½î¶¯ï¿½Ä¸ï¿½ï¿½ï¿½ä£©...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0patch_wps_mcp.ps1" -Root "%DIR%"
-if errorlevel 1 (echo [´íÎó] ²¹¶¡Ê§°Ü£ºÇëÈË¹¤ºË¶Ô scripts\wps-com.ps1 & pause & exit /b 1)
+if errorlevel 1 (echo [ï¿½ï¿½ï¿½ï¿½] ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½Ë¹ï¿½ï¿½Ë¶ï¿½ scripts\wps-com.ps1 & pause & exit /b 1)
 
-echo [5/5] Ð´ÔËÐÐÊ±ÅäÖÃ %REPO%\data\wps_mcp.json ...
+echo [5/5] Ð´ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ %REPO%\data\wps_mcp.json ...
 if not exist "%REPO%\data" mkdir "%REPO%\data"
 set "COMMIT="
 for /f "delims=" %%C in ('git -C "%DIR%" rev-parse HEAD 2^>nul') do set "COMMIT=%%C"
 powershell -NoProfile -Command "$j=[ordered]@{dir='%DIR%';entry='%DIR%\wps-office-mcp\dist\index.js';skills_dir='%DIR%\skills';commit='%COMMIT%';installed_at=(Get-Date).ToString('s')}; [IO.File]::WriteAllText('%REPO%\data\wps_mcp.json', ($j | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))"
 if errorlevel 1 (
-  echo [¾¯¸æ] Ð´ data\wps_mcp.json Ê§°Ü£º¿É¸ÄÓÃ»·¾³±äÁ¿ WPS_MCP_DIR Ö¸Ïò %DIR%
+  echo [ï¿½ï¿½ï¿½ï¿½] Ð´ data\wps_mcp.json Ê§ï¿½Ü£ï¿½ï¿½É¸ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ WPS_MCP_DIR Ö¸ï¿½ï¿½ %DIR%
 ) else (
   type "%REPO%\data\wps_mcp.json"
 )
 
 echo.
-echo Íê³É¡£Â·¾¶½âÎöÓÅÏÈ¼¶£º»·¾³±äÁ¿ WPS_MCP_DIR ^> data\wps_mcp.json ^> Ä¬ÈÏ %LOCALAPPDATA%\edu-agent\deps\wps-skills
-echo ×¢£ºWindows ×ß PowerShell COM ÇÅ£¨scripts\wps-com.ps1£©£¬**ÎÞÐè°²×° WPS ¼ÓÔØÏî**£¨ÄÇÊÇ macOS/Linux ÂÖÑ¯Ä£Ê½²ÅÒª£©¡£
-echo Æô¶¯·þÎñºóµ½¡¸MCP ·þÎñ¡¹Ò³¿É¿´µ½ WPS Office ·þÎñµÄ×´Ì¬Óë¹¤¾ßÊý£¨Õý³£Ô¼ 250 ¸ö£©¡£
+echo ï¿½ï¿½É¡ï¿½Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ WPS_MCP_DIR ^> data\wps_mcp.json ^> Ä¬ï¿½ï¿½ %LOCALAPPDATA%\edu-agent\deps\wps-skills
+echo ×¢ï¿½ï¿½Windows ï¿½ï¿½ PowerShell COM ï¿½Å£ï¿½scripts\wps-com.ps1ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½è°²×° WPS ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½**ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ macOS/Linux ï¿½ï¿½Ñ¯Ä£Ê½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½
+echo ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½óµ½¡ï¿½MCP ï¿½ï¿½ï¿½ï¿½Ò³ï¿½É¿ï¿½ï¿½ï¿½ WPS Office ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½ë¹¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ 250 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 pause

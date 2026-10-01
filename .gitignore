@@ -18,6 +18,10 @@ content/raw/
 content/templates/_trash/
 model_cache/
 
+# ============ 开发期临时目录（本机调试产物，不入库） ============
+_probe/
+_backup-*/
+
 # ============ 教材知识库说明 ============
 # chroma_db/ 与 content/structured_auto/ 已入库：
 # content/structured_auto/*.md = 教材自动切节文本（向量化源）

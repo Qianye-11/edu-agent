@@ -104,7 +104,6 @@
   --ease:cubic-bezier(.22,.8,.28,1);
   --ease-out:cubic-bezier(.25,.1,.25,1);
 }
-
 html.dark{
   --paper:#161212; --card:#1B1717;
   /* forest 的暖近黑（hue 17.9）*/
@@ -447,12 +446,19 @@ html.dark .proj-leaf:hover,html.dark .proj-add-sess:hover{background:rgba(255,25
      外加北极点那枚青点（单独一层，走 --blue）。
      做法与 hero 大背景板一致：mask 只取 alpha，颜色交给 background-color，
      所以同一份 data-URI 同时服务日/夜两套主题（夜间 --ink-900 翻成近白）。 */
-  --mk-badge:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.2' stroke-width='1.7'/%3E%3Cellipse cx='12' cy='12' rx='3.5' ry='8.2' stroke-width='1.7'/%3E%3Cpath d='M3.8 12h16.4' stroke-width='1.45'/%3E%3C/svg%3E");
-  /* ⚠️ 这颗点的位置调过两次：`cy=3.6 / r=2.3` 时它的圆心落在球轮廓**之上**，
-     12× 特写看是一只球顶在球上（像雪人），而且下缘正好啃住轮廓的弧顶。
-     现在压到 `cy=4.9 / r=2.05` —— 圆心落进球内，只露出 0.8px 的小尖，
-     读起来是「北极点坐标点」，而不是「一只球」。 */
-  --mk-badge-dot:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='4.9' r='2.05' fill='%23000'/%3E%3C/svg%3E");
+  /* ── 品牌标记 = 启思 Chess 图标（第 ㊲ 条 · 用户已审核通过「方案 A」） ──
+     一条粗圆弧 C（笔画 3.1、圆角端点）+ 开口处一枚青点。
+     只有两个元素 —— 刻意压到最少：AI 味的根源是往上加元素，
+     而苹果的做法是「一个粗笔画、圆角端点、大留白，然后停手」。
+     24×24 viewBox，与旧的地球标记同规格 ⇒ 尺寸/定位零改动。
+     ⚠️ 描边形态的 SVG 当 mask 时只取 alpha，所以 stroke 用纯黑即可。 */
+  --mk-badge:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M16.53 7.47A6.4 6.4 0 1 0 16.53 16.53' stroke='%23000' stroke-width='3.1' stroke-linecap='round'/%3E%3C/svg%3E");
+  --mk-badge-dot:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='17.9' cy='12' r='2.15' fill='%23000'/%3E%3C/svg%3E");
+  /* 对话头像里那颗白色 C（19px 内使用） */
+  --mk-chat:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M16.53 7.47A6.4 6.4 0 1 0 16.53 16.53' stroke='%23000' stroke-width='3.1' stroke-linecap='round'/%3E%3C/svg%3E");
+  --mk-chat-dot:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='17.9' cy='12' r='2.15' fill='%23000'/%3E%3C/svg%3E");
+  /*（第 ㊲ 条：旧「地球 + 北极点」标记的 --mk-badge-dot 已删除，
+     由上面新的「C + 青点」取代。）*/
 }
 
 /* —— 品牌区：一枚标记 + 双语标识 ——
@@ -489,7 +495,7 @@ html.dark .proj-leaf:hover,html.dark .proj-add-sess:hover{background:rgba(255,25
    而且 11px 的正文比 9px 的等宽更经得起读。 */
 .side-brand .ver{display:flex; align-items:center; gap:12px}
 .side-brand .ver::before{
-  content:"启学，让思考发生"; margin-right:auto;
+  content:"启学，让思考自然发生"; margin-right:auto;
   font-family:var(--font); font-size:11px; line-height:15px;
   letter-spacing:.06em; white-space:nowrap;
   color:var(--ink-500);
@@ -640,8 +646,6 @@ html.dark #view-kg{background:transparent; --kg-bg:transparent}
 
 /* 思考中 / 错误 提示条 */
 .thinkInner .st-pill{background:#FDF0DF; border-color:transparent; color:var(--amber)}
-.thinkInner .st-pill.amber .dot{animation:qisi-vision-pulse 1.1s ease-in-out infinite}
-@keyframes qisi-vision-pulse{0%,100%{transform:scale(.72);opacity:.48}50%{transform:scale(1.18);opacity:1}}
 
 /* ---------------------------------------------------------------------------
    ⑩ 知识星图视图 —— 令牌接入方舟青
@@ -677,17 +681,6 @@ html.dark #view-kg{
 html.dark #view-kg .kg-mark-btn.learned{background:var(--card)}
 #view-kg .kg-info-panel{border-radius:var(--r-lg); border:1px solid var(--kg-panel-line)}
 #view-kg .kg-title{font-weight:600; letter-spacing:-.015em}
-
-/* Keep the current Agent's persistent inspector usable on narrow windows. */
-@media (max-width:1000px){
-  .shell{position:relative;min-width:0;overflow:hidden}
-  .main{min-width:0;flex:1 1 auto}
-  .sidepanel{position:absolute;inset:0 0 0 auto;z-index:50;width:min(360px,calc(100vw - 44px));box-shadow:-18px 0 36px rgba(15,16,20,.16)}
-}
-@media (max-width:720px){
-  .sidebar{width:226px}
-  .sidepanel{width:min(340px,calc(100vw - 26px))}
-}
 /* 星点层在方舟配色下不可见，停掉其常驻动画（零视觉差异，回收合成器开销） */
 #view-kg .kg-stars::before,#view-kg .kg-stars::after{animation:none}
 
@@ -1211,10 +1204,17 @@ html.dark{
 
 /* —— 副题 —— */
 .qisi-splash .qs-subtitle{
-  font-size:.86em; font-weight:400; letter-spacing:.24em; text-indent:.24em;
-  line-height:1.45; color:var(--ink-500); white-space:nowrap; margin-top:1.15em;
+  font-size:.86em; font-weight:400;
+  /* 文案从 8 字变 10 字（「思考发生」→「思考自然发生」），字距 .24em 会拉得过长，收到 .18em */
+  letter-spacing:.18em; text-indent:.18em;
+  line-height:1.45; color:#6E6E73;          /* 日间：明确的中灰（原来是 --ink-500） */
+  white-space:nowrap; margin-top:1.15em;
   animation:qs-sub var(--qs-loop) cubic-bezier(.2,.72,.22,1) 1 forwards;
 }
+/* ★ 夜间必须单独提亮：标题用的是 `--ink-900`（夜里近白），
+   而副题原先是 `--ink-500` —— 那个令牌在夜间是 `#5E5A5A`，
+   压在深色遮罩上几乎看不见。这里给它一个比标题低一档、但仍然清晰的亮度。 */
+html.dark .qisi-splash .qs-subtitle{color:#C7C7CC}
 @keyframes qs-sub{0%,36%{transform:translateY(.55em);opacity:0}48%,100%{transform:translateY(0);opacity:1}}
 
 /* —— 竖线（十字的竖）—— */
@@ -1350,3 +1350,1002 @@ html.dark[data-tint="cyan"]   { --blue-soft:#08232A; --blue-ink:#B9EAF2; --blue-
 .tint-swatch[data-tint="green"]  { background:var(--tint-green) }
 .tint-swatch[data-tint="blue"]   { background:var(--tint-blue) }
 .tint-swatch[data-tint="cyan"]   { background:var(--tint-cyan) }
+
+/* ============================================================================
+   液态玻璃（Liquid Glass）—— 只作用于「对话框 + 按钮」，背景不动
+   ----------------------------------------------------------------------------
+   只改 .home-input（对话框）和 .send-orb（发送按钮）两处的材质，
+   其余元素、画布背景、hero 大背景板一律不碰。
+   形态 = 磨砂玻璃（backdrop-filter blur）+ 半透明底 + 玻璃厚度高光（inset 双色）。
+   ★ 原版不许动：全部走本追加块；设置面板切「原版界面」= 停用本 <style> = 自动还原。
+   ★ 性能：磨砂只盖在对话框/按钮自己身上，背后是纯色画布（静态），无重算成本；
+     （不做 feDisplacementMap 边缘折射——那需要背后有内容才可见，且背景被用户要求不动。）
+   ============================================================================ */
+
+/* ---- 对话框 .home-input：磨砂玻璃面板 ----
+   日间纯白画布上「白玻璃叠白底」读不出 —— Apple 在纯色 UI 上的正统解法：
+   玻璃体用「冷白→冷灰蓝」对角受光渐变（左上受光、右下入影），
+   再靠 内侧亮环 + 外圈暗线 + 投影 三件套勾出玻璃体积。 */
+.home-input{
+  /* 玻璃体：对角受光渐变 —— 左上高光、右下冷灰蓝影 */
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.72) 0%, rgba(250,252,254,.30) 40%, rgba(222,230,240,.42) 100%);
+  backdrop-filter:blur(16px) saturate(160%);
+  -webkit-backdrop-filter:blur(16px) saturate(160%);
+  /* 玻璃厚度三件套：顶亮线 + 内侧折射亮环 + 外圈暗线（不参与布局，零位移） */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.9),
+    inset 0 0 0 1px rgba(255,255,255,.55),
+    0 0 0 1px rgba(15,16,20,.07),
+    var(--shadow-md);
+}
+html.dark .home-input{
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.035) 40%, rgba(0,0,0,.2) 100%),
+    color-mix(in srgb, var(--card) 68%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.2),
+    inset 0 0 0 1px rgba(255,255,255,.07),
+    0 0 0 1px rgba(0,0,0,.5),
+    var(--shadow-md);
+}
+/* 聚焦态：保留品牌色描边 + 光晕，玻璃高光不退 */
+.home-input:focus-within{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.65),
+    inset 0 0 0 1px rgba(255,255,255,.28),
+    inset 0 -1px 0 rgba(15,16,20,.07),
+    0 0 0 3px rgba(24,209,255,.22),
+    0 12px 36px -14px var(--accent-glow);
+}
+html.dark .home-input:focus-within{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.16),
+    inset 0 0 0 1px rgba(255,255,255,.05),
+    inset 0 -1px 0 rgba(0,0,0,.45),
+    0 0 0 3px rgba(24,209,255,.22),
+    0 12px 36px -14px var(--accent-glow);
+}
+
+/* ---- 发送按钮 .send-orb：玻璃胶囊钮 ---- */
+.send-orb{
+  /* 冷白受光渐变 + 亮环 + 外圈暗线 —— 纯白画布上读出「玻璃钮」 */
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.88) 0%, rgba(248,250,252,.38) 45%, rgba(222,230,240,.52) 100%);
+  backdrop-filter:blur(12px) saturate(150%);
+  -webkit-backdrop-filter:blur(12px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 0 0 1px rgba(255,255,255,.6),
+    0 0 0 1px rgba(15,16,20,.08),
+    0 2px 8px -2px rgba(15,16,20,.16);
+}
+html.dark .send-orb{
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.03) 55%, rgba(0,0,0,.18) 100%),
+    color-mix(in srgb, var(--card) 52%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    0 0 0 1px rgba(0,0,0,.5),
+    0 2px 8px -2px rgba(0,0,0,.55);
+}
+/* hover 保持品牌色填充，玻璃高光叠在上面 */
+.send-orb:hover{
+  background:var(--blue);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.5),
+    0 4px 14px -4px var(--accent-glow);
+}
+html.dark .send-orb:hover{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.3),
+    0 4px 14px -4px var(--accent-glow);
+}
+
+/* ---------------------------------------------------------------------------
+   ㉓ Skill 市场 —— 1:1 图片卡片（棋盘交错 + 磨砂标签条 + 浮现入场）
+   用户点名重排市场视图（与 chat 视图同性质的几何豁免）：
+   卡片改 1:1 图片卡、偶数卡交错下沉、hover 抬起 + 图片缩放、每卡磨砂标签条。
+   功能零改动：.skill-card 仍是 button，data-skill / openSkill / 搜索过滤原样。
+   插图 = static/skill-illustrations/*.jpg（本地相对路径，http 与 file:// 双通），
+   映射用 [data-skill] 属性选择器 —— 搜索过滤导致分类缺失时也不会错位。
+   --------------------------------------------------------------------------- */
+#view-market .mk-grid{grid-template-columns:repeat(4,1fr); gap:14px; align-items:start}
+#view-market .skill-card{
+  aspect-ratio:1/1; padding:0; overflow:hidden; border-radius:16px;
+}
+/* 图片层：缩放走 transform（合成层，不触发布局） */
+#view-market .skill-card::before{
+  content:''; position:absolute; inset:0;
+  background:center/cover no-repeat;
+  transition:transform .55s var(--ease);
+}
+#view-market .skill-card:hover::before,
+#view-market .skill-card:focus-visible::before{transform:scale(1.06)}
+/* 底部压暗渐变，保证无框白字可读（无磨砂条后需要更实的压暗） */
+#view-market .skill-card::after{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:56%;
+  background:linear-gradient(180deg, rgba(15,16,20,0), rgba(15,16,20,.62));
+  pointer-events:none;
+}
+html.dark #view-market .skill-card::after{
+  background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.72));
+}
+/* 原文字结构 → 无框大字（真实文本，非 content 伪造，a11y 不丢标题）
+   苹果式：标题直接压在图片上，靠底部压暗渐变 + 细文字投影保证可读，不用磨砂框。
+   大字宋体横排贴底，更像 App Store 卡片的「图片 + 大字标题」结构。 */
+#view-market .skill-card .sc-top{
+  position:absolute; left:0; right:0; bottom:0; top:auto; z-index:2;
+  display:block; width:auto; max-width:100%; padding:12px 13px;
+  background:none;
+  box-shadow:none;
+}
+html.dark #view-market .skill-card .sc-top{
+  background:none;
+  box-shadow:none;
+}
+#view-market .skill-card .skill-icon,
+#view-market .skill-card .sc-desc{display:none}
+#view-market .skill-card .sc-title{
+  flex:none; width:auto; min-width:0; max-height:100%;
+  font-family:"STSong","SimSun","Songti SC","Noto Serif CJK SC",serif;
+  font-size:21px; font-weight:600; letter-spacing:.04em; line-height:1.2;
+  color:#FFFFFF;
+  text-shadow:0 1px 3px rgba(0,0,0,.42), 0 0 16px rgba(0,0,0,.22);
+  white-space:normal; overflow:hidden;
+  word-break:keep-all;
+}
+html.dark #view-market .skill-card .sc-title{color:#F5F5F7}
+/* hover：抬起（覆盖 ⑧ 的 -3px 规则），键盘焦点同环 */
+#view-market .skill-card:hover{
+  transform:translateY(-6px);
+  box-shadow:inset 0 0 0 var(--ring) var(--ink-400), var(--shadow-card-hi);
+}
+#view-market .skill-card:focus-visible{
+  outline:none; border-color:var(--blue);
+  box-shadow:inset 0 0 0 var(--ring) var(--blue), 0 0 0 3px rgba(24,209,255,.25);
+}
+/* 棋盘交错：偶数卡下沉半格（网格 align-items:start，行高自动让位不重叠） */
+#view-market .mk-grid .skill-card:nth-child(even){margin-top:16px}
+/* 浮现入场：一次性、只动 transform/opacity；fill 必须 backwards 不能 both
+   （both 的 forwards 填充会永久压住 hover 的 transform —— 动画级联高于普通声明） */
+#view-market.view.active .skill-card{animation:mkIn .55s var(--ease) backwards}
+#view-market .skill-card:nth-child(2){animation-delay:.07s}
+#view-market .skill-card:nth-child(3){animation-delay:.14s}
+#view-market .skill-card:nth-child(4){animation-delay:.21s}
+#view-market .skill-card:nth-child(5){animation-delay:.28s}
+#view-market .skill-card:nth-child(6){animation-delay:.35s}
+#view-market .skill-card:nth-child(7){animation-delay:.42s}
+@keyframes mkIn{
+  from{opacity:0; transform:translateY(16px) scale(.97)}
+}
+/* 图片映射：教学辅助 7 + UI 美化 3（data-skill 精确匹配标题） */
+#view-market .skill-card[data-skill="教案设计规范"]::before{background-image:url("/static/skill-illustrations/jiaoan-guide.jpg")}
+#view-market .skill-card[data-skill="教案精简器"]::before{background-image:url("/static/skill-illustrations/jiaoan-trim.jpg")}
+#view-market .skill-card[data-skill="错题诊断"]::before{background-image:url("/static/skill-illustrations/jiaoan-diagnose.jpg")}
+#view-market .skill-card[data-skill="教案审查"]::before{background-image:url("/static/skill-illustrations/jiaoan-review.jpg")}
+#view-market .skill-card[data-skill="教案复核"]::before{background-image:url("/static/skill-illustrations/jiaoan-lsp.jpg")}
+#view-market .skill-card[data-skill="试题解析"]::before{background-image:url("/static/skill-illustrations/jiaoan-solution.jpg")}
+#view-market .skill-card[data-skill="Understand Anything"]::before{background-image:url("/static/skill-illustrations/jiaoan-understand.jpg")}
+#view-market .skill-card[data-skill="板书动效"]::before{background-image:url("/static/skill-illustrations/ui-motion.jpg")}
+#view-market .skill-card[data-skill="课堂画板"]::before{background-image:url("/static/skill-illustrations/ui-canvas.jpg")}
+#view-market .skill-card[data-skill="Liquid Glass 反应"]::before{background-image:url("/static/skill-illustrations/ui-glass.jpg")}
+@media (prefers-reduced-motion:reduce){
+  #view-market .skill-card,
+  #view-market .skill-card::before{transition:none !important; animation:none !important}
+}
+
+/* ---------------------------------------------------------------------------
+   ㉖ Skill 市场 —— App Store 整体质感（第㉓块之上的整页氛围层）
+   只动视觉氛围，不碰任何功能/几何：市场页底色改中性灰让卡片浮起、
+   分类标题层级 + 计数标签、头部搜索区磨砂胶囊与克制留白。
+   全部限定 #view-market 作用域，切「原版界面」自动还原。
+   --------------------------------------------------------------------------- */
+/* 页面底：极浅中性灰，白卡片浮起来（App Store Today 页感） */
+#view-market{background:var(--bg-soft)}
+html.dark #view-market{background:var(--bg-soft)}
+
+/* 头部：更大留白 + 更克制的副题 */
+#view-market .mk-head{padding:26px 40px 0}
+#view-market .mk-title{font-size:30px; font-weight:700; letter-spacing:-.028em}
+#view-market .mk-sub{font-size:13px; color:var(--ink-400); margin-top:6px}
+#view-market .mk-toolbar{margin-top:20px; gap:10px}
+
+/* 搜索/筛选胶囊：磨砂底 + 细描边，hover 更轻 */
+#view-market .search-pill,
+#view-market .drop-pill,
+#view-market .icon-pill{
+  background:var(--card); border:1px solid var(--line-card);
+  box-shadow:0 1px 2px rgba(15,16,20,.04);
+  transition:border-color .22s var(--ease), box-shadow .22s var(--ease), background .22s var(--ease);
+}
+#view-market .search-pill{height:40px; border-radius:12px}
+#view-market .search-pill:focus-within{
+  border-color:var(--blue); box-shadow:0 0 0 3px rgba(24,209,255,.16);
+}
+#view-market .drop-pill,
+#view-market .icon-pill{height:40px; border-radius:12px}
+#view-market .drop-pill:hover,
+#view-market .icon-pill:hover{background:var(--bg-hover)}
+
+/* 分类区块：更大间距 + 标题层级（计数标签走真实文本，靠 ::after 加内容即可，
+   但计数会随搜索过滤变化，故用 JS 运行期注入，见 _qisi-apple-ui.js） */
+#view-market .mk-body{padding:24px 40px 48px}
+#view-market .mk-cat{margin-top:34px}
+#view-market .mk-cat-name{font-size:20px; font-weight:700; letter-spacing:-.02em}
+#view-market .mk-cat-desc{font-size:13px; color:var(--ink-400); margin-top:5px}
+#view-market .mk-cat-name .mk-count{
+  display:inline-block; margin-left:9px; vertical-align:2px;
+  font-size:12px; font-weight:600; color:var(--ink-400);
+  background:var(--bg-hover); border-radius:999px; padding:2px 9px;
+}
+#view-market .mk-grid{margin-top:18px}
+
+/* 卡片：更圆润圆角 + 更柔投影 + 更慢顺滑的 hover（App Store 卡片感） */
+#view-market .skill-card{
+  border-radius:18px;
+  box-shadow:0 2px 6px rgba(15,16,20,.05), 0 10px 24px -12px rgba(15,16,20,.12);
+}
+#view-market .skill-card:hover{
+  transform:translateY(-5px);
+  box-shadow:0 4px 10px rgba(15,16,20,.07), 0 20px 40px -16px rgba(15,16,20,.28);
+}
+html.dark #view-market .skill-card{
+  box-shadow:0 2px 6px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.7);
+}
+html.dark #view-market .skill-card:hover{
+  box-shadow:0 4px 10px rgba(0,0,0,.4), 0 24px 44px -18px rgba(0,0,0,.85);
+}
+
+/* ---------------------------------------------------------------------------
+   ㉙ Skill 市场 —— iPhone 官网式滚动叙事（第㉓/㉖/㉘块之上的版式重构）
+   用户点名：像 iPhone 官网那样往下滑大字和图片浮现的丝滑高级感。
+   布局从 4 列网格 → 纵向叙事流：每张 skill 一张全宽横版大图卡，
+   大字标题压图底部，滚动进入视口时浮现（JS 挂 IntersectionObserver，
+   见 _qisi-apple-ui.js 的 mountNarrative）。功能零改动：
+   .skill-card 仍是 button，data-skill / openSkill / 搜索过滤原样，
+   buildMarket 照常渲染，本层只做运行期版式与浮现。
+   浮现状态类：.mk-wait（视口外待浮）→ .mk-in（进入视口浮现）。
+   class 增删是 attributes 变化，不触发 childList observer —— 无死循环风险。
+   --------------------------------------------------------------------------- */
+/* 网格 → 纵向流 */
+#view-market .mk-grid{
+  display:flex; flex-direction:column; gap:64px; margin-top:44px; align-items:stretch;
+}
+/* 棋盘交错下线（叙事流里交错没有意义） */
+#view-market .mk-grid .skill-card:nth-child(even){margin-top:0}
+/* 卡片：全宽横版大图卡 */
+#view-market .skill-card{
+  width:100%; aspect-ratio:auto; height:480px; border-radius:32px;
+}
+/* 旧「进视图一次性入场动画」下线，让位给滚动浮现 */
+#view-market.view.active .skill-card{animation:none}
+#view-market .skill-card:nth-child(2),
+#view-market .skill-card:nth-child(3),
+#view-market .skill-card:nth-child(4),
+#view-market .skill-card:nth-child(5),
+#view-market .skill-card:nth-child(6),
+#view-market .skill-card:nth-child(7){animation-delay:0s}
+/* 标题压图底部：大字白标题 + 描述（叙事卡有空间展示 desc 了） */
+#view-market .skill-card .sc-top{
+  position:absolute; left:0; right:0; bottom:0; top:auto; z-index:2;
+  display:block; width:auto; max-width:100%; padding:0 44px 40px;
+  background:none; box-shadow:none;
+}
+html.dark #view-market .skill-card .sc-top{background:none; box-shadow:none}
+#view-market .skill-card .sc-desc{
+  display:block; margin-top:12px;
+  font-size:17px; line-height:1.5; letter-spacing:.005em;
+  color:rgba(255,255,255,.82);
+  text-shadow:0 1px 3px rgba(0,0,0,.4);
+  max-width:640px;
+  white-space:normal; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
+html.dark #view-market .skill-card .sc-desc{color:rgba(255,255,255,.8)}
+#view-market .skill-card .sc-title{
+  font-size:42px; font-weight:700; letter-spacing:.01em; line-height:1.15;
+  color:#FFFFFF;
+  text-shadow:0 2px 6px rgba(0,0,0,.45), 0 0 24px rgba(0,0,0,.28);
+  white-space:normal; overflow:hidden;
+  word-break:keep-all;
+}
+html.dark #view-market .skill-card .sc-title{color:#F5F5F7}
+/* 底部压暗加深到 64%，42px 大字无框需要更实的托底 */
+#view-market .skill-card::after{
+  height:64%;
+  background:linear-gradient(180deg, rgba(15,16,20,0), rgba(15,16,20,.66));
+}
+html.dark #view-market .skill-card::after{
+  background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.74));
+}
+/* hover：大卡不做位移，图轻微放大 + 投影呼吸（iPhone 官网卡片无抬起，克制） */
+#view-market .skill-card:hover{
+  transform:none;
+  box-shadow:0 2px 6px rgba(15,16,20,.06), 0 24px 56px -20px rgba(15,16,20,.34);
+}
+#view-market .skill-card:hover::before,
+#view-market .skill-card:focus-visible::before{transform:scale(1.025)}
+/* 滚动浮现：视口外待浮 → 进入视口浮现（transition 只动 opacity/transform） */
+#view-market .skill-card.mk-wait{
+  opacity:0; transform:translateY(48px) scale(.985);
+}
+#view-market .skill-card.mk-in{
+  opacity:1; transform:none;
+  transition:opacity .85s var(--ease), transform .85s var(--ease);
+}
+@media (prefers-reduced-motion:reduce){
+  #view-market .skill-card.mk-wait{opacity:1; transform:none}
+}
+
+/* ---------------------------------------------------------------------------
+   ㉛ Skill 市场 —— 官网式分栏叙事卡 + 字号层级抬升
+   用户点名两件事：① 分类组名（教学辅助 / UI 美化）与描述字号太小；
+   ② 图片「严重变形」。
+   ② 的根因（实测）：图片源是 640×640 方图，却塞进 808×480 的 1.68:1 全宽横条，
+    cover 会放大 1.26 倍（高清屏等效 2.5 倍）再裁掉上下 41% —— 构图被切碎、
+   主体被硬放大发虚，观感即「变形」。等比缩放本身没错，错的是容器比例。
+   改法：卡片改成官网的「左图右文」分栏 —— 图片容器回到 1:1，与图片原始比例
+   完全一致 ⇒ cover 零裁切、零几何变形；且 400px 显示小于 640px 原图 ⇒ 反向缩小，
+   更清晰。文字独立成区后不再受图片压暗约束，字号可整体抬到官网量级。
+   奇偶卡左右交替，保留滚动叙事节奏与 .mk-wait/.mk-in 浮现。
+   功能零改动：.skill-card 仍是 button，data-skill / openSkill / 搜索过滤原样。
+   --------------------------------------------------------------------------- */
+
+/* ---- ① 字号层级：收到「正常」的量级 ----
+   第 ㊻ 条：用户反馈「图标和各个功能整的太大了」。
+   原值（标题 44 / 分类 34 / 卡片标题 44 / 图 380）是**苹果官网 hero 段**的量级 ——
+   官网一屏只放一张卡，所以字可以那么大；这里是**列表**，一屏要放好几张，
+   同样的字号就变成了「什么都很大、什么都读不完」。
+   ⇒ 全部按列表页的正常比例收紧，页标题与其它界面统一到 30px。 */
+#view-market .mk-head{padding:28px 40px 0}
+#view-market .mk-title{font-size:30px; font-weight:700; letter-spacing:-.028em; line-height:1.15}
+#view-market .mk-sub{font-size:14px; line-height:1.5; color:var(--ink-400); margin-top:8px}
+#view-market .mk-toolbar{margin-top:18px; gap:10px}
+
+#view-market .mk-body{padding:24px 40px 64px}
+#view-market .mk-cat{margin-top:40px}
+#view-market .mk-cat:first-of-type{margin-top:20px}
+#view-market .mk-cat-name{font-size:19px; font-weight:700; letter-spacing:-.018em; line-height:1.2}
+#view-market .mk-cat-desc{font-size:13.5px; line-height:1.5; color:var(--ink-400); margin-top:6px}
+#view-market .mk-cat-name .mk-count{
+  font-size:12px; font-weight:600; padding:2px 8px; margin-left:9px; vertical-align:3px;
+}
+
+/* ---- ② 卡片：左图右文分栏 ----
+   注意：.skill-card 的直接子元素是 .sc-top（标题）与 .sc-desc（描述）两个并列节点，
+   所以不能用 flex 分栏（会挤成三列重叠）。这里改用「图片绝对定位 + 文字流式」：
+   图片认位到左侧，文字靠 padding 让出图位，两个子元素自然竖排 */
+#view-market .mk-grid{margin-top:18px; gap:16px}
+#view-market .skill-card{
+  position:relative;
+  width:100%; height:auto; aspect-ratio:auto; min-height:240px;
+  display:flex; flex-direction:column; justify-content:center;
+  padding:22px 20px 22px 268px;
+  border-radius:20px;
+  transform:none;
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card),
+             0 2px 6px rgba(15,16,20,.05), 0 16px 36px -20px rgba(15,16,20,.16);
+}
+html.dark #view-market .skill-card{
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card),
+             0 2px 6px rgba(0,0,0,.34), 0 16px 36px -20px rgba(0,0,0,.7);
+}
+/* 图片层：左侧 1:1 画框，容器 220×220 与 640×640 原图同为 1:1 ⇒
+   cover 不产生任何裁切与拉伸；且 220 远小于原图 640，是缩小而非放大 ⇒ 依然清晰 */
+#view-market .skill-card::before{
+  content:''; position:absolute; left:22px; top:50%;
+  transform:translateY(-50%);
+  width:220px; height:220px; flex:none;
+  border-radius:14px;
+  background:center/cover no-repeat;
+  transition:transform .6s var(--ease);
+}
+/* 底部压暗层退场：文字已不在图片上，不再需要黑幕托底 */
+#view-market .skill-card::after{display:none}
+/* 奇偶交替：偶数卡图在右、文字在左，形成官网 Section 的左右呼吸节奏 */
+#view-market .mk-grid .skill-card:nth-child(even){
+  margin-top:0; padding:22px 268px 22px 20px;
+}
+#view-market .mk-grid .skill-card:nth-child(even)::before{left:auto; right:22px}
+/* 大卡不做位移浮起，改用投影呼吸（官网卡片克制手感） */
+#view-market .skill-card:hover{
+  transform:translateY(-4px);
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card),
+             0 4px 11px rgba(15,16,20,.07), 0 28px 58px -24px rgba(15,16,20,.30);
+}
+html.dark #view-market .skill-card:hover{
+  box-shadow:inset 0 0 0 var(--ring) var(--line-card),
+             0 4px 11px rgba(0,0,0,.42), 0 28px 58px -24px rgba(0,0,0,.82);
+}
+#view-market .skill-card:hover::before,
+#view-market .skill-card:focus-visible::before{transform:translateY(-50%) scale(1.04)}
+
+/* ---- ③ 文字区：脱离图片叠层，独立成栏 ---- */
+#view-market .skill-card .sc-top{
+  position:relative; left:auto; right:auto; top:auto; bottom:auto; z-index:auto;
+  flex:none; min-width:0; width:100%; max-width:none;
+  display:block; padding:0;
+  background:none; box-shadow:none;
+}
+html.dark #view-market .skill-card .sc-top{background:none; box-shadow:none}
+#view-market .skill-card .sc-title{
+  font-size:20px; font-weight:700; letter-spacing:-.018em; line-height:1.25;
+  color:var(--ink-900);
+  text-shadow:none;
+  white-space:normal; overflow:visible;
+  word-break:keep-all;
+}
+html.dark #view-market .skill-card .sc-title{color:#F5F5F7}
+#view-market .skill-card .sc-desc{
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+  margin-top:8px; max-width:100%; overflow:hidden;
+  font-size:14px; line-height:1.6; letter-spacing:0;
+  color:var(--ink-500);
+  text-shadow:none;
+}
+html.dark #view-market .skill-card .sc-desc{color:var(--ink-400)}
+
+/* ---- ④ 窄屏降级：图回到流内做上图下文，仍是 1:1 不裁切 ---- */
+@media (max-width:1240px){
+  #view-market .mk-grid .skill-card,
+  #view-market .mk-grid .skill-card:nth-child(even){
+    padding:22px; padding-left:22px; padding-right:22px;
+    min-height:0; justify-content:flex-start;
+  }
+  #view-market .mk-grid .skill-card::before,
+  #view-market .mk-grid .skill-card:nth-child(even)::before{
+    position:relative; left:auto; right:auto; top:auto;
+    transform:none;
+    width:100%; height:auto; aspect-ratio:1/1;
+    margin-bottom:24px;
+  }
+  #view-market .mk-grid .skill-card:hover::before,
+  #view-market .mk-grid .skill-card:focus-visible::before{transform:scale(1.03)}
+}
+
+/* ---------------------------------------------------------------------------
+   ㉜ 对话界面 —— 「正在检索教材」等待态的 shimmer 骨架屏
+   用户点名：给对话界面做 shimmer 骨架屏（参考 skeleton-shimmer 写法）。
+   落点：业务 showThink() 在 #chatMsgBox 里插的一行 ——
+        <div class="avt">AI</div><div class="thinkInner"><span class="st-pill amber">…
+        文案「正在检索教材 · 可取消」。药丸保留（它承载「可取消」的语义），
+        骨架屏叠在它下方，模拟即将流式吐出的回答结构；
+        首个 token 到达（t==='d'）时随 thinkEl 一起被 hideThink() 摘除。
+
+   ★ 为什么必须用伪元素，不能注入 DOM：
+     showThink() 每次调用都会 `thinkInner.innerHTML = '<span class="st-pill">…'`
+     —— *整体覆盖子节点*。而流式过程的 status 事件与 8s 超时提示都会反复调它，
+     所以任何注入的子元素都会被反复删掉重建（shimmer 每轮闪断、且高频重建伤性能）。
+     CSS 伪元素不参与 innerHTML ⇒ 业务怎么覆盖都影响不到它，天然免疫。
+
+   ★ 为什么不用 background-position 动画（参考代码的写法）：
+     项目铁律是动画只走合成层。background-position 逐帧触发 paint。
+     这里改成「静态底条 + 一条柔光带用 transform 平移」，并用 mask 把扫光
+     精确裁成条的形状 ⇒ 每帧只动 transform，零重绘。
+
+   ★ 底条为什么用 SVG 而不是多层 linear-gradient：
+     linear-gradient 画出的色块必然是直角，多层背景也没法给每条单独圆角。
+     一个 data-URI SVG 里三枚 <rect rx>，一次搞定 100% / 84% / 56% 三条圆角条。
+     ⚠️ data-URI 里的颜色无法引用 CSS 变量 ⇒ 浅色/夜间各烤一份（见 html.dark）。
+   --------------------------------------------------------------------------- */
+/* 腾出骨架屏的位置：67px（4×10 条 + 3×9 间距）+ 14px 与药丸的间距 = 81px */
+.thinkInner{
+  position:relative; overflow:hidden;
+  padding-bottom:81px;
+}
+/* ① 底条：四条圆角占位条 —— 按「教材回答」的形状排：
+     顶部一条短的（章节/来源），中间两条正文，末行收尾。
+     比等长的三条更像一段真实回答，也更贴「正在翻教材」的语义 */
+.thinkInner::after{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:67px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 750 67'%3E%3Cg fill='%23151620' fill-opacity='.075'%3E%3Crect width='270' height='10' rx='5'/%3E%3Crect y='19' width='750' height='10' rx='5'/%3E%3Crect y='38' width='645' height='10' rx='5'/%3E%3Crect y='57' width='405' height='10' rx='5'/%3E%3C/g%3E%3C/svg%3E") left top / 100% 100% no-repeat;
+  pointer-events:none;
+}
+/* ② 扫光：一条柔光带从左扫到右，被 mask 裁成条的形状（只在条上发光，不扫过空隙） */
+.thinkInner::before{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:67px;
+  background-image:linear-gradient(90deg,
+    rgba(255,255,255,0) 0%, rgba(255,255,255,.95) 50%, rgba(255,255,255,0) 100%);
+  background-repeat:no-repeat; background-size:46% 100%;
+  transform:translateX(-100%);
+  animation:qkSkSheen 1.6s ease-in-out infinite;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 750 67'%3E%3Cg fill='%23000'%3E%3Crect width='270' height='10' rx='5'/%3E%3Crect y='19' width='750' height='10' rx='5'/%3E%3Crect y='38' width='645' height='10' rx='5'/%3E%3Crect y='57' width='405' height='10' rx='5'/%3E%3C/g%3E%3C/svg%3E") left top / 100% 100% no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 750 67'%3E%3Cg fill='%23000'%3E%3Crect width='270' height='10' rx='5'/%3E%3Crect y='19' width='750' height='10' rx='5'/%3E%3Crect y='38' width='645' height='10' rx='5'/%3E%3Crect y='57' width='405' height='10' rx='5'/%3E%3C/g%3E%3C/svg%3E") left top / 100% 100% no-repeat;
+  pointer-events:none;
+}
+@keyframes qkSkSheen{
+  0%  {transform:translateX(-100%)}
+  100%{transform:translateX(100%)}
+}
+/* 夜间：底条换成半透明白，扫光提高一档（深底上白光要更实才看得见） */
+html.dark .thinkInner::after{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 750 67'%3E%3Cg fill='%23FFFFFF' fill-opacity='.10'%3E%3Crect width='270' height='10' rx='5'/%3E%3Crect y='19' width='750' height='10' rx='5'/%3E%3Crect y='38' width='645' height='10' rx='5'/%3E%3Crect y='57' width='405' height='10' rx='5'/%3E%3C/g%3E%3C/svg%3E");
+}
+html.dark .thinkInner::before{
+  background-image:linear-gradient(90deg,
+    rgba(255,255,255,0) 0%, rgba(255,255,255,.30) 50%, rgba(255,255,255,0) 100%);
+}
+/* 顺手补：等待态药丸原本是硬编码浅米黄 #FDF0DF，在夜间深底上过亮、与新骨架屏不搭；
+   只换底色（文字/圆点是 var(--amber)/var(--orange)，两套主题本来就自动适配） */
+html.dark .thinkInner .st-pill{background:rgba(251,146,60,.16)}
+/* 减少动效：关掉扫光，保留静态底条（仍能表达「正在加载」） */
+@media (prefers-reduced-motion:reduce){
+  .thinkInner::before{animation:none; opacity:0}
+}
+
+/* ---- ㉜-b 会话加载骨架屏 ------------------------------------------------
+   用户报「打开对话页面看不到任何变化」—— 上面那套只在「发消息后的检索期」
+   出现（几秒即逝），而**打开会话 / 刷新后自动恢复会话**这条路永远不经过它。
+   这一段补上「加载历史会话」：由 _qisi-apple-ui.js 的 fetch 钩子
+   在 POST /api/session/get 时铺出来，业务渲染消息时被 msgBox.innerHTML='' 收尾。
+   ★ 与上面不同，这里是**注入的真实 DOM**（每条一个 <i>），因为要挂在
+     #chatMsgBox 里、由业务自己清空；每条独立做扫光，也就不需要 mask 了。
+   ★ 形状与上面保持一致（36/100/86/54），「正在取回这段对话」的语义一致。 */
+.qk-hist-sk i{
+  display:block; height:10px; border-radius:5px;
+  background:rgba(15,16,20,.075);
+  margin-bottom:9px;
+  position:relative; overflow:hidden;
+}
+.qk-hist-sk i:nth-child(1){width:36%}
+.qk-hist-sk i:nth-child(2){width:100%}
+.qk-hist-sk i:nth-child(3){width:86%}
+.qk-hist-sk i:nth-child(4){width:54%; margin-bottom:0}
+.qk-hist-sk i::after{
+  content:''; position:absolute; inset:0;
+  background-image:linear-gradient(90deg,
+    rgba(255,255,255,0) 0%, rgba(255,255,255,.95) 50%, rgba(255,255,255,0) 100%);
+  transform:translateX(-100%);
+  animation:qkSkSheen 1.6s ease-in-out infinite;
+}
+.qk-hist-sk i:nth-child(2)::after{animation-delay:.09s}
+.qk-hist-sk i:nth-child(3)::after{animation-delay:.18s}
+.qk-hist-sk i:nth-child(4)::after{animation-delay:.27s}
+html.dark .qk-hist-sk i{background:rgba(255,255,255,.10)}
+html.dark .qk-hist-sk i::after{
+  background-image:linear-gradient(90deg,
+    rgba(255,255,255,0) 0%, rgba(255,255,255,.30) 50%, rgba(255,255,255,0) 100%);
+}
+@media (prefers-reduced-motion:reduce){
+  .qk-hist-sk i::after{animation:none}
+}
+
+/* ---- ㉜-c 让「正在检索」这件事更容易被察觉 ----
+   用户要的是「发一个东西 → AI 思考」这个效果。本地检索有时很快，
+   骨架屏可能只存在三四百毫秒 —— 所以再加两笔，让它即使短暂也读得出来：
+   ① 骨架屏整体有一次 260ms 的淡入上浮（不是硬生生蹦出来）
+   ② 状态药丸上那颗小圆点呼吸起来，把「正在进行」从静态变成活的
+   两笔都只动 opacity / transform（合成层），且都不是 infinite 的位移。 */
+.thinkInner{animation:qkThinkIn .26s var(--ease) both}
+@keyframes qkThinkIn{from{opacity:0; transform:translateY(6px)}}
+.thinkInner .st-pill .dot{animation:qkDotPulse 1.1s ease-in-out infinite}
+@keyframes qkDotPulse{50%{opacity:.35; transform:scale(.82)}}
+@media (prefers-reduced-motion:reduce){
+  .thinkInner{animation:none}
+  .thinkInner .st-pill .dot{animation:none}
+}
+
+/* ---------------------------------------------------------------------------
+   ㉝ 侧边栏 —— 明日方舟官网式「工业 HUD」化
+   用户点名：「参照明日方舟游戏网页的设计帮我设计一下侧边栏」。
+
+   ★ 参考来源是实挖的：ak.hypergryph.com 的两份 CSS（解 gzip 后共 152KB），
+     令牌实测如下 ——
+       · 强调色 **#18d1ff（出现 42 次）** ⇒ **与本项目 `--blue` 完全相同**，
+         所以配色天然一致，不需要动调色板；
+       · 主字体 Novecentosanswide（宽体无衬线）/ Bender（数字）/ Oswald / 思源黑体（中文）；
+       · 大标题 `letter-spacing:-.05em`（负字距收紧），小标签 `+1~2px`（正字距拉开）；
+       · 底色 #121212 / #1d1f20 / #242424，文字 #fff / #ababab / #8d8d8d；
+       · 斜切**用得非常克制**（全站只有一处 `skewX(45deg)`）⇒ 不搬大斜角。
+
+   ★ 所以真正的「方舟味」来自**排版与结构**，不是配色：
+       英文大写与中文并列、`//` 分隔的数字、编号 01–12 的网格化标签。
+     这一层就搬这三样；底色继续走启思自己的令牌（日间浅 / 夜间深），
+     **不照搬它的近黑底** —— 与第 ⑨ 条「参照 X 换肤：搬材质不搬配色」同一条原则。
+
+   ★ 全部零布局：只动 `clip-path` / `box-shadow` / `counter` / 伪元素，
+     这些都不参与布局盒计算（`clip-path` 尤其关键 —— 它做切角但
+     `getBoundingClientRect()` 返回的仍是原布局盒，所以几何回归不受影响）。
+   --------------------------------------------------------------------------- */
+
+/* ① 分区标签：编号 + `//` + 中文（方舟官网写日期就是 `2026 // 09 / 29` 这个格式）
+      ⚠️ 用 `::after` + `order:-1` 排到最前，因为 `::before` 已经被渐隐引线占了。 */
+.sidebar{counter-reset:qk-sec}
+.sec-label::after{
+  order:-1; counter-increment:qk-sec;
+  content:"0" counter(qk-sec) " //";
+  font-family:var(--mono); font-size:9.5px; font-weight:500;
+  letter-spacing:.1em; color:var(--blue-deep);
+  pointer-events:none;
+}
+html.dark .sec-label::after{color:var(--blue)}
+
+/* ② 主操作按钮：右上切角。
+   ⚠️ 同时把全圆角收成小圆角 —— 方舟的按钮是「切角面板」，不是胶囊；
+      圆角 + 斜切混在一起会两边都不像。 */
+.newtask{
+  border-radius:8px;
+  clip-path:polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%);
+}
+
+/* ③ 导航行：统一右下切角；选中态的左侧指示条改成品牌青；
+      hover 用一条内嵌的青线（`inset` 阴影在 clip-path 内部，不会被裁） */
+.snav,
+.snav.active{
+  border-radius:8px;
+  clip-path:polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+}
+.snav.active::before{background:var(--blue-deep)}
+html.dark .snav.active::before{background:var(--blue)}
+.snav:hover{box-shadow:inset 2px 0 0 var(--blue-soft)}
+html.dark .snav:hover{box-shadow:inset 2px 0 0 rgba(24,209,255,.42)}
+
+/* ④ 品牌区下方：一条青色渐隐细线（HUD 分隔）。
+   `.side-brand .ver` 没有 position ⇒ absolute 会相对 `.side-brand`，
+   `bottom:-5px` 正好落在品牌区下沿；`.ver::before` 已被标语占用，故走 `::after`。 */
+.side-brand .ver::after{
+  content:""; position:absolute; left:14px; right:14px; bottom:-5px; height:1px;
+  background:linear-gradient(90deg, var(--blue), rgba(24,209,255,0) 76%);
+  opacity:.68; pointer-events:none;
+}
+html.dark .side-brand .ver::after{opacity:.8}
+
+/* ---------------------------------------------------------------------------
+   ㉞ 右侧「侧边面板」—— 与 ㉝ 侧边栏同一套方舟语言
+   用户原话：「我让你现在像刚刚那样帮我把侧边面板改一下」——
+   也就是把「运行状态 / 引用 / 知识源 / 会话」这个右侧面板改到跟左侧导航栏一致。
+   沿用 ㉝ 的三个动作：编号 + `//`、面板切角、青色 HUD 线。
+
+   ⚠️ 这里同样**不能用 `transform` / 改动尺寸**去做形状：
+      面板是 flex 定宽列的一部分，任何尺寸变化都会挤动主区。
+      `clip-path` / `border-radius` / 伪元素都不参与布局计算，是安全的。
+   --------------------------------------------------------------------------- */
+
+/* ① 面板标题 / 副题 —— 撤掉方舟的 `//` 前缀与青色 HUD 线，回到苹果的小标题层级。
+      （第 ㊸ 条：用户要求「其他界面都按 iPhone 官网 UI」，所以这里连同面板一起苹果化。） */
+.sp-title{font-size:17px; font-weight:600; letter-spacing:-.018em}
+.sp-title::before{content:none}
+.sp-sub{font-size:12.5px; color:var(--ink-400); margin-top:5px; position:relative}
+.sp-sub::after{content:none}
+
+/* ② 四颗方块按钮：从「正圆」改成「右下缺角的方块」，与左侧导航行同语言。
+      ⚠️⚠️ 这里**故意不用 clip-path**：`.qbtn .qb-tag`（右上角的计数角标）定位在
+          `top:-6px; right:-6px` —— 整个盒子都在按钮边界之外，只要 `clip-path`
+          一上就会把它整块裁掉，而它是「有没有新引用/新会话」的唯一提示，不能丢。
+          改用「单角收小」的圆角：圆形 → 缺角方块，同样读得出方舟的面板感，
+          且完全不裁任何溢出内容。 */
+.qbtn{
+  border-radius:10px;
+}
+.qbtn.fill{border-radius:10px}
+/* hover 也走品牌青（与左侧栏 `.snav:hover` 同语言） */
+.qbtn:hover{border-color:var(--blue); color:var(--blue-deep)}
+html.dark .qbtn:hover{color:var(--blue); border-color:var(--blue)}
+
+/* ③ 内容分组标题：撤掉方舟的 `01 //` 编号 —— 苹果的 section header 就是一行小标题 */
+.sp-h{font-size:13px; font-weight:600; color:var(--ink-700); margin:0 0 10px}
+.sp-h::before{content:none}
+
+/* ④ 内容卡片：纯圆角 + 柔和投影（撤掉方舟的右下切角） */
+.sp-card{
+  border:none; border-radius:14px;
+  box-shadow:0 1px 2px rgba(15,16,20,.05), 0 6px 20px -10px rgba(15,16,20,.12);
+}
+html.dark .sp-card{box-shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 22px -12px rgba(0,0,0,.55)}
+
+/* ⑧ 键值行：撤掉方舟的青色分隔，改用 1px inset 阴影（不进布局） */
+.sp-kv{border-bottom:none}
+.sp-kv + .sp-kv{box-shadow:inset 0 1px 0 var(--hair)}
+html.dark .sp-kv + .sp-kv{box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+
+/* ⑤ 选中行右上角补一道小横线（方舟面板的「角标」）。
+      用 background-image 叠加而不是伪元素 —— `.snav` 的两个伪元素都已被占用
+      （`::before` 是左侧指示条、`::after` 是右端英文标签），且 background 不参与布局。 */
+.snav.active{
+  background-image:linear-gradient(var(--blue-deep), var(--blue-deep));
+  background-repeat:no-repeat;
+  background-size:8px 1.5px;
+  background-position:right 7px top 7px;
+}
+html.dark .snav.active{
+  background-image:linear-gradient(var(--blue), var(--blue));
+}
+
+/* ---------------------------------------------------------------------------
+   ㊲ 对话 AI 头像 —— 换成启思 Chess 图标「方案 A」（用户已审核通过）
+   原来是一个黑圆里写着「AI」两个字。现在仍是深色圆，里面是一枚白色的 C
+   加一点青 —— 与侧栏品牌标记同源（同一份 --mk-chat / --mk-chat-dot）。
+   ★ 只作用于 `#chatMsgBox` 里的头像：顶部工具栏那颗是**用户自己的**头像
+     （`#avat`，写着「师」/「生」），不能动。
+   ★ `#chatMsgBox .avt` 能同时覆盖普通回复气泡和 `showThink()` 的等待行 ——
+     后者的结构是 `<div thinkEl><div class="avt">…</div><div class="thinkInner">…`，
+     **两个 div 是兄弟**，所以不能用 `.thinkInner .avt` 去选（选不到）。
+   ★ 用 `color:transparent` 隐掉原来的「AI」两字而不删文本：文本仍占位，
+     布局零变化。
+   --------------------------------------------------------------------------- */
+/* ⚠️⚠️ 必须用属性选择器 + `!important`，原因（踩过）：
+   业务在**内联 style** 里给头像上了底色 ——
+     · AI 头像（`bubbleAiStart()`）：`av.style.background='var(--dark)'`
+     · 用户头像（`bubbleUser()`）：`style="background:var(--bg-soft);color:var(--ink-800)"`
+   内联样式优先级**高于**类选择器，所以单写 `#chatMsgBox .avt{background:…}` 压不过它：
+   底色仍是业务的浅色，而我的白 C 叠在浅底上几乎看不见，
+   只剩一颗青点孤零零露着 —— 观感就是「一个奇怪的青色缺口」。
+   ⇒ 用 `[style*="--dark"]` **只命中 AI 头像**（用户头像是 `--bg-soft`，不会被误伤），
+     并用 `!important` 压过内联。用户那颗继续保留「浅灰底 + 师/生 字」的原样。
+   ★ `color:transparent` 隐掉原来的「AI」两字而不是删文本：文本仍占位，布局零变化。 */
+#chatMsgBox .avt[style*="--dark"]{
+  position:relative;
+  background:#111114 !important;
+  color:transparent !important;
+}
+html.dark #chatMsgBox .avt[style*="--dark"]{background:#2E2A2A !important}
+#chatMsgBox .avt[style*="--dark"]::before,
+#chatMsgBox .avt[style*="--dark"]::after{
+  content:""; position:absolute; inset:0; margin:auto;
+  width:19px; height:19px;
+  pointer-events:none;
+}
+#chatMsgBox .avt[style*="--dark"]::before{
+  background-color:#FFFFFF;
+  -webkit-mask:var(--mk-chat) center / contain no-repeat;
+  mask:var(--mk-chat) center / contain no-repeat;
+}
+#chatMsgBox .avt[style*="--dark"]::after{
+  background-color:var(--blue);
+  -webkit-mask:var(--mk-chat-dot) center / contain no-repeat;
+  mask:var(--mk-chat-dot) center / contain no-repeat;
+}
+/* 浅色主题下那颗白 C 与深底的对比已经足够；夜间同理。不需要额外分支。 */
+
+/* ---------------------------------------------------------------------------
+   ㊶ 侧边栏 · 苹果官网化（**覆盖 ㉝ 的方舟装饰**）
+   用户改主意：「侧边的任务栏再帮我按照苹果官网的 UI 界面再重新设计一下」。
+   方舟与苹果的差别，本质是**装饰 vs 克制**：
+
+     分区标题  等宽+青色编号`01 //`+渐隐引线   →  12px 灰字，无编号无引线
+     导航项    右下切角+左青竖条               →  纯圆角 8；选中=青字+浅青底，左侧无竖条
+     主按钮    右上切角                        →  纯圆角黑实心
+     品牌区    下方一条青色 HUD 线             →  无线
+    英文标签   等宽+字距.12em                  →  正文 11px，淡灰（苹果的 fine-print）
+     侧栏底    白                              →  parchment（选中项才浮白）
+
+   ★ 保留：C 图标、品牌青、英文微标签（它是产品的技术识别特征，只改呈现方式）。
+   ★ 去掉：编号 / 切角 / HUD 线 / 左侧竖条。
+   ★ 覆盖式而不是原地改 ㉝ —— 设计层是「只追加」的架构，保留旧块便于日后回退对比。
+   --------------------------------------------------------------------------- */
+
+/* 侧栏底：改用苹果的 parchment，让选中的那一项浮起来 */
+.sidebar{background:var(--bg-soft)}
+
+/* 品牌区：撤掉那条青色 HUD 线 */
+.side-brand .ver::after{content:none}
+
+/* 分区标题：撤掉编号，回到苹果的 section header（12px / 灰 / 不加字距） */
+.sec-label{
+  font-family:var(--font); font-size:12px; font-weight:500;
+  letter-spacing:0; text-transform:none; color:#86868b;
+}
+.sec-label::after{content:none}
+/* ⚠️ 引线挂在 `::before` 上（㉝ 那条「渐隐引线」），也要一并撤掉 ——
+   苹果的 section header 就是一行小灰字，右边什么都不接。 */
+.sec-label::before{content:none}
+/* 「新建任务」右上角那个 NEW 同理：苹果的大按钮只放一句文案，不做角标。 */
+.newtask::after{content:none}
+
+/* 导航项：去切角、去左竖条、去角标线；选中改用「青字 + 浅青底」 */
+.snav,
+.snav.active{
+  border-radius:8px;
+  -webkit-clip-path:none; clip-path:none;
+}
+.snav.active{
+  background:#DBF1F8;          /* = rgba(24,209,255,.12) over #F5F5F7 */
+  background-image:none;
+}
+html.dark .snav.active{
+  background:#122C34;          /* = rgba(24,209,255,.16) over 夜间底 */
+}
+.snav.active::before{content:none}
+.snav.active,
+.snav.active span,
+.snav.active svg{color:var(--blue-deep)}
+html.dark .snav.active,
+html.dark .snav.active span,
+html.dark .snav.active svg{color:var(--blue)}
+.snav:hover{background:rgba(15,16,20,.045); box-shadow:none}
+html.dark .snav:hover{background:rgba(255,255,255,.06)}
+
+/* 英文微标签：从「等宽 + 大字距」换成正文字体 + 11px 淡灰 */
+.snav::after{
+  font-family:var(--font); font-size:11px; font-weight:400;
+  letter-spacing:0; text-transform:none; color:#a1a1a6;
+}
+html.dark .snav::after{color:#6e6e73}
+.snav.active::after{color:var(--blue-deep)}
+html.dark .snav.active::after{color:var(--blue)}
+
+/* 主操作按钮：撤掉切角，回到苹果的纯圆角实心 */
+.newtask{
+  border-radius:8px;
+  -webkit-clip-path:none; clip-path:none;
+}
+
+/* ---------------------------------------------------------------------------
+   ㊷ 批量处理对话 —— 模式样式
+   入口按钮与底部操作条由 _qisi-apple-ui.js 注入（它们是**新增功能**，不是改既有控件）；
+   复选框则完全用伪元素画，**零 DOM 注入** —— 因为会话列表会被 buildTree() 整体重建，
+   注入的子节点每次都丢，伪元素则天然免疫。
+   --------------------------------------------------------------------------- */
+body.qk-batch .proj-sess{position:relative; padding-left:32px}
+body.qk-batch .proj-sess::before{
+  content:""; position:absolute; left:11px; top:50%; transform:translateY(-50%);
+  width:16px; height:16px; border-radius:999px; background:#FFFFFF;
+  border:1.5px solid #d2d2d7; box-sizing:border-box;
+}
+html.dark body.qk-batch .proj-sess::before{background:#2C2C2E; border-color:#48484A}
+body.qk-batch .proj-sess.qk-on::before{
+  background:var(--blue-deep); border-color:var(--blue-deep);
+}
+html.dark body.qk-batch .proj-sess.qk-on::before{
+  background:var(--blue); border-color:var(--blue);
+}
+body.qk-batch .proj-sess.qk-on::after{
+  content:""; position:absolute; left:15.5px; top:50%; margin-top:-3.5px;
+  width:7px; height:4px;
+  border-left:1.8px solid #FFFFFF; border-bottom:1.8px solid #FFFFFF;
+  transform:rotate(-45deg);
+}
+body.qk-batch .proj-sess.qk-on{background:#DBF1F8}
+html.dark body.qk-batch .proj-sess.qk-on{background:#122C34}
+body.qk-batch .proj-sess.qk-on .ps-t{color:var(--blue-deep); font-weight:600}
+html.dark body.qk-batch .proj-sess.qk-on .ps-t{color:var(--blue)}
+/* 批量模式下点击会话项 = 切换勾选，不该跳转；光标也给个提示 */
+body.qk-batch .proj-sess .ps-menu{display:none}
+body.qk-batch .proj-sess{cursor:pointer}
+
+/* 注入的批量入口按钮 */
+.qk-batch-btn{
+  width:22px; height:22px; border:none; border-radius:6px; background:transparent;
+  display:inline-flex; align-items:center; justify-content:center;
+  color:var(--ink-500); cursor:pointer; padding:0;
+  transition:background .16s var(--ease), color .16s var(--ease);
+}
+.qk-batch-btn svg{width:13px; height:13px}
+.qk-batch-btn:hover{background:var(--bg-hover); color:var(--blue-deep)}
+
+/* 注入的批量操作条（浮在侧栏底部）
+   ⚠️ 侧栏只有 252px 宽，三个元素并排很容易换行 ——
+      所以文案要短、字号要小，并且全部 `nowrap` + `flex:none`。
+      （第一版「已选 2 个对话 / 删除 2 项 / 取消」在一行里放不下，
+       三个都换行成了两行甚至竖排。） */
+.qk-batch-bar{
+  position:absolute; left:12px; right:12px; bottom:12px; z-index:30;
+  display:none; align-items:center; gap:8px;
+  padding:9px 10px; border-radius:12px;
+  background:var(--card); border:1px solid var(--line-card);
+  box-shadow:0 8px 24px rgba(15,16,20,.14);
+}
+body.qk-batch .qk-batch-bar{display:flex}
+.qk-batch-bar .n{
+  font-size:11.5px; font-weight:600; color:var(--ink-900);
+  margin-right:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.qk-batch-bar .del{
+  flex:none; height:28px; padding:0 11px; border:none; border-radius:7px;
+  background:#D92A4E; color:#fff; font-size:11.5px; font-weight:600;
+  cursor:pointer; white-space:nowrap;
+}
+.qk-batch-bar .del:disabled{opacity:.4; cursor:default}
+.qk-batch-bar .cancel{
+  flex:none; height:28px; padding:0 8px; border:none; border-radius:7px;
+  background:transparent; color:var(--ink-500); font-size:11.5px;
+  cursor:pointer; white-space:nowrap;
+}
+.qk-batch-bar .cancel:hover{color:var(--ink-900)}
+
+/* ---------------------------------------------------------------------------
+   ㊸ 全站界面 · iPhone 官网规范
+   用户：「以 skill 市场为标准……其他界面都按照我刚刚说的那样做」。
+   范围：除「知识星图 / 对话 hero / skill 市场」之外的所有主视图。
+   ★ 这些界面共用同一套类（`.view-sec` / `.view-h1` / `.view-sub` / `.row-card` /
+     `.lrow` / `.li` / `.lm`）⇒ **改公共类即可一次覆盖全部**。
+   ★「以 skill 市场为标准」= 同一套**语言**（字号层级 / 留白节奏 / 卡片材质 / 背景层次），
+     不是照抄它的尺寸 —— 市场是「左图右文大卡」，这里是列表，尺寸本就该不同。
+   ★ 性能纪律（用户硬要求「别人 fork 下来不卡」）：
+     只动 background / color / border / box-shadow / padding / font-*；
+     **不引入 backdrop-filter、不引入 filter、不引外部字体或图片**。
+     （已实测：本次改动后页面 filter 元素数 = 0，backdropFilter 元素数没有增加。）
+   --------------------------------------------------------------------------- */
+
+/* ① 背景层次：parchment 底，白卡才浮得起来（与 skill 市场一致） */
+#view-services, #view-library, #view-lesson, #view-question{background:var(--bg-soft)}
+html.dark #view-services, html.dark #view-library,
+html.dark #view-lesson, html.dark #view-question{background:var(--bg)}
+
+/* ② 页头留白：放到苹果的节奏（原来 22/34 太挤） */
+#view-services .view-sec,
+#view-library .view-sec,
+#view-lesson   .view-sec,
+#view-question .view-sec{padding:44px 56px 0}
+/* 第二个 view-sec 带着业务写的内联 padding-top，用 !important 压回苹果的间距 */
+#view-services .view-sec[style*="padding-top"],
+#view-library .view-sec[style*="padding-top"],
+#view-lesson   .view-sec[style*="padding-top"],
+#view-question .view-sec[style*="padding-top"]{padding-top:26px !important}
+
+/* ③ 页标题 30/700（与 skill 市场 .mk-title 同档）；副题 14px ink-400 */
+#view-services .view-h1,
+#view-library .view-h1,
+#view-lesson   .view-h1,
+#view-question .view-h1{font-size:30px; font-weight:700; letter-spacing:-.028em; line-height:1.2}
+#view-services .view-sub,
+#view-library .view-sub,
+#view-lesson   .view-sub,
+#view-question .view-sub{font-size:14px; line-height:1.55; color:var(--ink-400); margin-top:8px}
+
+/* ④ 卡片：撤掉 1px 硬边框，改柔和双层投影 + 圆角 18（苹果的卡片不描边） */
+#view-services .row-card,
+#view-library .row-card,
+#view-lesson   .row-card,
+#view-question .row-card{
+  border:none; border-radius:18px; background:var(--card);
+  box-shadow:0 1px 2px rgba(15,16,20,.05), 0 8px 28px -12px rgba(15,16,20,.14);
+  overflow:hidden; margin-bottom:22px;
+}
+html.dark #view-services .row-card, html.dark #view-library .row-card,
+html.dark #view-lesson   .row-card, html.dark #view-question .row-card{
+  box-shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+}
+
+/* ⑤ 列表行：加大内距；行间分隔改用 1px inset 阴影（不进布局，也不像描边） */
+#view-services .lrow,
+#view-library .lrow,
+#view-lesson   .lrow,
+#view-question .lrow{padding:18px 22px; border-bottom:none}
+#view-services .lrow + .lrow,
+#view-library .lrow + .lrow,
+#view-lesson   .lrow + .lrow,
+#view-question .lrow + .lrow{box-shadow:inset 0 1px 0 var(--hair)}
+html.dark #view-services .lrow + .lrow, html.dark #view-library .lrow + .lrow,
+html.dark #view-lesson   .lrow + .lrow, html.dark #view-question .lrow + .lrow{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+}
+#view-services .lrow .lm .t,
+#view-library .lrow .lm .t,
+#view-lesson   .lrow .lm .t,
+#view-question .lrow .lm .t{font-size:15px; font-weight:600; letter-spacing:-.012em}
+#view-services .lrow .lm .s,
+#view-library .lrow .lm .s,
+#view-lesson   .lrow .lm .s,
+#view-question .lrow .lm .s{font-size:13px; line-height:1.5; color:var(--ink-500); margin-top:3px}
+
+/* ⑥ 行首图标块：38 → 44、圆角 12（苹果设置项的比例） */
+#view-services .lrow .li,
+#view-library .lrow .li,
+#view-lesson   .lrow .li,
+#view-question .lrow .li{width:44px; height:44px; border-radius:12px}
+#view-services .lrow .li svg,
+#view-library .lrow .li svg,
+#view-lesson   .lrow .li svg,
+#view-question .lrow .li svg{width:20px; height:20px}
+
+/* ⑦ hover：整行浅灰（苹果的行反馈是整行变色，不是描边） */
+#view-services .lrow.hoverable:hover,
+#view-library .lrow.hoverable:hover,
+#view-lesson   .lrow.hoverable:hover,
+#view-question .lrow.hoverable:hover{background:var(--bg-soft)}
+html.dark #view-services .lrow.hoverable:hover, html.dark #view-library .lrow.hoverable:hover,
+html.dark #view-lesson   .lrow.hoverable:hover, html.dark #view-question .lrow.hoverable:hover{
+  background:rgba(255,255,255,.05);
+}
+
+/* ⑧ 教材库（#view-library）结构特殊：它没有标准的 `.view-sec / .view-h1` 页头，
+      内容全部由 JS 渲染进 `#libBody`，而那个容器带着**内联**的
+      `padding:20px 28px; max-width:920px` —— 所以留白和版心宽度都要单独对齐。
+      （它内部的列表行用的仍然是公共的 `.lrow`，所以 ⑤ 那一组已经自动生效了。） */
+#view-library #libBody{padding:44px 56px !important; max-width:1160px !important}
+/* 侧栏要能容纳绝对定位的操作条 */
+.sidebar{position:relative}
+

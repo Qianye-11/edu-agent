@@ -125,7 +125,16 @@ def take_download(token: str) -> Path | None:
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return (STATIC / "index.html").read_text(encoding="utf-8")
+    # 每次读盘点取最新产物；并显式禁用缓存 ——
+    # 否则改完 UI 后浏览器会拿旧副本，「重新打开应用」看到的仍是上一版。
+    # （这一段是本地补丁：上游版本没有它，更新代码后需要重新加回。）
+    return HTMLResponse(
+        content=(STATIC / "index.html").read_text(encoding="utf-8"),
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 # ---------- 知识星图 ----------
