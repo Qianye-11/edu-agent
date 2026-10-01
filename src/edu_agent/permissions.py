@@ -42,6 +42,9 @@ ACTIONS: list[dict] = [
     {"id": "skill_publish", "label": "发布 Skill（安装到运行时，Agent 从此可加载）", "risk": "write", "default": "ask"},
     {"id": "skill_disable", "label": "停用已发布的 Skill（从运行时撤下）", "risk": "write", "default": "ask"},
     {"id": "skill_rollback", "label": "回滚 Skill 到上一个版本", "risk": "destructive", "default": "ask"},
+    # ---- skill-create（自动技能封装）：从跑通的会话自动生成草稿 ----
+    # 只到"生成草稿"这一步；提交审核、发布仍然各走各的闸门，自动流程绝不越过它们。
+    {"id": "skill_create_draft", "label": "由跑通的会话自动生成 Skill 草稿", "risk": "write", "default": "ask"},
 ]
 
 _BY_ID = {a["id"]: a for a in ACTIONS}

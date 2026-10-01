@@ -58,3 +58,7 @@ tools/uicheck/package-lock.json
 # 模块3 测试临时目录（仓库内建，避免沙箱对系统 %TEMP% 的限制）
 .tmp-skill-market/
 .tmp-probe/
+# skill-create 测试/自检的临时目录
+.tmp-skill-create/
+.tmp-verify-sc-*/
+.tmp-debug/

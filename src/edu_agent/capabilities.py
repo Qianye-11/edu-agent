@@ -676,6 +676,15 @@ def run_skill(cid: str, args: dict | None = None, timeout: float = _SKILL_TIMEOU
     data.setdefault("ok", True)
     data.setdefault("skill", cid)
     data["ms"] = int((time.time() - t0) * 1000)
+    # skill-create 埋点（docs/21）：把"这一轮调了哪个技能"记进本轮缓冲，
+    # 供后续生成运行痕迹（R2/L2 需要"实际调用集合"）。埋点失败不影响技能结果。
+    try:
+        from edu_agent.skill_market import runs as _runs
+
+        _runs.record_skill_call(cid, ok=bool(data.get("ok")), ms=int(data["ms"]),
+                                args=args or {})
+    except Exception:  # noqa: BLE001
+        pass
     return data
 
 

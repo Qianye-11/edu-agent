@@ -130,6 +130,56 @@ def _next_seq(path: Path) -> int:
     return n + 1
 
 
+def chain_append(path: Path, record: dict) -> dict:
+    """把一条记录追加到任意 JSONL 并接上哈希链（seq/prev_hash/hash 由本函数补）。
+
+    公共件：审计日志（`audit/`）与运行痕迹（`runs/`）共用同一套"只追加 + 可校验"的写法，
+    免得两处各写一遍、日后各错一半。
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rec = {k: v for k, v in dict(record).items() if k != "hash"}
+    rec["seq"] = _next_seq(path)
+    rec["prev_hash"] = _last_hash(path)
+    rec["hash"] = hashlib.sha256(
+        (rec["prev_hash"] + _canonical(rec)).encode("utf-8")).hexdigest()
+    line = json.dumps(rec, ensure_ascii=False, separators=(",", ":"))
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+        fh.flush()
+        try:
+            os.fsync(fh.fileno())      # 审计不能只停在页缓存里
+        except OSError:
+            pass
+    return rec
+
+
+def verify_chain_in(path: Path) -> list[dict]:
+    """校验单个 JSONL 的哈希链，返回断链/被改的记录清单（空 = 完好）。"""
+    broken: list[dict] = []
+    path = Path(path)
+    if not path.exists():
+        return broken
+    prev = ""
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            broken.append({"file": path.name, "seq": None, "why": "不是合法 JSON（被改过？）"})
+            continue
+        if rec.get("prev_hash", "") != prev:
+            broken.append({"file": path.name, "seq": rec.get("seq"), "why": "prev_hash 断链"})
+        want = hashlib.sha256(
+            (rec.get("prev_hash", "") + _canonical(rec)).encode("utf-8")).hexdigest()
+        if rec.get("hash") != want:
+            broken.append({"file": path.name, "seq": rec.get("seq"),
+                           "why": "hash 不匹配（记录被修改）"})
+        prev = rec.get("hash", "")
+    return broken
+
+
 def append(event: str, *, skill: str = "", version: str = "", actor: str = "",
            session_id: str = "", status_from: str = "", status_to: str = "",
            input_text: str = "", result: dict | None = None,
@@ -140,7 +190,6 @@ def append(event: str, *, skill: str = "", version: str = "", actor: str = "",
     path = _month_file(ts)
     with _lock:
         rec: dict[str, Any] = {
-            "seq": _next_seq(path),
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts)),
             "event": str(event),
             "skill": str(skill),
@@ -151,21 +200,10 @@ def append(event: str, *, skill: str = "", version: str = "", actor: str = "",
             "input": summarize(input_text) if input_text else None,
             "result": redact(result or {}),
             "gates": redact(gates or {}),
-            "prev_hash": _last_hash(path),
         }
         if extra:
             rec["extra"] = redact(extra)
-        rec["hash"] = hashlib.sha256(
-            (rec["prev_hash"] + _canonical(rec)).encode("utf-8")).hexdigest()
-        line = json.dumps(rec, ensure_ascii=False, separators=(",", ":"))
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
-            fh.flush()
-            try:
-                os.fsync(fh.fileno())      # 审计不能只停在页缓存里
-            except OSError:
-                pass
-        return rec
+        return chain_append(path, rec)
 
 
 # ---------------------------------------------------------------- 读取 / 校验
@@ -205,23 +243,7 @@ def verify_chain() -> dict:
         return {"ok": True, "files": 0, "records": 0, "broken": []}
     for path in sorted(paths.audit_dir().glob("*.jsonl")):
         files += 1
-        prev = ""
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            if not line.strip():
-                continue
-            records += 1
-            try:
-                rec = json.loads(line)
-            except ValueError:
-                broken.append({"file": path.name, "seq": None, "why": "不是合法 JSON（被改过？）"})
-                continue
-            if rec.get("prev_hash", "") != prev:
-                broken.append({"file": path.name, "seq": rec.get("seq"),
-                               "why": "prev_hash 断链"})
-            want = hashlib.sha256(
-                (rec.get("prev_hash", "") + _canonical(rec)).encode("utf-8")).hexdigest()
-            if rec.get("hash") != want:
-                broken.append({"file": path.name, "seq": rec.get("seq"),
-                               "why": "hash 不匹配（记录被修改）"})
-            prev = rec.get("hash", "")
+        records += sum(1 for line in path.read_text(encoding="utf-8", errors="replace")
+                       .splitlines() if line.strip())
+        broken.extend(verify_chain_in(path))
     return {"ok": not broken, "files": files, "records": records, "broken": broken}

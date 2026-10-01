@@ -73,6 +73,27 @@ def sessions_dir() -> Path:
     return market_root() / "sessions"
 
 
+# ---------------------------------------------------------------- skill-create
+def runs_dir() -> Path:
+    """运行痕迹（run trace）：**只追加**，skill-create 判定"跑通"的唯一原始证据。"""
+    return market_root() / "runs"
+
+
+def candidates_dir() -> Path:
+    """候选工作流（可更新：计数/评分/状态）。"""
+    return market_root() / "candidates"
+
+
+def rejected_file() -> Path:
+    """被否决的候选（冷却名单，只追加）。"""
+    return candidates_dir() / "_rejected.jsonl"
+
+
+def config_file() -> Path:
+    """skill-create 的阈值配置（可改，不用改代码）。"""
+    return market_root() / "skill_create.json"
+
+
 def runtime_skills_dir() -> Path:
     """**唯一**会被 Agent 自动发现的技能目录。
 
@@ -124,7 +145,8 @@ def runtime_plugin_path(skill_id: str) -> Path:
 
 def ensure_dirs() -> None:
     for d in (drafts_dir(), submitted_dir(), published_dir(), archive_dir(),
-              audit_dir(), fixtures_dir(), sessions_dir()):
+              audit_dir(), fixtures_dir(), sessions_dir(),
+              runs_dir(), candidates_dir()):
         d.mkdir(parents=True, exist_ok=True)
 
 

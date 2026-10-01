@@ -34,19 +34,26 @@ from edu_agent.skill_market import (  # noqa: F401
     audit,
     capability_registry,
     contract,
+    create_api,
     draft,
+    fixture,
     isolation,
     kernel_loader,
     lifecycle,
     manifest,
+    miner,
+    packager,
     paths,
     perm_scan,
+    runs,
     store,
+    verifier,
 )
 
 __all__ = [
-    "audit", "capability_registry", "contract", "draft", "isolation",
-    "kernel_loader", "lifecycle", "manifest", "paths", "perm_scan", "store",
+    "audit", "capability_registry", "contract", "create_api", "draft", "fixture",
+    "isolation", "kernel_loader", "lifecycle", "manifest", "miner", "packager",
+    "paths", "perm_scan", "runs", "store", "verifier",
 ]
 
 # 版本号跟模块一起走（SKILL-01 的 version 是技能版本，这里是模块版本）

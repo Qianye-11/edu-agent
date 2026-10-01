@@ -63,8 +63,10 @@ app = FastAPI(title="课本教练 x 教案 Agent")
 # 挂载失败不能拖垮整个网关（例如某个可选依赖缺失），所以包了 try/except 并只记日志。
 try:
     from edu_agent.skill_market.api import router as _skill_market_router
+    from edu_agent.skill_market.create_api import router as _skill_create_router
 
     app.include_router(_skill_market_router)
+    app.include_router(_skill_create_router)
 except Exception as _e:  # noqa: BLE001
     log.warning("模块3（Skill 市场）路由未挂载：%s: %s", type(_e).__name__, _e)
 
@@ -1044,6 +1046,15 @@ def _chat_gen(req: ChatReq):
 
     code = _code(req.preset)
     sid = _pick_session(req)
+    # skill-create 埋点（2026-10-02，见 docs/21）：先把"上一轮"补成运行痕迹（幂等），
+    # 再清空本轮的技能调用缓冲。包 try/except —— 埋点永远不能影响回答。
+    try:
+        from edu_agent.skill_market import runs as _runs
+
+        _runs.sweep_session(sid, session_reader=lambda s: _store.get(s))
+        _runs.begin_turn(sid)
+    except Exception:  # noqa: BLE001
+        pass
     _store.append(sid, "user", text)
     _store.set_title_if_new(sid, text.splitlines()[0][:18])
     yield {"t": "session", "id": sid,
