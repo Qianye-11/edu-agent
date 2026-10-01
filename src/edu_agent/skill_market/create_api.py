@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from edu_agent.skill_market import (lifecycle, miner, packager, runs, verifier)
+from edu_agent.skill_market import (health, lifecycle, miner, packager, runs,
+                                   scheduler, shadow, verifier)
 
 router = APIRouter(prefix="/api/skill-create", tags=["skill-create"])
 
@@ -198,8 +199,87 @@ def api_get_config():
 @router.post("/config")
 def api_set_config(body: dict):
     """改阈值（min_sessions / window_days / consistency_min / score_min /
-    reject_cooldown_days / dedupe_threshold / trace_enabled）。"""
+    reject_cooldown_days / dedupe_threshold / trace_enabled /
+    require_shadow / scan_interval_hours / prompt_in_chat /
+    health_min_calls / health_min_ok_rate / health_window_days）。"""
     try:
         return {"ok": True, "config": runs.set_config(**(body or {}))}
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+# ---------------------------------------------------------------- 第二轮：L3 / L4 / 定时
+@router.post("/shadow")
+def api_shadow(body: dict):
+    """L3 影子运行：把草稿里的 plugin.py 放进子进程真跑一次，出站调用全被记录桩拦下。"""
+    try:
+        return shadow.shadow_run(str(body.get("candidate_id") or ""),
+                                 actor=str(body.get("actor") or "E"),
+                                 timeout=int(body.get("timeout") or 60))
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/health")
+def api_health(window_days: int = 0):
+    """L4 发布后回归：每个已发布技能的调用次数/成功率/延迟/最近错误。
+
+    跌破阈值的会带 `attention=true` 与原因 —— **只提示，不自动停用**。
+    """
+    try:
+        return health.health(window_days=window_days or None)
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/health/{skill_id}")
+def api_health_one(skill_id: str):
+    try:
+        return {"ok": True, "skills": health.skill_stats(skill_id)}
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/schedule")
+def api_schedule():
+    """定时扫描状态（间隔、上次/下次、上次结果）。"""
+    try:
+        return scheduler.status()
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.post("/schedule/run")
+def api_schedule_run(body: dict | None = None):
+    """立刻扫一次（等于 /scan，但走定时任务同一入口，结果会记进调度状态）。"""
+    try:
+        b = body or {}
+        return scheduler.run_once(sweep=bool(b.get("sweep", True)),
+                                  limit_sessions=int(b.get("limit_sessions") or 30))
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.post("/schedule/start")
+def api_schedule_start():
+    try:
+        return scheduler.start()
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.post("/schedule/stop")
+def api_schedule_stop():
+    try:
+        return scheduler.stop()
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/prompt")
+def api_prompt(session_id: str = ""):
+    """半自动提示：这个会话里跑过的流程值不值得固化（只提议，且同一会话只提一次）。"""
+    try:
+        return miner.prompt_for_session(str(session_id or ""))
     except Exception as e:  # noqa: BLE001
         return _err(e)

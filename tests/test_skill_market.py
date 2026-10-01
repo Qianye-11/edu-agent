@@ -295,6 +295,29 @@ class TestPermScanSkill03(MarketTestCase):
         self.assertTrue(any(g["action"] == "export_pptx"
                             for g in rep.declared.get("gated_actions", [])))
 
+    def test_local_module_url_is_not_network(self):
+        """插件里写**本机**模块 API 地址不算联网 —— 声明了跨模块能力就该放行。
+
+        （早先所有 http:// 都按联网处理，任何调用模块2/模块4 对外 API 的插件都会被
+        判"未声明的网络访问"，等于把正常技能全挡在审核门外。）
+        """
+        man = self._man(allowed_capabilities=("kg.read",))
+        rep = perm_scan.scan(man, "调用 ModuleClient({'module2': 'http://127.0.0.1:5180'})")
+        self.assertTrue(rep.ok, [f.message for f in rep.blocking])
+        self.assertFalse(any(f.code == "net.url" for f in rep.findings))
+
+    def test_local_module_url_without_declaration_blocked(self):
+        man = self._man(allowed_capabilities=("action:export_docx",))
+        rep = perm_scan.scan(man, "调用 http://127.0.0.1:5180/api/knowledge/node")
+        self.assertFalse(rep.ok)
+        self.assertTrue(any("跨模块调用" in f.message for f in rep.blocking))
+
+    def test_public_url_still_blocked(self):
+        man = self._man(allowed_capabilities=("kg.read",))
+        rep = perm_scan.scan(man, "去 https://api.example.com 拿数据")
+        self.assertFalse(rep.ok)
+        self.assertTrue(any("未声明的网络访问" in f.message for f in rep.blocking))
+
 
 # ---------------------------------------------------------------- SKILL-04
 class TestAuditSkill04(MarketTestCase):

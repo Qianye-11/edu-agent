@@ -30,8 +30,17 @@ from edu_agent.skill_market import paths
 # ---------------------------------------------------------------- 风险关键词
 # 每类风险：code → (正则, 人话说明)。命中后必须由 manifest 声明对应能力才放行。
 RISK_PATTERNS: dict[str, list[tuple[str, re.Pattern, str]]] = {
+    # 跨模块调用：**本机**模块 API（127.0.0.1/localhost）不是"联网"。
+    # 早先所有 http:// 都按联网处理，结果任何调用模块2/模块4 对外 API 的插件
+    # 都被判"未声明的网络访问"——等于把正常技能全挡在审核门外（实测踩过）。
+    "module_api": [
+        ("api.local_url", re.compile(r"https?://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?", re.I),
+         "出现本机模块 API 地址"),
+        ("api.module_client", re.compile(r"\bModuleClient\b"), "使用跨模块客户端 ModuleClient"),
+    ],
     "network": [
-        ("net.url", re.compile(r"https?://|ftp://", re.I), "出现网络地址（http/https/ftp）"),
+        ("net.url", re.compile(r"https?://(?!127\.0\.0\.1|localhost|\[::1\])|ftp://", re.I),
+         "出现公网地址（http/https/ftp）"),
         ("net.lib", re.compile(r"\b(requests|urllib|httpx|aiohttp|socket|websocket|curl|wget|fetch)\b", re.I),
          "出现网络库/命令调用"),
         ("net.api", re.compile(r"(api[_-]?key|bearer\s+[a-z0-9]|openai|deepseek|siliconflow)", re.I),
@@ -57,6 +66,8 @@ RISK_PATTERNS: dict[str, list[tuple[str, re.Pattern, str]]] = {
 
 # 每类风险需要 manifest 声明的能力令牌（命中任一即可）
 RISK_REQUIRES: dict[str, tuple[str, ...]] = {
+    "module_api": ("kg.read", "kb.read", "question.draft", "mastery.read",
+                   "lesson.read", "workbench.emit", "session.read"),
     "network": ("action:vision_analyze", "skill:web-image"),
     "file_write": ("action:export_docx", "action:export_pptx", "action:project_new",
                    "action:template_save", "action:pdf_ingest", "action:pdf_library_manage",
@@ -65,7 +76,8 @@ RISK_REQUIRES: dict[str, tuple[str, ...]] = {
     "destructive": ("action:template_delete",),
 }
 
-RISK_LABEL = {"network": "网络访问", "file_write": "文件写入", "exec": "执行外部程序",
+RISK_LABEL = {"module_api": "跨模块调用", "network": "网络访问",
+              "file_write": "文件写入", "exec": "执行外部程序",
               "destructive": "破坏性操作"}
 
 # 越界：直接操作别的模块的内部库表/模型

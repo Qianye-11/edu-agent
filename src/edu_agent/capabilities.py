@@ -679,10 +679,15 @@ def run_skill(cid: str, args: dict | None = None, timeout: float = _SKILL_TIMEOU
     # skill-create 埋点（docs/21）：把"这一轮调了哪个技能"记进本轮缓冲，
     # 供后续生成运行痕迹（R2/L2 需要"实际调用集合"）。埋点失败不影响技能结果。
     try:
+        from edu_agent.skill_market import health as _health
         from edu_agent.skill_market import runs as _runs
 
         _runs.record_skill_call(cid, ok=bool(data.get("ok")), ms=int(data["ms"]),
                                 args=args or {})
+        # L4 发布后回归：**已发布**的技能（装在运行时目录里）额外记一条 skill-run，
+        # 这样成功率/延迟统计不依赖"是否在一轮对话里被调用"。草稿/市场技能不记。
+        _health.record_run(cid, ok=bool(data.get("ok")), ms=int(data["ms"]),
+                           error=str(data.get("error") or ""), args=args or {})
     except Exception:  # noqa: BLE001
         pass
     return data

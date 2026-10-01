@@ -174,5 +174,21 @@ def verification_state(candidate_id: str) -> dict:
         return {"ok": False, "gate": "stale", "candidate_id": cand.get("candidate_id"),
                 "error": "草稿在检验之后被改过：请重新调 /api/skill-create/verify",
                 "digest_now": cur, "digest_verified": want}
+
+    # L3 影子运行：草稿声明了 plugin.py（有真代码）就必须跑过它。
+    # 纯提示词技能没有代码可跑，跳过（L1+L2 已足够）。
+    try:
+        from edu_agent.skill_market import manifest as _mf
+
+        man, _ = _mf.from_document(p.read_text(encoding="utf-8", errors="replace"))
+        has_code = bool(man.plugin) or (d / "plugin.py").exists()
+        need = bool(runs.config().get("require_shadow", True))
+        if need and has_code and not (cand.get("verification") or {}).get("l3"):
+            return {"ok": False, "gate": "shadow", "candidate_id": cand.get("candidate_id"),
+                    "error": "草稿声明了 plugin.py：提交前必须先跑 L3 影子运行 "
+                             "（POST /api/skill-create/shadow）"}
+    except Exception:  # noqa: BLE001
+        pass
+
     return {"ok": True, "candidate_id": cand.get("candidate_id"),
             "skill_id": cand.get("skill_id"), "draft_digest": cur}

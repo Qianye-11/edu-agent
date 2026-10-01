@@ -70,6 +70,15 @@ try:
 except Exception as _e:  # noqa: BLE001
     log.warning("模块3（Skill 市场）路由未挂载：%s: %s", type(_e).__name__, _e)
 
+# skill-create 定时扫描（docs/22 M9）：守护线程，默认 24 小时一次，只做"发现"
+# （回扫会话 + 更新候选看板），**绝不自动出草稿、绝不自动发布**。
+try:
+    from edu_agent.skill_market import scheduler as _sc_scheduler
+
+    _sc_scheduler.start()
+except Exception as _e:  # noqa: BLE001
+    log.warning("skill-create 定时扫描未启动：%s: %s", type(_e).__name__, _e)
+
 # ---------- host：会话存储（进程内只保留这一个持久化入口） ----------
 _settings = load_settings()
 _store = SessionStore(path=_settings.sessions_db,
@@ -1019,9 +1028,19 @@ def _tagged(mode: str, md: str) -> str:
 
 
 
-def _sse(gen):
+def _sse(gen, holder=None):
+    """把生成器包成 SSE。holder 是 skill-create 的"半自动提示"通道（见 _chat_gen）：
+    生成器在开头算好提示文案放进 holder，这里在收尾事件（t=done）上把那一句附到回答末尾
+    —— 这样任何前端都能看见，不依赖前端新增事件类型。"""
     def stream():
+        hint = ""
         for ev in gen:
+            if holder and holder.get("hint"):
+                hint = str(holder["hint"])
+            if hint and isinstance(ev, dict) and ev.get("t") == "done" and not ev.get("suggest"):
+                ev = dict(ev)
+                ev["text"] = (str(ev.get("text") or "") + "\n\n" + hint).strip()
+                ev["suggest"] = hint
             yield "data: " + json.dumps(ev, ensure_ascii=False) + "\n\n"
     return StreamingResponse(stream(), media_type="text/event-stream")
 
@@ -1034,7 +1053,7 @@ def _pick_session(req: ChatReq) -> str:
     return sid
 
 
-def _chat_gen(req: ChatReq):
+def _chat_gen(req: ChatReq, holder: dict | None = None):
     # 注意：这里不能用 logsetup.request（contextvars）包裹整个生成器——
     # SSE 经 Starlette 线程池逐段恢复，每次 next() 在不同 context 副本，
     # __exit__ 的 reset(token) 会抛 "created in a different Context"。
@@ -1053,6 +1072,21 @@ def _chat_gen(req: ChatReq):
 
         _runs.sweep_session(sid, session_reader=lambda s: _store.get(s))
         _runs.begin_turn(sid)
+    except Exception:  # noqa: BLE001
+        pass
+    # skill-create 半自动提示（docs/22 M8）：上一轮补记完成后，看看这个会话里跑过的流程
+    # 有没有已经跨会话跑通的。**只提议**：文案挂在收尾事件上（_sse 负责附加），
+    # 同一 (会话,候选) 只提示一次（miner._prompts.jsonl 只追加）。
+    try:
+        from edu_agent.skill_market import miner as _miner
+
+        _pr = _miner.prompt_for_session(sid)
+        if _pr.get("ask"):
+            if holder is not None:
+                holder["hint"] = _pr.get("text") or ""
+                holder["candidate_id"] = _pr.get("candidate_id")
+            yield {"t": "suggest", "text": _pr.get("text") or "",
+                   "candidate_id": _pr.get("candidate_id")}
     except Exception:  # noqa: BLE001
         pass
     _store.append(sid, "user", text)
@@ -1385,7 +1419,8 @@ def _stream_planner(sid: str, req: ChatReq, text: str):
 
 @app.post("/api/chat")
 def api_chat(req: ChatReq):
-    return _sse(_chat_gen(req))
+    holder: dict = {}
+    return _sse(_chat_gen(req, holder), holder=holder)
 
 
 @app.post("/api/session/last_html")

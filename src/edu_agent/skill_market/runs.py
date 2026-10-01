@@ -39,6 +39,13 @@ _DEFAULTS = {
     "score_min": 0.6,            # 候选入板的最低分
     "reject_cooldown_days": 30,  # 否决后的冷却期
     "dedupe_threshold": 0.6,     # 与已有技能的相似度阈值（超过就抑制）
+    # ---- 第二轮 ----
+    "require_shadow": True,      # 草稿声明了 plugin.py 就必须过 L3 影子运行
+    "scan_interval_hours": 24,   # 自动挖掘间隔（0 = 关掉定时扫描）
+    "prompt_in_chat": True,      # 跑通的流程是否在对话里提示一句
+    "health_min_calls": 5,       # L4：少于这个调用数不下结论
+    "health_min_ok_rate": 0.8,   # L4：成功率低于它就标 attention
+    "health_window_days": 30,    # L4：只看最近多少天
 }
 
 _lock = threading.RLock()

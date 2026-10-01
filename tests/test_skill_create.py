@@ -15,7 +15,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from edu_agent.skill_market import (lifecycle, miner, packager, runs, store, verifier)
+from edu_agent.skill_market import (lifecycle, manifest as mf, miner, packager,  # noqa: E402
+                                   runs, store, verifier)
 
 # ---------------------------------------------------------------- 测试数据
 STEPS_Q = [{"kind": "skill", "id": "kg.read"}, {"kind": "skill", "id": "question.draft"}]
@@ -478,6 +479,247 @@ class TestSkillCreateE2E(CreateTestCase):
         self.assertTrue(sub["ok"], sub)
         self.assertEqual(store.effective_status(d["id"]), "submitted")
         self.assertFalse(store.is_loadable(d["id"])[0])
+
+
+# ════════════════════════════════════════════════════ 第二轮：L3 / L4 / 定时 / 提示
+PLUGIN_OK = '''# -*- coding: utf-8 -*-
+from typing import Annotated
+
+from semantic_kernel.functions import kernel_function
+
+from edu_agent.skill_market.contract import ModuleClient, TeachingContext
+
+
+class Draft:
+    @kernel_function(name="draft_question", description="生成题目草稿")
+    def draft_question(self,
+                       knowledge_id: Annotated[str, "节点标识"],
+                       difficulty: Annotated[str, "难度"] = "基础") -> dict:
+        ctx = TeachingContext(knowledge_id=knowledge_id)
+        node = ModuleClient({"module2": "http://127.0.0.1:5180"}).read_knowledge_node(ctx)
+        return {"stem": "题干", "answer": "答案", "analysis": "解析",
+                "knowledge_id": knowledge_id, "node": node}
+'''
+
+PLUGIN_BOOM = '''# -*- coding: utf-8 -*-
+from semantic_kernel.functions import kernel_function
+
+
+class Draft:
+    @kernel_function(name="draft_question", description="会炸")
+    def draft_question(self, knowledge_id: str = "") -> dict:
+        raise RuntimeError("故意炸一下")
+'''
+
+PLUGIN_EMPTY = '''# -*- coding: utf-8 -*-
+class Draft:
+    def helper(self) -> dict:
+        return {}
+'''
+
+
+class TestHealthL4(CreateTestCase):
+    """M6：发布后回归（L4）。"""
+
+    def _install_fake(self, skill_id="installed-skill"):
+        """造一个"已安装"的假技能（只放一个 SKILL.md 到运行时目录）。"""
+        d = Path(os.environ["EDU_SKILL_RUNTIME_DIR"], skill_id)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text("---\nname: %s\ndescription: d\n---\n\n正文\n" % skill_id,
+                                    encoding="utf-8")
+        return skill_id
+
+    def test_only_installed_skills_are_recorded(self):
+        from edu_agent.skill_market import health
+
+        self.assertEqual(health.record_run("not-installed", ok=True), {})
+        sid = self._install_fake()
+        rec = health.record_run(sid, ok=True, ms=120)
+        self.assertTrue(rec.get("hash"))
+        self.assertEqual(len(health.skill_stats()), 1)
+
+    def test_ok_rate_and_attention(self):
+        from edu_agent.skill_market import health
+
+        sid = self._install_fake()
+        for i in range(6):
+            health.record_run(sid, ok=(i < 3), ms=100 + i, error="" if i < 3 else "上游 500")
+        st = health.skill_stats()[0]
+        self.assertEqual(st["calls"], 6)
+        self.assertEqual(st["ok"], 3)
+        self.assertEqual(st["ok_rate"], 0.5)
+        self.assertTrue(st["attention"])
+        self.assertIn("成功率", st["reason"])
+        self.assertIn("上游 500", st["last_error"])
+        self.assertGreaterEqual(st["latency_p95_ms"], st["latency_p50_ms"])
+
+    def test_small_sample_not_flagged(self):
+        from edu_agent.skill_market import health
+
+        sid = self._install_fake()
+        health.record_run(sid, ok=False)
+        st = health.skill_stats()[0]
+        self.assertFalse(st["attention"])
+        self.assertIn("样本还少", st["reason"])
+
+    def test_health_summary_and_no_auto_disable(self):
+        from edu_agent.skill_market import health
+
+        sid = self._install_fake()
+        for _ in range(6):
+            health.record_run(sid, ok=False, error="挂了")
+        h = health.health()
+        self.assertEqual(h["attention_count"], 1)
+        self.assertIn("不会自动停用", h["hint"])
+        # 只提示，不改变安装状态
+        self.assertTrue(Path(os.environ["EDU_SKILL_RUNTIME_DIR"], sid).exists())
+
+    def test_health_config_switch(self):
+        from edu_agent.skill_market import health
+
+        sid = self._install_fake()
+        # 交错成功/失败：前后半段成功率一致，避免触发"下滑"那条规则
+        for ok in (True, True, False, True, True, False):
+            health.record_run(sid, ok=ok)
+        self.assertTrue(health.skill_stats()[0]["attention"])      # 0.667 < 0.8
+        runs.set_config(health_min_ok_rate=0.5)                    # 放宽阈值
+        st = health.skill_stats()[0]
+        self.assertFalse(st["attention"], st["reason"])
+        runs.set_config(health_min_ok_rate=0.8)
+
+    def test_trend_drop_flags_attention(self):
+        """总成功率还达标、但最近几次基本都失败 → 也要提示（刚坏）。"""
+        from edu_agent.skill_market import health
+
+        sid = self._install_fake()
+        for i in range(15):
+            health.record_run(sid, ok=(i < 12))          # 12/15 = 0.8 达标，最近 3 次全失败
+        st = health.skill_stats()[0]
+        self.assertEqual(st["ok_rate"], 0.8)
+        self.assertTrue(st["attention"])
+        self.assertIn("下滑", st["reason"])
+
+
+class TestShadowL3(CreateTestCase):
+    """M7：影子运行（L3）—— 真代码跑一次，出站全被拦。"""
+
+    def _draft_with_plugin(self, plugin: str):
+        c, r = self.drafted()
+        p = Path(r["dir"], "SKILL.md")
+        text = p.read_text(encoding="utf-8").replace(
+            "tests: fixture.json", "tests: fixture.json\nplugin: plugin.py")
+        man, body = mf.from_document(text)
+        store.write_draft(man, body, files={"plugin.py": plugin}, allow_code=True)
+        return c, r
+
+    def test_shadow_ok_and_intercepts_outbound(self):
+        from edu_agent.skill_market import shadow
+
+        c, r = self._draft_with_plugin(PLUGIN_OK)
+        out = shadow.shadow_run(c["candidate_id"])
+        self.assertTrue(out["ok"], out)
+        l3 = out["L3"]
+        self.assertTrue(l3["executed"])
+        self.assertEqual(l3["shape_match"], 1.0)
+        self.assertTrue(l3["outbound_attempts"], "应当记到一次出站尝试")
+        self.assertEqual(l3["undeclared_targets"], [])
+        self.assertIn("被记录桩拦截", l3["note"])
+
+    def test_shadow_plugin_error(self):
+        from edu_agent.skill_market import shadow
+
+        c, _ = self._draft_with_plugin(PLUGIN_BOOM)
+        out = shadow.shadow_run(c["candidate_id"])
+        self.assertFalse(out["ok"])
+        self.assertIn("故意炸一下", str(out.get("error")))
+
+    def test_shadow_no_kernel_function(self):
+        from edu_agent.skill_market import shadow
+
+        c, _ = self._draft_with_plugin(PLUGIN_EMPTY)
+        out = shadow.shadow_run(c["candidate_id"])
+        self.assertFalse(out["ok"])
+        self.assertIn("@kernel_function", str(out.get("error")))
+
+    def test_shadow_skipped_without_plugin(self):
+        from edu_agent.skill_market import shadow
+
+        c, _ = self.drafted()
+        out = shadow.shadow_run(c["candidate_id"])
+        self.assertFalse(out["ok"])
+        self.assertTrue(out.get("skipped"))
+        self.assertIn("纯提示词技能", out["reason"])
+
+    def test_submit_requires_shadow_when_plugin_declared(self):
+        from edu_agent.skill_market import shadow
+
+        c, r = self._draft_with_plugin(PLUGIN_OK)
+        self.assertTrue(verifier.verify(c["candidate_id"])["ok"])
+        st = verifier.verification_state(c["candidate_id"])
+        self.assertFalse(st["ok"])
+        self.assertEqual(st.get("gate"), "shadow")           # 有代码就必须影子运行
+        self.assertTrue(shadow.shadow_run(c["candidate_id"])["ok"])
+        self.assertTrue(verifier.verification_state(c["candidate_id"])["ok"])
+        self.assertTrue(lifecycle.submit(r["id"], "E")["ok"])
+
+    def test_require_shadow_can_be_disabled(self):
+        c, r = self._draft_with_plugin(PLUGIN_OK)
+        self.assertTrue(verifier.verify(c["candidate_id"])["ok"])
+        runs.set_config(require_shadow=False)
+        self.assertTrue(verifier.verification_state(c["candidate_id"])["ok"])
+        runs.set_config(require_shadow=True)
+
+
+class TestSchedulerAndPrompt(CreateTestCase):
+    """M9 定时扫描 + M8 半自动提示。"""
+
+    def test_scheduler_disabled_when_interval_zero(self):
+        from edu_agent.skill_market import scheduler
+
+        runs.set_config(scan_interval_hours=0)
+        r = scheduler.start()
+        self.assertTrue(r.get("disabled"))
+        self.assertFalse(r.get("running"))
+        runs.set_config(scan_interval_hours=24)
+
+    def test_scheduler_status_fields(self):
+        from edu_agent.skill_market import scheduler
+
+        st = scheduler.status()
+        for k in ("interval_hours", "running", "runs", "last_run", "next_run"):
+            self.assertIn(k, st)
+
+    def test_scheduler_run_once_updates_board(self):
+        from edu_agent.skill_market import scheduler
+
+        self.seed((SESS_A, SESS_B))
+        r = scheduler.run_once(sweep=False)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["scan"]["candidates"], 1)
+        self.assertEqual(scheduler.status()["runs"], 1)
+
+    def test_prompt_once_per_session(self):
+        self.seed((SESS_A, SESS_B))
+        miner.scan()
+        p1 = miner.prompt_for_session("sess-B")
+        self.assertTrue(p1["ask"], p1)
+        self.assertIn("跑通", p1["text"])
+        p2 = miner.prompt_for_session("sess-B")          # 同一会话不重复唠叨
+        self.assertFalse(p2["ask"])
+        p3 = miner.prompt_for_session("sess-A")          # 别的会话可以再提一次
+        self.assertTrue(p3["ask"])
+
+    def test_prompt_disabled_by_config(self):
+        self.seed((SESS_A, SESS_B))
+        miner.scan()
+        runs.set_config(prompt_in_chat=False)
+        self.assertFalse(miner.prompt_for_session("sess-B")["ask"])
+        runs.set_config(prompt_in_chat=True)
+
+    def test_prompt_skips_unverified_candidate(self):
+        self.seed((SESS_A,))                             # 只有 1 个会话 → R1 不过
+        miner.scan()
+        self.assertFalse(miner.prompt_for_session("sess-A")["ask"])
 
 
 if __name__ == "__main__":

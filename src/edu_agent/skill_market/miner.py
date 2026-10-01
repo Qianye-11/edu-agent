@@ -436,3 +436,74 @@ def stats() -> dict:
             "criteria_ready": len(ready),
             "avg_score": round(sum(float(c.get("score") or 0) for c in cands) / len(cands), 4) if cands else 0.0,
             "trace": runs.stats(), "config": runs.config()}
+
+
+# ---------------------------------------------------------------- 半自动提示（M8）
+def prompted_file() -> Path:
+    """提示记录（**只追加**）：同一个会话/候选只提示一次，不反复唠叨。"""
+    return paths.candidates_dir() / "_prompts.jsonl"
+
+
+def already_prompted(session_id: str, candidate_id: str) -> bool:
+    p = prompted_file()
+    if not p.exists():
+        return False
+    try:
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if (str(rec.get("session_id")) == str(session_id)
+                and str(rec.get("candidate_id")) == str(candidate_id)):
+            return True
+    return False
+
+
+def mark_prompted(session_id: str, candidate_id: str, text: str = "") -> dict:
+    return audit.chain_append(prompted_file(), {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "kind": "prompt",
+        "session_id": str(session_id),
+        "candidate_id": str(candidate_id),
+        "text": audit.redact(str(text))[:200] if text else "",
+    })
+
+
+def prompt_for_session(session_id: str) -> dict:
+    """半自动提示：这个会话里跑过的流程，有没有已经跨会话跑通、值得固化的？
+
+    只**提议**：返回文案给 web 层去展示；不生成草稿、不发布。
+    同一个 (会话, 候选) 只提示一次（`_prompts.jsonl` 只追加记录）。
+    """
+    sid = str(session_id or "")
+    if not sid:
+        return {"ok": False, "error": "缺少 session_id"}
+    if not bool(runs.config().get("prompt_in_chat", True)):
+        return {"ok": True, "ask": False, "reason": "prompt_in_chat=false"}
+    sigs = {r.get("intent_signature") for r in runs.runs() if r.get("session_id") == sid}
+    if not sigs:
+        return {"ok": True, "ask": False, "reason": "这个会话还没有痕迹"}
+    for c in list_candidates():
+        if c.get("signature") not in sigs:
+            continue
+        if c.get("state") in ("rejected", "promoted", "drafted"):
+            continue
+        if not all((c.get("criteria") or {}).values()):
+            continue
+        cid = str(c.get("candidate_id"))
+        if already_prompted(sid, cid):
+            continue
+        text = ("（这套流程已经跨 %d 个会话跑通 %d 次了，要不要固化成技能？"
+                "回复「存成技能」我就把它整理成草稿待你审核。）"
+                % (c.get("sessions") or 0, c.get("runs") or 0))
+        mark_prompted(sid, cid, text)
+        return {"ok": True, "ask": True, "candidate_id": cid,
+                "title": c.get("title"), "runs": c.get("runs"),
+                "sessions": c.get("sessions"), "score": c.get("score"), "text": text}
+    return {"ok": True, "ask": False, "reason": "没有新的、已跑通的流程可提示"}
