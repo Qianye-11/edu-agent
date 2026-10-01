@@ -43,6 +43,8 @@ ALLOWED_KEYS: tuple[str, ...] = (
     # 题目草稿内容（模块2 的入库接口要吃这些）
     "kind", "stem", "answer", "analysis", "solution", "options", "node",
     "question", "questions", "items", "draft_id", "result",
+    # 教材库只读（textbook:read）：书本与章节标识
+    "book_id", "chapter_no", "chapter_title", "book", "sections", "toc", "pages",
 )
 
 
@@ -142,17 +144,52 @@ def _default_transport(url: str, payload: dict, timeout: float) -> dict:
         return {"ok": True, "raw": raw[:2000]}
 
 
+def _default_get_transport(url: str, params: dict, timeout: float) -> dict:
+    """默认 GET 传输（只读查询：教材库章节、目录…）。测试可注入假传输。"""
+    import urllib.parse
+
+    qs = urllib.parse.urlencode({k: v for k, v in (params or {}).items() if v not in (None, "")})
+    full = url + (("?" + qs) if qs else "")
+    req = urllib.request.Request(full, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  只连本机模块
+            raw = resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": "HTTP %s" % e.code,
+                "body": e.read().decode("utf-8", "replace")[:500]}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {"ok": True, "data": data}
+    except ValueError:
+        return {"ok": True, "raw": raw[:2000]}
+
+
 class ModuleClient:
-    """跨模块调用客户端：**只有 HTTP**，没有第二条路。"""
+    """跨模块调用客户端：**只有 HTTP**，没有第二条路。
+
+    bases 可传任意模块名（module2 / module4 / platform…），未传的从环境变量取：
+
+        EDU_MODULE2_BASE / EDU_MODULE4_BASE / EDU_PLATFORM_BASE（默认 http://127.0.0.1:5174）
+    """
 
     def __init__(self, bases: dict[str, str] | None = None, *,
                  transport: Callable[[str, dict, float], dict] | None = None,
+                 get_transport: Callable[[str, dict, float], dict] | None = None,
                  timeout: float = 20.0):
+        given = {str(k): str(v) for k, v in (bases or {}).items() if v}
         self.bases = {
-            "module2": (bases or {}).get("module2") or os.getenv("EDU_MODULE2_BASE", ""),
-            "module4": (bases or {}).get("module4") or os.getenv("EDU_MODULE4_BASE", ""),
+            "module2": given.get("module2") or os.getenv("EDU_MODULE2_BASE", ""),
+            "module4": given.get("module4") or os.getenv("EDU_MODULE4_BASE", ""),
+            "platform": given.get("platform") or os.getenv(
+                "EDU_PLATFORM_BASE", "http://127.0.0.1:5174"),
         }
+        # 其它自定义模块名原样保留（插件可以传任意键）
+        for k, v in given.items():
+            self.bases.setdefault(k, v)
         self.transport = transport or _default_transport
+        self.get_transport = get_transport or _default_get_transport
         self.timeout = timeout
         self.calls: list[dict] = []          # 供审计取"输入摘要/执行结果"
 
@@ -167,9 +204,30 @@ class ModuleClient:
             return {"ok": False, "gate": "contract", "module": module, "path": path,
                     "error": "；".join(errs)}
         url = base + path
-        rec = {"module": module, "path": path, "payload": body}
+        rec = {"module": module, "path": path, "payload": body, "method": "POST"}
         try:
             out = self.transport(url, body, self.timeout)
+        except Exception as e:  # noqa: BLE001
+            out = {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
+        rec["result"] = out
+        self.calls.append(rec)
+        return out
+
+    def get(self, module: str, path: str, params: dict | None = None) -> dict:
+        """只读查询（GET）。参数同样过隐私/白名单闸门。"""
+        base = (self.bases.get(module) or "").rstrip("/")
+        if not base:
+            return {"ok": False, "error": "模块 %s 未接线（设 EDU_%s_BASE）" % (module, module.upper()),
+                    "module": module, "path": path}
+        q = {k: v for k, v in dict(params or {}).items() if v not in (None, "")}
+        errs = guard_payload(q)
+        if errs:
+            return {"ok": False, "gate": "contract", "module": module, "path": path,
+                    "error": "；".join(errs)}
+        url = base + path
+        rec = {"module": module, "path": path, "payload": q, "method": "GET"}
+        try:
+            out = self.get_transport(url, q, self.timeout)
         except Exception as e:  # noqa: BLE001
             out = {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
         rec["result"] = out

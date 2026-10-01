@@ -51,11 +51,15 @@ def skill_id_for(plugin_name: str, session_id: str = "") -> str:
     return plugin_name
 
 
-def plugin_file(skill_id: str) -> Path | None:
-    """运行时目录里该技能的插件文件（manifest 的 plugin 字段，默认 plugin.py）。"""
+def plugin_file(skill_id: str, *, draft_dir=None) -> Path | None:
+    """技能的插件文件（manifest 的 plugin 字段，默认 plugin.py）。
+
+    默认看**运行时目录**（已发布的技能）；`draft_dir` 给定时看草稿目录 ——
+    草稿阶段也要能静态列举/影子运行它自己的 plugin.py。
+    """
     from edu_agent.skill_market import paths
 
-    d = paths.runtime_plugin_path(skill_id)
+    d = Path(draft_dir) if draft_dir else paths.runtime_plugin_path(skill_id)
     text = d / "SKILL.md"
     rel = "plugin.py"
     if text.exists():
@@ -112,9 +116,12 @@ def describe_plugin_file(path: Path) -> dict:
             "kernel_function_count": len(out)}
 
 
-def describe_skill(skill_id: str) -> dict:
-    """市场详情页用：这个技能发布后会对 Kernel 暴露哪些函数（静态、不执行）。"""
-    p = plugin_file(skill_id)
+def describe_skill(skill_id: str, *, draft_dir=None) -> dict:
+    """市场详情页用：这个技能会对 Kernel 暴露哪些函数（静态、不执行）。
+
+    `draft_dir` 给定时看草稿目录（尚未发布的技能）。
+    """
+    p = plugin_file(skill_id, draft_dir=draft_dir)
     if p is None:
         return {"ok": True, "skill": skill_id, "functions": [], "plugin": "",
                 "note": "未声明 plugin（纯提示词技能），发布后不注册 kernel function"}

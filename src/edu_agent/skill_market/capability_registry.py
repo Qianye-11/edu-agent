@@ -31,6 +31,91 @@ CROSS_MODULE_CAPABILITIES: dict[str, str] = {
     "session.read": "读取本会话的历史消息（仅用于 SKILL-02 草稿抽取，需 owner 显式触发）",
 }
 
+# ---------------------------------------------------------------- 平台自带能力
+# 这些是**平台已经实现好的**只读能力，技能只做调用封装、不自己解析教材
+# （约束：textbook:read 是系统已有能力，不要自己实现教材解析）。
+PLATFORM_CAPABILITIES: dict[str, str] = {
+    "textbook:read": "读本地教材库（只读）：/api/textbook、/api/textbook/chapters、"
+                     "/api/textbook/toc、/api/textbook/stats、/api/knowledge-bases",
+}
+
+
+# ---------------------------------------------------------------- 出站目标映射
+# 一个能力令牌对应"允许调到哪里"。影子运行（L3）用它判断"实际出站目标 ⊆ 声明范围"。
+# 早先 shadow.py 硬编码 module2/module4，结果调平台只读接口（textbook:read → 127.0.0.1:5174）
+# 被当成未声明目标、L3 误判失败（实测踩过）。这里改成由令牌驱动，加能力不用改 shadow。
+CAPABILITY_TARGETS: dict[str, tuple[str, ...]] = {
+    "kg.read": ("module2",),
+    "kb.read": ("module2",),
+    "question.draft": ("module2",),
+    "mastery.read": ("module2",),
+    "lesson.read": ("platform",),
+    "workbench.emit": ("module4",),
+    "session.read": ("platform",),
+    "textbook:read": ("platform",),
+}
+
+
+def targets_for(tokens) -> set[str]:
+    """一组能力令牌 → 允许的出站目标集合。
+
+    `skill:<id>` / `mcp:<id>` / `action:<id>` 是**平台内部**能力（进程内或本机服务），
+    归到 "local"，不需要外部目标声明。
+    """
+    out: set[str] = set()
+    for t in tokens or []:
+        t = str(t or "").strip()
+        if not t:
+            continue
+        if t in CAPABILITY_TARGETS:
+            out.update(CAPABILITY_TARGETS[t])
+        elif t.startswith(("skill:", "mcp:", "action:")):
+            out.add("local")
+        else:
+            # 跨模块令牌里带模块号的（如 xxx.module2）也认一下
+            for m in ("module2", "module4", "platform"):
+                if m in t:
+                    out.add(m)
+    return out
+
+
+# 路径前缀 → 目标模块（环境变量没配时的兜底；比按端口猜可靠）
+PATH_TARGETS: tuple[tuple[str, str], ...] = (
+    ("/api/knowledge", "module2"),
+    ("/api/question", "module2"),
+    ("/api/mastery", "module2"),
+    ("/api/workbench", "module4"),
+    ("/api/lesson", "platform"),
+    ("/api/textbook", "platform"),
+    ("/api/knowledge-bases", "platform"),
+    ("/api/sessions", "platform"),
+    ("/api/session", "platform"),
+)
+
+
+def classify_url(url: str) -> str:
+    """出站 URL → 目标名（module2 / module4 / platform / external）。
+
+    判定顺序：环境变量里的模块地址 → 路径前缀表 → 本机地址算平台 → 其余算公网。
+    """
+    import os
+
+    u = str(url or "").lower()
+    for name, env in (("module2", "EDU_MODULE2_BASE"), ("module4", "EDU_MODULE4_BASE")):
+        base = (os.getenv(env) or "").lower().rstrip("/")
+        if base and base in u:
+            return name
+    for prefix, name in PATH_TARGETS:
+        if prefix in u:
+            return name
+    plat = (os.getenv("EDU_PLATFORM_BASE") or "http://127.0.0.1:5174").lower().rstrip("/")
+    if plat and plat in u:
+        return "platform"
+    if "127.0.0.1" in u or "localhost" in u or "[::1]" in u:
+        return "platform"          # 本机默认算平台（教材库/会话/知识库都在平台里）
+    return "external"
+
+
 # ---------------------------------------------------------------- 数据范围词表
 DATA_SCOPE_TOKENS: dict[str, str] = {
     "knowledge_id": "知识点/图谱节点标识",
@@ -84,6 +169,7 @@ def _permission_action_tokens() -> dict[str, str]:
 def allowed_capabilities() -> dict[str, str]:
     """完整白名单（每次现算，capabilities/permissions 新增能力后市场自动跟上）。"""
     merged: dict[str, str] = dict(CROSS_MODULE_CAPABILITIES)
+    merged.update(PLATFORM_CAPABILITIES)
     merged.update(_live_skill_tokens())
     merged.update(_permission_action_tokens())
     return merged
@@ -120,6 +206,7 @@ def describe() -> dict[str, Any]:
     return {
         "capabilities": allowed_capabilities(),
         "cross_module": CROSS_MODULE_CAPABILITIES,
+        "platform": PLATFORM_CAPABILITIES,
         "data_scope": DATA_SCOPE_TOKENS,
         "forbidden_data": list(FORBIDDEN_DATA_TOKENS),
     }

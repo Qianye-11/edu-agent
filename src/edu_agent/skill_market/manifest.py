@@ -89,7 +89,12 @@ class SkillManifest:
     allowed_capabilities: tuple[str, ...] = ()
     data_scope: tuple[str, ...] = ()
     tests: tuple[str, ...] = ()
-    source: str = "session"                     # session | manual
+    # ---- 结构化字段（YAML 块状 front-matter 用；手写草稿常这么写）----
+    # inputs_spec: [{"name": "book_id", "type": "string", "description": "..."}]
+    # inline_tests: [{"input": {...}, "expect_contains": "..."}] → 会转成 fixture 断言
+    inputs_spec: tuple[dict, ...] = ()
+    inline_tests: tuple[dict, ...] = ()
+    source: str = "session"                     # session | manual | hand-written
     session_id: str = ""                        # 溯源（只进审计，不进提示词）
     fixture: str = ""                           # 匿名 fixture 相对路径
     review: str = ""                            # 审核意见 / 驳回原因
@@ -155,7 +160,13 @@ class SkillManifest:
 
     # ---------------------------------------------------------------- 序列化
     def to_front_matter(self) -> str:
-        """序列化成 front-matter（**全单行**，兼容 capabilities 的按行解析）。"""
+        """序列化成 front-matter。
+
+        * **简单字段全单行**（capabilities 的按行解析器要能读回 name/description/title/entry）；
+        * 结构化字段（`inputs_spec` / `inline_tests`）写成 YAML 块 —— 手写草稿的
+          `inputs:`（含 type/description）与 `tests:`（含 input/expect_contains）不会丢。
+        """
+        y = _yaml_module()
         rows: list[tuple[str, str]] = [
             ("name", self.name),
             ("title", self.title or self.name),
@@ -170,10 +181,27 @@ class SkillManifest:
             rows.append(("entry", self.entry))
         if self.plugin:
             rows.append(("plugin", self.plugin))
-        for f in ("inputs", "outputs", "allowed_capabilities", "data_scope", "tests", "tags"):
+
+        blocks: list[str] = []
+        if self.inputs_spec and y is not None:
+            blocks.append("inputs:\n" + y.safe_dump(
+                [dict(d) for d in self.inputs_spec], allow_unicode=True,
+                sort_keys=False, default_flow_style=False).rstrip())
+        elif self.inputs:
+            rows.append(("inputs", _inline(self.inputs)))
+
+        for f in ("outputs", "allowed_capabilities", "data_scope", "tags"):
             vals = getattr(self, f)
             if vals:
                 rows.append((f, _inline(vals)))
+
+        if self.inline_tests and y is not None:
+            blocks.append("tests:\n" + y.safe_dump(
+                [dict(d) for d in self.inline_tests], allow_unicode=True,
+                sort_keys=False, default_flow_style=False).rstrip())
+        elif self.tests:
+            rows.append(("tests", _inline(self.tests)))
+
         rows += [("source", self.source), ("updated", self.updated or _now())]
         if self.session_id:
             rows.append(("session_id", self.session_id))
@@ -183,6 +211,8 @@ class SkillManifest:
             rows.append(("review", self.review))
         rows += [(k, v) for k, v in self.extra]
         body = "\n".join("%s: %s" % (k, v) for k, v in rows if str(v) != "")
+        if blocks:
+            body += "\n" + "\n".join(blocks)
         return "---\n" + body + "\n---\n"
 
     def to_document(self, body: str) -> str:
@@ -203,6 +233,8 @@ class SkillManifest:
             "source": self.source, "session_id": self.session_id,
             "fixture": self.fixture, "review": self.review,
             "tags": list(self.tags), "updated": self.updated,
+            "inputs_spec": [dict(d) for d in self.inputs_spec],
+            "inline_tests": [dict(d) for d in self.inline_tests],
         }
 
     def bumped(self, *, level: str = "patch", status: str | None = None,
@@ -228,9 +260,24 @@ def _now() -> str:
     return time.strftime("%Y-%m-%d %H:%M")
 
 
-# ---------------------------------------------------------------- 解析
+# ---------------------------------------------------------------- YAML 支持
+def _yaml_module():
+    """PyYAML 可选依赖：装了就支持块状 front-matter，没装就退回逐行解析。"""
+    try:
+        import yaml
+
+        return yaml
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def parse_front_matter(text: str) -> dict[str, str]:
-    """逐行解析 front-matter（与 capabilities/skills_local 同款规则）。"""
+    """逐行解析 front-matter（与 capabilities/skills_local 同款规则）。
+
+    只认单行 `key: value`；块状结构（`inputs:` 下面是 `- name: x`）由
+    `parse_front_matter_full()` 用 YAML 解析。两者并存：
+    **简单字段永远保持单行**，所以平台的按行解析器始终能读回 name/description/title/entry。
+    """
     lines = str(text or "").splitlines()
     if not lines or lines[0].strip() != "---":
         return {}
@@ -248,8 +295,30 @@ def parse_front_matter(text: str) -> dict[str, str]:
     return meta
 
 
+def _front_matter_text(text: str) -> str:
+    raw = str(text or "")
+    if not raw.startswith("---"):
+        return ""
+    end = raw.find("\n---", 3)
+    return raw[3:end] if end > 0 else ""
+
+
+def parse_front_matter_full(text: str) -> dict:
+    """完整解析（含块状结构）。YAML 不可用或解析失败时回落到逐行结果。"""
+    fm = _front_matter_text(text)
+    y = _yaml_module()
+    if y is not None and fm.strip():
+        try:
+            data = y.safe_load(fm)
+            if isinstance(data, dict):
+                return {str(k).lower(): v for k, v in data.items()}
+        except Exception:  # noqa: BLE001
+            pass
+    return parse_front_matter(text)
+
+
 def split_document(text: str) -> tuple[dict[str, str], str]:
-    """拆成 (front-matter dict, 正文)。"""
+    """拆成 (front-matter dict, 正文)。逐行口径（简单字段）。"""
     raw = str(text or "")
     if not raw.startswith("---"):
         return {}, raw
@@ -261,36 +330,102 @@ def split_document(text: str) -> tuple[dict[str, str], str]:
     return meta, body.lstrip("\n")
 
 
+def _as_dict_tuple(value: object) -> tuple[dict, ...]:
+    """把 YAML 里的「字典列表」规范化成 tuple[dict]。"""
+    if not isinstance(value, (list, tuple)):
+        return ()
+    out: list[dict] = []
+    for item in value:
+        if isinstance(item, dict):
+            out.append({str(k): v for k, v in item.items()})
+    return tuple(out)
+
+
 def from_document(text: str) -> tuple[SkillManifest, str]:
-    """SKILL.md 文本 → (manifest, 正文)。缺字段按默认值补，不抛异常。"""
-    meta, body = split_document(text)
+    """SKILL.md 文本 → (manifest, 正文)。
+
+    **两种 front-matter 都认**：
+    * 逐行 `key: value`（平台既有风格，capabilities 也按行读）；
+    * YAML 块状（手写草稿常用，`inputs:` 下面是 `- name: ...`，`tests:` 是字典列表）。
+    结构化字段落进 `inputs_spec` / `inline_tests`，简单字段照旧。
+    """
+    raw = str(text or "")
+    body = raw[raw.find("\n---", 3) + 4:].lstrip("\n") if raw.startswith("---") and \
+        raw.find("\n---", 3) > 0 else raw
+    meta = parse_front_matter_full(raw)
     known = {
         "name", "title", "description", "version", "status", "owner", "category",
         "icon", "entry", "plugin", "inputs", "outputs", "allowed_capabilities",
         "data_scope", "tests", "tags", "source", "updated", "session_id",
         "fixture", "review",
     }
-    lists = {f: _as_list(meta.get(f)) for f in _LIST_FIELDS}
-    extra = tuple((k, v) for k, v in meta.items() if k not in known)
+
+    inputs_spec = _as_dict_tuple(meta.get("inputs"))
+    inline_tests = _as_dict_tuple(meta.get("tests"))
+    # 简单字段仍取「字符串列表」口径
+    def _list_of_str(key: str) -> tuple[str, ...]:
+        v = meta.get(key)
+        if isinstance(v, (list, tuple)):
+            if all(isinstance(x, dict) for x in v) and v:
+                return ()
+            return _as_list([x for x in v if not isinstance(x, dict)])
+        return _as_list(v)
+
+    inputs = _list_of_str("inputs")
+    if not inputs and inputs_spec:
+        inputs = tuple(str(d.get("name")) for d in inputs_spec if d.get("name"))
+    tests = _list_of_str("tests")
+    if not tests and inline_tests:
+        tests = ("inline-tests(%d)" % len(inline_tests),)
+
+    extra = tuple((str(k), str(v)) for k, v in meta.items()
+                  if k not in known and not isinstance(v, (dict, list)))
+
+    # 手写 SKILL.md 常把技能名写在 H1 标题里（front-matter 只有 version/status/inputs…）。
+    # 这里兜一下：没有 name 就用 H1 标题生成合法 id（平台 discover_skills 也是这个思路）。
+    name = str(meta.get("name") or "").strip()
+    title = str(meta.get("title") or "").strip()
+    if not name or not title:
+        h1 = re.search(r"^#\s+(.+)$", body, re.M)
+        if h1:
+            head = h1.group(1).strip()
+            if not title:
+                title = head
+            if not name:
+                name = _slugify(head)
+
     m = SkillManifest(
-        name=(meta.get("name") or "").strip(),
-        description=(meta.get("description") or "").strip(),
-        version=(meta.get("version") or "0.1.0").strip(),
-        status=(meta.get("status") or "draft").strip(),
-        owner=(meta.get("owner") or "").strip(),
-        title=(meta.get("title") or "").strip(),
-        category=(meta.get("category") or "通用能力").strip(),
-        icon=(meta.get("icon") or "S").strip()[:2],
-        entry=(meta.get("entry") or "").strip(),
-        plugin=(meta.get("plugin") or "").strip(),
-        inputs=lists["inputs"], outputs=lists["outputs"],
-        allowed_capabilities=lists["allowed_capabilities"],
-        data_scope=lists["data_scope"], tests=lists["tests"], tags=lists["tags"],
-        source=(meta.get("source") or "session").strip(),
-        session_id=(meta.get("session_id") or "").strip(),
-        fixture=(meta.get("fixture") or "").strip(),
-        review=(meta.get("review") or "").strip(),
-        updated=(meta.get("updated") or "").strip(),
+        name=name,
+        description=str(meta.get("description") or "").strip(),
+        version=str(meta.get("version") or "0.1.0").strip(),
+        status=str(meta.get("status") or "draft").strip(),
+        owner=str(meta.get("owner") or "").strip(),
+        title=title,
+        category=str(meta.get("category") or "通用能力").strip(),
+        icon=str(meta.get("icon") or "S").strip()[:2],
+        entry=str(meta.get("entry") or "").strip(),
+        plugin=str(meta.get("plugin") or "").strip(),
+        inputs=inputs, outputs=_list_of_str("outputs"),
+        allowed_capabilities=_list_of_str("allowed_capabilities"),
+        data_scope=_list_of_str("data_scope"), tests=tests, tags=_list_of_str("tags"),
+        inputs_spec=inputs_spec, inline_tests=inline_tests,
+        source=str(meta.get("source") or "session").strip(),
+        session_id=str(meta.get("session_id") or "").strip(),
+        fixture=str(meta.get("fixture") or "").strip(),
+        review=str(meta.get("review") or "").strip(),
+        updated=str(meta.get("updated") or "").strip(),
         extra=extra,
     )
     return m, body
+
+
+def _slugify(text: str) -> str:
+    """标题 → 合法技能 id（ASCII 化；含中文则退化成 skill-<hash>）。"""
+    raw = " ".join(str(text or "").split())
+    if raw and re.fullmatch(r"[A-Za-z0-9 _.-]+", raw):
+        s = re.sub(r"[^a-zA-Z0-9]+", "_", raw).strip("_").lower()[:48]
+        if re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,47}", s):
+            return s
+    import hashlib
+
+    return "skill-" + hashlib.sha1((raw or "skill").encode("utf-8")).hexdigest()[:10]

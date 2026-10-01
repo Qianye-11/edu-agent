@@ -758,5 +758,126 @@ class TestSchedulerAndPrompt(CreateTestCase):
         self.assertFalse(miner.prompt_for_session("sess-A")["ask"])
 
 
+class TestYamlDraftAndImport(CreateTestCase):
+    """手写 SKILL.md（YAML 块状 front-matter）导入 + textbook:read 这类平台能力。"""
+
+    YAML_DRAFT = """---
+version: "1.0.0"
+status: "draft"
+inputs:
+  - name: book_id
+    type: string
+    description: 教材库里面书本唯一id
+  - name: chapter_no
+    type: integer
+    description: 需要生成思维导图的章节序号
+allowed_capabilities: ["textbook:read"]
+data_scope: ["teaching_context"]
+owner: "test_agent"
+tests:
+  - input: {"book_id":"math_grade7","chapter_no":2}
+    expect_contains: "- 章节思维导图"
+---
+# textbook_mindmap_generator
+## 功能
+根据book_id与章节号，读取本地教材库对应课本内容，自动生成该章节Markdown思维导图。
+"""
+
+    def test_parse_yaml_front_matter(self):
+        man, body = mf.from_document(self.YAML_DRAFT)
+        self.assertEqual(man.name, "textbook_mindmap_generator")     # 从 H1 标题兜出来
+        self.assertEqual(man.version, "1.0.0")
+        self.assertEqual(man.status, "draft")
+        self.assertEqual(man.owner, "test_agent")
+        self.assertEqual(man.inputs, ("book_id", "chapter_no"))
+        self.assertEqual([d.get("type") for d in man.inputs_spec], ["string", "integer"])
+        self.assertEqual(man.allowed_capabilities, ("textbook:read",))
+        self.assertEqual(man.data_scope, ("teaching_context",))
+        self.assertEqual(man.inline_tests[0]["input"]["chapter_no"], 2)
+        self.assertIn("功能", body)
+
+    def test_yaml_roundtrip_keeps_blocks_and_line_compat(self):
+        """结构化字段序列化后仍能被读回；简单字段仍是单行（capabilities 按行读）。"""
+        from edu_agent import capabilities
+
+        man, body = mf.from_document(self.YAML_DRAFT)
+        text = man.to_document(body)
+        again, _ = mf.from_document(text)
+        self.assertEqual(again.inputs_spec, man.inputs_spec)
+        self.assertEqual(again.inline_tests, man.inline_tests)
+        self.assertEqual(again.allowed_capabilities, ("textbook:read",))
+        p = self.tmp / "SKILL.md"
+        p.write_text(text, encoding="utf-8")
+        meta = capabilities._parse_front_matter(p)
+        self.assertEqual(meta["name"], "textbook_mindmap_generator")
+        self.assertEqual(meta["owner"], "test_agent")
+
+    def test_textbook_read_is_registered(self):
+        from edu_agent.skill_market import capability_registry as caps
+
+        ok, why = caps.resolve_capability("textbook:read")
+        self.assertTrue(ok, why)
+        self.assertIn("教材库", why)
+        self.assertEqual(caps.targets_for(["textbook:read"]), {"platform"})
+        self.assertEqual(caps.targets_for(["kg.read"]), {"module2"})
+        self.assertEqual(caps.classify_url("http://127.0.0.1:5174/api/textbook/chapters"),
+                         "platform")
+        self.assertEqual(caps.classify_url("http://127.0.0.1:5180/api/knowledge/node"),
+                         "module2")
+        self.assertEqual(caps.classify_url("https://api.example.com/x"), "external")
+
+    def test_import_draft_end_to_end(self):
+        with mock.patch("edu_agent.permissions.policy", return_value="allow"):
+            r = packager.import_draft(self.YAML_DRAFT, actor="test_agent", confirm=True)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["id"], "textbook_mindmap_generator")
+        # description 从正文「## 功能」自动补出来
+        self.assertIn("教材库", r["derived"].get("description", ""))
+        # fixture 由 tests 块生成，断言含 expect_contains
+        fx = r["fixture"]
+        self.assertEqual(fx["input"]["chapter_no"], 2)
+        self.assertTrue(any("- 章节思维导图" in a for a in fx["assertions"]), fx["assertions"])
+        self.assertEqual(r["scan"]["verdict"], "pass")
+        # 导入后进入草稿态，且草稿区不允许有可执行文件
+        self.assertEqual(store.effective_status(r["id"]), "draft")
+        self.assertFalse(list(Path(r["dir"]).glob("*.py")))
+
+    def test_import_requires_permission_gate(self):
+        r = packager.import_draft(self.YAML_DRAFT)        # 不带 confirm（默认 ask）
+        self.assertFalse(r["ok"])
+        self.assertEqual(r.get("gate"), "permission")
+
+    def test_verify_and_shadow_accept_skill_id(self):
+        """手写草稿没有候选 id，verify/shadow 必须也认技能 id。"""
+        from edu_agent.skill_market import shadow
+
+        with mock.patch("edu_agent.permissions.policy", return_value="allow"):
+            r = packager.import_draft(self.YAML_DRAFT, confirm=True)
+        self.assertTrue(r["ok"], r)
+        v = verifier.verify("textbook_mindmap_generator")
+        self.assertTrue(v["ok"], v)
+        self.assertEqual(v["L1"]["verdict"], "pass")
+        # 没有 plugin.py 的纯提示词技能：L3 跳过，verification_state 直接放行
+        self.assertEqual(verifier.verification_state("textbook_mindmap_generator")["ok"], True)
+        sh = shadow.shadow_run("textbook_mindmap_generator")
+        self.assertTrue(sh.get("skipped"), sh)
+
+    def test_inline_fixture_assertion_expect_contains(self):
+        from edu_agent.skill_market import fixture as fixture_mod
+
+        fx = fixture_mod.from_inline_tests([{"input": {"chapter_no": 2},
+                                             "expect_contains": "- 章节思维导图"}],
+                                           skill_id="x")
+        self.assertTrue(fixture_mod.validate_fixture(fx)["ok"])
+        # expect_contains 断言：包含即过、不包含即不过
+        self.assertTrue(fixture_mod._assert_one(fx["assertions"][0],
+                                                {"markdown": "- 章节思维导图\n  - 第二章"}, fx))
+        self.assertFalse(fixture_mod._assert_one(fx["assertions"][0],
+                                                 {"markdown": "别的内容"}, fx))
+        # 隐私断言优先（"不得包含"里也有"包含"两个字）
+        self.assertFalse(fixture_mod._assert_one("不得包含学生姓名/学号/作答明文",
+                                                 {"markdown": "学生 13800138000"}, fx))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

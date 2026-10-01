@@ -500,6 +500,16 @@ class TestLifecycleSkill05(MarketTestCase):
         self.assertEqual(rb["version"], first)
         self.assertTrue(store.is_loadable(skill_id)[0])
 
+    def test_write_version_same_version_twice(self):
+        """同一版本号重复写入不能炸（实验重跑/回滚后再发同一版会走到这里）。"""
+        skill_id, man, body, d = self.make_draft()
+        v1 = store.write_version(man, body, d)
+        v2 = store.write_version(man, body, d)          # 同名版本目录已存在
+        self.assertNotEqual(v1, v2)
+        self.assertTrue((v1 / "SKILL.md").exists())
+        self.assertTrue((v2 / "SKILL.md").exists())
+        self.assertGreaterEqual(len(store.list_versions(skill_id)), 2)
+
     def test_new_draft_refused_while_editable(self):
         skill_id, _, _, _ = self.make_draft()
         r = lifecycle.new_draft(skill_id, "E")

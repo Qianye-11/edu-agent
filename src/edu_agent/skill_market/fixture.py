@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Callable
 
@@ -126,9 +127,59 @@ def run_fixture(skill_id: str, *, executor: Callable[[dict], dict] | None = None
     return out
 
 
+def from_inline_tests(tests: tuple[dict, ...] | list[dict], *, skill_id: str = "",
+                      expected_fields: list[str] | None = None) -> dict:
+    """把 SKILL.md 里 `tests:` 块（YAML 字典列表）转成匿名 fixture。
+
+    手写草稿常这么写：
+
+        tests:
+          - input: {"book_id":"math_grade7","chapter_no":2}
+            expect_contains: "- 章节思维导图"
+
+    这里把它变成 fixture 的 `assertions`（"输出必须包含：…"），并保留原始用例清单。
+    """
+    cases = [dict(t) for t in (tests or []) if isinstance(t, dict)]
+    first = cases[0] if cases else {}
+    assertions: list[str] = []
+    for c in cases:
+        exp = c.get("expect_contains") or c.get("expect") or ""
+        if str(exp).strip():
+            assertions.append("输出必须包含：%s" % str(exp).strip())
+        if c.get("expect_fields"):
+            fields = c["expect_fields"]
+            if isinstance(fields, (list, tuple)):
+                assertions.append("输出字段与期望形状一致（%s）" % "、".join(map(str, fields)))
+    if not assertions:
+        assertions = ["输出字段与期望形状一致", "不得包含学生姓名/学号/作答明文"]
+    assertions.append("不得包含学生姓名/学号/作答明文")
+    fields = list(expected_fields or [])
+    if not fields:
+        for c in cases:
+            if isinstance(c.get("expect_fields"), (list, tuple)):
+                fields = [str(x) for x in c["expect_fields"]]
+                break
+    return {
+        "skill": skill_id,
+        "source": {"from": "SKILL.md tests 块", "cases": len(cases)},
+        "note": "匿名 fixture：由 SKILL.md 的 tests 块生成，只含标识与结构化槽位",
+        "input": dict(first.get("input") or {}),
+        "expected_output_shape": {"kind": "markdown", "fields": fields or ["markdown"]},
+        "assertions": assertions,
+        "cases": cases,
+    }
+
+
 def _assert_one(text: str, got: dict, fixture: dict) -> bool:
     """极简断言解释器（够用于 fixture 里的几条声明式断言）。"""
     g = got if isinstance(got, dict) else {}
+    blob = json.dumps(g, ensure_ascii=False, default=str)
+    # 顺序要紧：先判否定（"不得包含"里也有"包含"）
+    if "不得包含" in text or "不含" in text:
+        return not any(rx.search(blob) for _, rx in _PII_PATTERNS)
+    if "包含" in text:
+        want = text.split("包含", 1)[1].lstrip("：: ").strip()
+        return (want in blob) if want else True
     if "knowledge_id" in text:
         want = (fixture.get("input") or {}).get("knowledge_id")
         return bool(g.get("knowledge_id")) and (not want or g.get("knowledge_id") == want)
@@ -137,7 +188,4 @@ def _assert_one(text: str, got: dict, fixture: dict) -> bool:
         if key:
             return bool(str(g.get(key) or "").strip())
         return bool(g)
-    if "不得包含" in text or "不含" in text:
-        blob = str(g)
-        return not any(rx.search(blob) for _, rx in _PII_PATTERNS)
     return True

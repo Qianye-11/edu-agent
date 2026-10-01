@@ -181,11 +181,15 @@ def publish_area(skill_id: str, version: str) -> Path:
 
 
 def write_version(man: mf.SkillManifest, body: str, src_dir: Path) -> Path:
-    """把一份技能**整目录**存成不可变版本（published/<id>/<version>/）。"""
+    """把一份技能**整目录**存成不可变版本（published/<id>/<version>/）。
+
+    同一版本号重复写入时（例如实验重跑、回滚后又发同一版），加时间戳后缀留档，
+    **不覆盖**旧版本目录。
+    """
     dest = publish_area(man.name, man.version)
     if dest.exists():
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        dest = dest.with_name("%s-%s" % (version, stamp))
+        dest = dest.with_name("%s-%s" % (man.version, stamp))
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "SKILL.md").write_text(man.to_document(body), encoding="utf-8")
     for p in Path(src_dir).rglob("*"):

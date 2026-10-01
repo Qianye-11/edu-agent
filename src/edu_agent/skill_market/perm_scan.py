@@ -66,8 +66,9 @@ RISK_PATTERNS: dict[str, list[tuple[str, re.Pattern, str]]] = {
 
 # 每类风险需要 manifest 声明的能力令牌（命中任一即可）
 RISK_REQUIRES: dict[str, tuple[str, ...]] = {
+    # 本机模块 API 调用：跨模块令牌或平台只读能力（如 textbook:read）都算已声明
     "module_api": ("kg.read", "kb.read", "question.draft", "mastery.read",
-                   "lesson.read", "workbench.emit", "session.read"),
+                   "lesson.read", "workbench.emit", "session.read", "textbook:read"),
     "network": ("action:vision_analyze", "skill:web-image"),
     "file_write": ("action:export_docx", "action:export_pptx", "action:project_new",
                    "action:template_save", "action:pdf_ingest", "action:pdf_library_manage",

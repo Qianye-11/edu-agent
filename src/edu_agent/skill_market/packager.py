@@ -326,6 +326,105 @@ def make_draft(candidate_id: str, *, actor: str = "E", confirm: bool = False,
                            "通过后 /api/skill-create/submit 提交审核"]}
 
 
+def _derive_description(body: str) -> str:
+    """手写草稿常常只有正文没有 description —— 从正文里取一句（优先「## 功能」下面那句）。"""
+    lines = [ln.strip() for ln in str(body or "").splitlines()]
+    start = 0
+    for i, ln in enumerate(lines):
+        if ln.startswith("##") and "功能" in ln:
+            start = i + 1
+            break
+    for ln in lines[start:]:
+        if ln and not ln.startswith("#") and not ln.startswith(">"):
+            return ln[:200]
+    for ln in lines:
+        if ln and not ln.startswith("#"):
+            return ln[:200]
+    return ""
+
+
+def import_draft(text: str, *, actor: str = "E", confirm: bool = False,
+                 description: str = "") -> dict:
+    """**导入手写的 SKILL.md**（YAML 块状 front-matter 也认）到市场草稿区。
+
+    与 `make_draft()` 的分工：那个是"从跑通的会话自动生成"，这个是"人工写好了直接送进来"。
+    两者之后的流程完全一样（L1 → L2 → L3 → 提交审核），也**同样过 `skill_create_draft` 闸门**、
+    同样不产可执行代码（plugin.py 由人工补）。
+    """
+    man, body = mf.from_document(text)
+    if not man.name:
+        return {"ok": False, "error": "SKILL.md 缺少 name 字段"}
+    # 补默认值（手写草稿常缺 description/title）
+    fixes: dict = {}
+    if not str(man.description or "").strip():
+        fixes["description"] = description or _derive_description(body) or man.name
+    if not str(man.title or "").strip():
+        fixes["title"] = man.name
+    if not str(man.source or "").strip() or man.source == "session":
+        fixes["source"] = "manual"
+    if fixes:
+        import dataclasses
+
+        man = dataclasses.replace(man, **fixes)
+
+    errs = man.errors(strict_caps=True)
+    if errs:
+        return {"ok": False, "gate": "manifest", "error": "；".join(errs), "errors": errs}
+
+    try:
+        from edu_agent import permissions
+
+        blocked = permissions.guard(ACTION, confirm=bool(confirm))
+    except Exception as e:  # noqa: BLE001
+        blocked = {"ok": False, "gate": "permission", "action": ACTION,
+                   "error": "权限层不可用，已按拒绝处理：%s" % e}
+    if blocked:
+        audit.append("skill-create.import.blocked", skill=man.name, actor=actor,
+                     input_text="import SKILL.md",
+                     result={"ok": False, "code": "permission"},
+                     gates={"permission": blocked.get("policy")})
+        return blocked
+
+    # 有 tests 块 → 生成匿名 fixture（L3 影子运行要用）
+    fx = None
+    if man.inline_tests:
+        from edu_agent.skill_market import fixture as fixture_mod
+
+        fx = fixture_mod.from_inline_tests(man.inline_tests, skill_id=man.name)
+        val = fixture_mod.validate_fixture(fx)
+        if not val["ok"]:
+            return {"ok": False, "gate": "fixture", "error": "；".join(val["blocking"]),
+                    "validation": val}
+        if not man.fixture:
+            import dataclasses
+
+            man = dataclasses.replace(man, fixture="fixture.json")
+
+    files = {"fixture.json": json.dumps(fx, ensure_ascii=False, indent=2)} if fx else {}
+    d = store.write_draft(man, body, files=files)          # allow_code=False
+    if fx:
+        store.write_fixture(man.name, fx)
+    # 导入 = 进入草稿态（若这个技能之前已发布，运行时那版照常服务，直到重新发布）
+    store.write_state(man.name, status="draft", area="draft",
+                      verify_state="", verification={}, imported_at=time.time())
+    rep = perm_scan.scan(man, body, fixture_text=json.dumps(fx or {}, ensure_ascii=False),
+                         fixture_path=(Path(d) / "fixture.json") if fx else None,
+                         skill_dir=d)
+    audit.append("skill-create.import", skill=man.name, actor=actor,
+                 input_text="import SKILL.md",
+                 result={"ok": True, "code": "imported", "dir": str(d),
+                         "perm_scan": rep.verdict},
+                 gates={"permission": "allow", "manifest": "pass"},
+                 extra={"capabilities": list(man.allowed_capabilities)})
+    return {"ok": True, "id": man.name, "dir": str(d), "manifest": man.to_dict(),
+            "fixture": fx, "scan": rep.to_dict(),
+            "derived": fixes,
+            "next_steps": ["补 plugin.py（人工编写，@kernel_function）",
+                           "POST /api/skill-create/verify 做 L1+L2",
+                           "POST /api/skill-create/shadow 做 L3",
+                           "POST /api/skill-create/submit 提交审核"]}
+
+
 def _build_body(cand: dict, ex: dict, man: mf.SkillManifest, defaults: dict) -> str:
     """草稿正文：在 SKILL-02 的模板基础上，补"证据链"与"记忆默认值"两节。"""
     base = draft_mod.build_body(ex, allowed=man.allowed_capabilities, data_scope=man.data_scope)

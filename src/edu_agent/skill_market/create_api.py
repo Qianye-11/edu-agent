@@ -69,10 +69,33 @@ def api_sweep(body: dict | None = None):
 
 @router.post("/verify")
 def api_verify(body: dict):
-    """L1 静态权限扫描 + L2 声明式回放。全过 → 候选 state=verified。"""
+    """L1 静态权限扫描 + L2 声明式回放。`candidate_id` 或 `skill_id` 都行。"""
     try:
-        return verifier.verify(str(body.get("candidate_id") or ""),
-                               actor=str(body.get("actor") or "E"))
+        target = str(body.get("candidate_id") or body.get("skill_id") or "")
+        return verifier.verify(target, actor=str(body.get("actor") or "E"))
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.post("/import")
+def api_import(body: dict):
+    """把手写的 SKILL.md（YAML 块状 front-matter 也认）导入市场草稿区。
+
+    body: {"text": "<SKILL.md 全文>"} 或 {"path": "<文件路径>"}
+    """
+    try:
+        from pathlib import Path as _P
+
+        text = str(body.get("text") or "")
+        if not text and body.get("path"):
+            text = _P(str(body["path"])).read_text(encoding="utf-8", errors="replace")
+        if not text.strip():
+            return {"ok": False, "error": "缺少 text 或 path"}
+        r = packager.import_draft(text, actor=str(body.get("actor") or "E"),
+                                  confirm=bool(body.get("confirm")),
+                                  description=str(body.get("description") or ""))
+        r.pop("manifest", None)
+        return r
     except Exception as e:  # noqa: BLE001
         return _err(e)
 
@@ -95,15 +118,15 @@ def api_draft(body: dict):
 def api_submit(body: dict):
     """提交审核。**必须先检验过**（且检验后草稿没被改过）——这是"必须检验"的闸门。"""
     try:
-        cid = str(body.get("candidate_id") or "")
-        st = verifier.verification_state(cid)
+        target = str(body.get("candidate_id") or body.get("skill_id") or "")
+        st = verifier.verification_state(target)
         if not st.get("ok"):
             return st
         r = lifecycle.submit(str(st.get("skill_id") or ""),
                              str(body.get("actor") or "E"),
                              session_id=str(body.get("session_id") or ""))
-        if r.get("ok"):
-            miner.set_state(cid, "promoted", skill_id=st.get("skill_id"),
+        if r.get("ok") and st.get("candidate_id"):
+            miner.set_state(str(st["candidate_id"]), "promoted", skill_id=st.get("skill_id"),
                             submitted_at=__import__("time").time())
         return r
     except Exception as e:  # noqa: BLE001
@@ -211,10 +234,13 @@ def api_set_config(body: dict):
 # ---------------------------------------------------------------- 第二轮：L3 / L4 / 定时
 @router.post("/shadow")
 def api_shadow(body: dict):
-    """L3 影子运行：把草稿里的 plugin.py 放进子进程真跑一次，出站调用全被记录桩拦下。"""
+    """L3 影子运行：把草稿里的 plugin.py 放进子进程真跑一次，出站调用全被记录桩拦下。
+
+    `candidate_id` 或 `skill_id` 都行（人工导入的草稿没有候选 id）。
+    """
     try:
-        return shadow.shadow_run(str(body.get("candidate_id") or ""),
-                                 actor=str(body.get("actor") or "E"),
+        target = str(body.get("candidate_id") or body.get("skill_id") or "")
+        return shadow.shadow_run(target, actor=str(body.get("actor") or "E"),
                                  timeout=int(body.get("timeout") or 60))
     except Exception as e:  # noqa: BLE001
         return _err(e)

@@ -51,10 +51,12 @@ def main():
     from edu_agent.skill_market import contract
 
     contract._default_transport = _stub
+    contract._default_get_transport = _stub
     _orig_init = contract.ModuleClient.__init__
 
-    def _init(self, bases=None, *, transport=None, timeout=20.0):
-        _orig_init(self, bases, transport=_stub, timeout=timeout)
+    def _init(self, bases=None, *, transport=None, get_transport=None, timeout=20.0):
+        # 读写两条出站路径都换成记录桩（GET 也要拦，否则只读接口会真发出去）
+        _orig_init(self, bases, transport=_stub, get_transport=_stub, timeout=timeout)
 
     contract.ModuleClient.__init__ = _init
 
@@ -120,16 +122,23 @@ def _declared_tokens(man: mf.SkillManifest) -> set[str]:
     return set(man.allowed_capabilities)
 
 
-def shadow_run(candidate_id: str, *, actor: str = "E", timeout: int = 60) -> dict:
-    """对一个候选的草稿做影子运行（L3）。没有 plugin.py 的纯提示词技能会 skip。"""
-    cand = miner.get_candidate(candidate_id)
-    if cand is None:
-        return {"ok": False, "error": "候选不存在：%s" % candidate_id}
-    cid = cand["candidate_id"]
-    d = Path(str(cand.get("draft_dir") or ""))
+def shadow_run(target: str, *, actor: str = "E", timeout: int = 60) -> dict:
+    """对一个草稿做影子运行（L3）。
+
+    `target` 可以是**候选 id**（miner 挖出来的）或**技能 id**（人工导入的草稿）。
+    没有 plugin.py 的纯提示词技能会 skip。
+    """
+    from edu_agent.skill_market import verifier as _verifier
+
+    tgt = _verifier.resolve_target(target)
+    if not tgt:
+        return {"ok": False, "error": "既不是候选也不是草稿：%s" % target}
+    cid = tgt.get("candidate_id") or ""
+    skill_id = tgt["skill_id"]
+    d = Path(tgt["dir"])
     if not (d / "SKILL.md").exists():
-        return {"ok": False, "gate": "draft", "candidate_id": cid,
-                "error": "还没有草稿：先调 /api/skill-create/draft"}
+        return {"ok": False, "gate": "draft", "candidate_id": cid, "skill_id": skill_id,
+                "error": "还没有草稿：先调 /api/skill-create/draft 或 import"}
     man, _body = mf.from_document((d / "SKILL.md").read_text(encoding="utf-8", errors="replace"))
     plugin = d / (man.plugin or "plugin.py")
     if not plugin.exists():
@@ -203,21 +212,14 @@ def shadow_run(candidate_id: str, *, actor: str = "E", timeout: int = 60) -> dic
     declared = _declared_tokens(man)
     attempted: list[str] = []
     for c in payload.get("calls") or []:
-        url = str(c.get("url") or "")
-        # 记录桩拿到的是 URL，只能粗略判断模块；这里只统计"尝试出站次数"
-        attempted.append(url)
-    # 出站尝试必须落在声明的能力范围内：用 URL 里的模块路径反查（模块2/模块4）
-    allowed_hosts = set()
-    for t in declared:
-        ok, why = caps.resolve_capability(t)
-        if ok and "模块2" in why:
-            allowed_hosts.add("module2")
-        if ok and "模块4" in why:
-            allowed_hosts.add("module4")
+        attempted.append(str(c.get("url") or ""))
+    # 出站目标必须落在**声明能力允许的范围**内（由 capability_registry 的令牌→目标映射决定，
+    # 不再硬编码 module2/module4 —— 那样会把平台只读接口误判成未声明目标）。
+    allowed_targets = caps.targets_for(declared)
     undeclared_hosts: list[str] = []
     for url in attempted:
-        host = "module4" if "/workbench/" in url else ("module2" if "127.0.0.1" in url or "/api/" in url else "?")
-        if host == "?" or host not in allowed_hosts:
+        host = caps.classify_url(url)
+        if host == "external" or (host not in allowed_targets):
             if host not in undeclared_hosts:
                 undeclared_hosts.append(host)
 
@@ -226,17 +228,23 @@ def shadow_run(candidate_id: str, *, actor: str = "E", timeout: int = 60) -> dic
     l3 = {"executed": True, "ok": ok, "ms": ms, "exit_code": proc.returncode,
           "actual_fields": actual_fields, "expected_fields": expected,
           "matched": matched, "shape_match": round(shape_match, 4),
-          "outbound_attempts": attempted, "undeclared_targets": undeclared_hosts,
+          "outbound_attempts": attempted, "allowed_targets": sorted(allowed_targets),
+          "undeclared_targets": undeclared_hosts,
           "kwargs_used": payload.get("kwargs") or [],
           "plugin_class": payload.get("plugin_class") or "",
           "note": "出站调用已被记录桩拦截：未发网络、未写其它模块"}
 
-    ver = dict(cand.get("verification") or {})
+    ver = dict((tgt.get("candidate") or {}).get("verification") or {}) if cid else \
+        dict((store.get_state(skill_id).get("verification") or {}))
     ver.update({"l3": ok, "l3_at": time.time()})
-    miner.set_state(cid, cand.get("state") or "drafted", verification=ver)
-    _audit(cid, man.name, actor, {"ok": ok, "code": "shadow",
-                                  "shape_match": round(shape_match, 4),
-                                  "undeclared": undeclared_hosts})
+    if cid:
+        miner.set_state(cid, (tgt.get("candidate") or {}).get("state") or "drafted",
+                        verification=ver)
+    else:
+        store.write_state(skill_id, verification=ver)
+    _audit(cid or skill_id, man.name, actor, {"ok": ok, "code": "shadow",
+                                              "shape_match": round(shape_match, 4),
+                                              "undeclared": undeclared_hosts})
     return {"ok": ok, "candidate_id": cid, "skill": man.name, "L3": l3,
             "message": "影子运行通过：真代码跑通、返回形状一致、出站调用都被拦下" if ok else
                        "影子运行未通过：见 L3 明细"}
