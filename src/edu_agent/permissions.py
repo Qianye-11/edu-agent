@@ -37,6 +37,11 @@ ACTIONS: list[dict] = [
     {"id": "pdf_library_manage", "label": "调整资料的知识库归属", "risk": "write", "default": "ask"},
     {"id": "vision_analyze", "label": "将图片发送到远程视觉模型进行分析", "risk": "network", "default": "ask"},
     {"id": "file_open", "label": "用本机 WPS / 默认程序打开文件", "risk": "local", "default": "allow"},
+    # ---- 模块3（Skill 市场）：把技能送进"能被 Agent 加载"的世界，属于有副作用的动作 ----
+    # 默认都是 ask：第一次发布/停用/回滚让你看见到底动了什么；可在「权限」里改成 allow/deny。
+    {"id": "skill_publish", "label": "发布 Skill（安装到运行时，Agent 从此可加载）", "risk": "write", "default": "ask"},
+    {"id": "skill_disable", "label": "停用已发布的 Skill（从运行时撤下）", "risk": "write", "default": "ask"},
+    {"id": "skill_rollback", "label": "回滚 Skill 到上一个版本", "risk": "destructive", "default": "ask"},
 ]
 
 _BY_ID = {a["id"]: a for a in ACTIONS}

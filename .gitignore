@@ -54,3 +54,7 @@ tools/uicheck/package-lock.json
 
 # 构建缓存（uv / pip）：迁到项目盘，避免占 C 盘
 .cache/
+
+# 模块3 测试临时目录（仓库内建，避免沙箱对系统 %TEMP% 的限制）
+.tmp-skill-market/
+.tmp-probe/

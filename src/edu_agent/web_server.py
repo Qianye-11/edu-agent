@@ -58,6 +58,16 @@ log = logsetup.get_logger("web_server")
 
 app = FastAPI(title="课本教练 x 教案 Agent")
 
+# ---------- 模块3：Skill 市场与 Agent 自动封装（见 edu_agent/skill_market/） ----------
+# 只挂路由（数据面），不含任何前端页面；市场 UI 由模块 F 另做。
+# 挂载失败不能拖垮整个网关（例如某个可选依赖缺失），所以包了 try/except 并只记日志。
+try:
+    from edu_agent.skill_market.api import router as _skill_market_router
+
+    app.include_router(_skill_market_router)
+except Exception as _e:  # noqa: BLE001
+    log.warning("模块3（Skill 市场）路由未挂载：%s: %s", type(_e).__name__, _e)
+
 # ---------- host：会话存储（进程内只保留这一个持久化入口） ----------
 _settings = load_settings()
 _store = SessionStore(path=_settings.sessions_db,
