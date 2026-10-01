@@ -1195,10 +1195,12 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
     #   ① 自己积累的技能清单（经验→技能回路的"读回"端，见 skills_local）
     #   ② 相关历史对话片段（跨会话检索，见 session_search）
     try:
-        from edu_agent import session_search, skills_local
+        from edu_agent import session_search, skill_catalog
 
         session_search.refresh()                       # 增量重建（只有新消息的会话才重做）
-        extra = [skills_local.prompt_block(),
+        # 技能：DSH 式「目录 + 按需加载」——目录只给名字+描述；用户点名或问题相关时把**正文**注入。
+        # 写一个 SKILL.md 就等于创建技能（下次对话生效），见 edu_agent/skill_catalog.py。
+        extra = [skill_catalog.prompt_block(text),
                  session_search.past_prefix(text, exclude_sid=sid)]
         prefix = "；".join([p for p in ([prefix] + extra) if p])
     except Exception:  # noqa: BLE001
@@ -3610,6 +3612,39 @@ def api_skill_get(id: str = ""):
     from edu_agent import skills_local
 
     return {"ok": True, "id": id, "text": skills_local.read_skill(id)}
+
+
+# ---------- DSH 式技能：发现 + 按需加载（见 edu_agent/skill_catalog.py） ----------
+@app.get("/api/skill/catalog")
+def api_skill_catalog():
+    """技能目录：多根发现（含 rank 优先级）、frontmatter 校验结果、被丢弃的技能与原因。
+
+    与 `/api/skills/local` 的区别：那个只列"agent 自建"那一个目录；这个扫**所有根**
+    （`<repo>/skills` 100 → `<data_dir>/skills` 200 → `EDU_SKILLS_DIR` 300 → `~/.edu-agent/skills` 400），
+    并且按 DSH 的口径校验 frontmatter（name/description 必填、两个开关严格布尔）。
+    """
+    from edu_agent import skill_catalog
+
+    return skill_catalog.stats()
+
+
+@app.get("/api/skill/load")
+def api_skill_load(name: str = ""):
+    """按名加载技能**正文**（每次现读盘 → 改了正文下次加载即生效，不用重启）。"""
+    from edu_agent import skill_catalog
+
+    return skill_catalog.load(name)
+
+
+@app.get("/api/skill/prompt")
+def api_skill_prompt(q: str = ""):
+    """调试用：看某个问题会注入哪些技能（目录 + 命中正文），以及为什么。"""
+    from edu_agent import skill_catalog
+
+    name = skill_catalog.explicit_intent(q)
+    hits = [r["name"] for r in skill_catalog.relevant(q)]
+    return {"ok": True, "query": q, "explicit": name, "relevant": hits,
+            "prompt": skill_catalog.prompt_block(q)}
 
 
 @app.post("/api/skill/delete")

@@ -62,11 +62,17 @@ def _slug(text: str, fallback: str = "") -> str:
     return "skill-" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:10]
 
 
-def _front_matter(name: str, description: str, tags: list[str] | None = None,
-                  source: str = "self") -> str:
+def _front_matter(skill_id: str, name: str, description: str,
+                  tags: list[str] | None = None, source: str = "self") -> str:
+    """写 frontmatter。
+
+    **`name` 写技能 id（kebab-case），人类可读的名字写 `title`** —— 这是 DSH 的口径
+    （`dsh-skill-filesystem` 要求 name 是 kebab-case 的 id）。早先把中文名直接写进 `name:`，
+    结果 skill_catalog 会按"name 非法"把整个技能丢掉（实测踩过）。
+    """
     tags = tags or []
     now = time.strftime("%Y-%m-%d %H:%M")
-    lines = [f"name: {name}", f"description: {description}"]
+    lines = [f"name: {skill_id}", f"title: {name}", f"description: {description}"]
     if tags:
         lines.append("tags: " + ", ".join(tags))
     lines += [f"source: {source}", f"updated: {now}"]
@@ -94,7 +100,7 @@ def save_skill(skill_id: str, name: str, description: str, body: str,
             p.replace(backup)
         except OSError:
             backup = None
-    p.write_text(_front_matter(nm, desc, tags) + txt + ("\n" if not txt.endswith("\n") else ""),
+    p.write_text(_front_matter(sid, nm, desc, tags) + txt + ("\n" if not txt.endswith("\n") else ""),
                  encoding="utf-8")
     out = {"ok": True, "id": sid, "name": nm, "path": str(p),
            "bytes": p.stat().st_size}
@@ -134,7 +140,10 @@ def list_skills() -> list[dict]:
             continue
         fm = _parse(txt)
         body = txt.split("\n---", 1)[-1].strip()
-        out.append({"id": d.name, "name": fm.get("name") or d.name,
+        out.append({"id": d.name,
+                    # 显示名优先用 title（DSH 口径：name 是 id、title 是人类可读名）；
+                    # 老技能没有 title 就退回 name，再退回目录名 —— 向后兼容。
+                    "name": fm.get("title") or fm.get("name") or d.name,
                     "description": fm.get("description") or "",
                     "tags": [t.strip() for t in (fm.get("tags") or "").split(",") if t.strip()],
                     "source": fm.get("source") or "self",
