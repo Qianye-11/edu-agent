@@ -509,6 +509,10 @@ class TestLifecycleSkill05(MarketTestCase):
         self.assertEqual(row["area"], "published")      # 版本仍在
         self.assertFalse(row["installed"])              # 但已从运行时撤下
         self.assertFalse(store.is_loadable(skill_id)[0])
+        # 列表页的状态必须是**权威状态**，不能照抄版本快照里冻结的 "published"
+        self.assertEqual(row["status"], "disabled")
+        self.assertFalse(row["loadable"])
+        self.assertTrue(row["loadable_reason"])
 
     def test_audit_trail_complete(self):
         skill_id, _, _, _ = self.make_draft()

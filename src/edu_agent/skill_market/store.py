@@ -305,9 +305,13 @@ def market_index(keyword: str = "") -> list[dict]:
                 rows[row["name"]] = row
     out = list(rows.values())
     for r in out:
+        # 权威状态覆盖 front-matter 里的镜像：published/<v>/SKILL.md 是**不可变快照**，
+        # 它里面永远写着 published，但技能可能早已被停用/回滚（列表页显示错状态会误导人）。
+        r["status"] = effective_status(r["name"]) or r["status"]
         r["versions"] = len(list_versions(r["name"]))
         r["fixture"] = bool(read_fixture(r["name"]))
         r["installed"] = paths.is_inside_runtime(r["name"])
+        r["loadable"], r["loadable_reason"] = is_loadable(r["name"])
     if keyword:
         k = keyword.strip().lower()
         out = [r for r in out
