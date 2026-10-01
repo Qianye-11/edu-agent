@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.parse  # _export_media 里的下载地址要用（来自 feat/ppt-view）
 import time
 import uuid
 import zipfile
@@ -44,6 +45,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from edu_agent import kg, lesson_docx, lesson_library, logsetup, pdf_upload, plan_html, planner, routing  # noqa: E402
 from edu_agent import capabilities, care, greet, wps_export  # noqa: E402  能力开关 + 问候/情绪短路 + WPS 导出
+from edu_agent import ppt_polish  # noqa: E402  PPT 优化（体检 / 原地统一 / 内容校验）—— 端点来自 feat/ppt-view
 from edu_agent import slide_deck  # noqa: E402  PPT 工作台：预览与导出共用同一份 SVG 版式
 from edu_agent.config import load_settings  # noqa: E402
 from edu_agent.host.store import SessionStore  # noqa: E402
