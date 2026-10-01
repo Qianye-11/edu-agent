@@ -33,7 +33,18 @@ _PII_KEY_RE = re.compile(
 # 值里的隐私模式（即使键名无害也要擦）
 _PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]{2,}")
-_IDCARD_RE = re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")
+# 身份证：**必须带合法生日**。早先用「18 位数字」这个宽口径，结果把自家的 sha256 十六进制
+# 串里偶然出现的 18 位连续数字当成身份证（实测踩过：R4 隐私判据随机拦住合法封装）。
+# 精确口径 = 6 位地区码 + 19xx/20xx 生日 + 3 位顺序码 + 校验位。
+_IDCARD_RE = re.compile(
+    r"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)")
+# 自家摘要/哈希：扫描前先剔除，它们不是用户数据（sha256:xxxx(len=n) 或纯十六进制串）
+_DIGEST_RE = re.compile(r"(?:sha256:)?[0-9a-f]{24,}", re.I)
+
+
+def strip_digests(text: Any) -> str:
+    """把摘要/哈希从文本里剔掉（隐私扫描前用，避免自家哈希被误判成身份证/手机号）。"""
+    return _DIGEST_RE.sub("<digest>", str(text or ""))
 # 自由文本里的姓名字段（必须带冒号，避免把"学生生成"这类正常词误擦）
 _NAME_FIELD_RE = re.compile(r"(?:学生姓名|学生名|姓名|学生)\s*[:：]\s*[\u4e00-\u9fa5]{2,4}")
 _STU_FIELD_RE = re.compile(r"(?:学号|考号)\s*[:：]\s*[A-Za-z0-9]{4,20}")

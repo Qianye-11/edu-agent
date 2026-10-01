@@ -224,8 +224,13 @@ def rejection_until(signature: str, cfg: dict | None = None) -> float:
 _PII_PATTERNS = (
     re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"),
     re.compile(r"[\w.+-]+@[\w-]+\.[\w.]{2,}"),
-    re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)"),
+    # 身份证要带合法生日，否则 64 位十六进制哈希里偶然出现的 18 位数字会被误判（实测踩过）
+    re.compile(r"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)"),
 )
+
+# 扫描隐私时**跳过**这些字段：它们是我们自己的摘要/链路值，不是用户数据。
+_PII_EXEMPT_KEYS = {"hash", "prev_hash", "args_digest", "digest", "seq", "ts",
+                    "turn", "latency_ms", "chars", "ms"}
 
 
 def _ts_of(rec: dict) -> float:
@@ -246,8 +251,19 @@ def _trace_complete(rec: dict) -> bool:
 
 
 def _has_pii(rec: dict) -> bool:
-    """R4：痕迹里是否残留未脱敏隐私（脱敏后不该命中）。"""
-    blob = json.dumps(rec, ensure_ascii=False)
+    """R4：痕迹里是否残留未脱敏隐私。
+
+    两处防误判（都踩过）：① 跳过自家摘要/链路字段（hash/prev_hash/digest…）；
+    ② 剩下的文本里再把摘要串剔掉。否则 sha256 里偶然出现的 18 位数字会被当成身份证。
+    """
+    def strip(o):
+        if isinstance(o, dict):
+            return {k: strip(v) for k, v in o.items() if str(k) not in _PII_EXEMPT_KEYS}
+        if isinstance(o, list):
+            return [strip(v) for v in o]
+        return o
+
+    blob = audit.strip_digests(json.dumps(strip(rec), ensure_ascii=False))
     return any(rx.search(blob) for rx in _PII_PATTERNS)
 
 

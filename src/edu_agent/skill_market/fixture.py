@@ -15,12 +15,14 @@ from __future__ import annotations
 import re
 from typing import Callable
 
-from edu_agent.skill_market import kernel_loader, store
+from edu_agent.skill_market import audit, kernel_loader, store
 
 _PII_PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
     ("phone", re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")),
     ("email", re.compile(r"[\w.+-]+@[\w-]+\.[\w.]{2,}")),
-    ("id_card", re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")),
+    # 身份证必须带合法生日：否则 fixture 里的 expected_digest（sha256 十六进制）会被误判
+    ("id_card", re.compile(r"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])"
+                           r"(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)")),
     ("student_name", re.compile(r"(姓名|学生名|真实姓名)\s*[:：]\s*\S")),
     ("student_id", re.compile(r"(学号|考号)\s*[:：]\s*[A-Za-z0-9]{4,}")),
 )
@@ -60,8 +62,10 @@ def validate_fixture(fixture: dict | None) -> dict:
         if _PII_KEYS.search(leaf):
             blocking.append("fixture 字段 %s 命中隐私键名：匿名 fixture 只留标识" % path)
         if isinstance(val, str):
+            # 先剔掉自家摘要（sha256 十六进制），否则会被当成身份证/手机号（实测踩过）
+            probe = audit.strip_digests(val)
             for name, rx in _PII_PATTERNS:
-                if rx.search(val):
+                if rx.search(probe):
                     blocking.append("fixture 字段 %s 里出现 %s 明文" % (path, name))
     if "note" not in fixture:
         warnings.append("建议加 note 说明匿名化方式（便于审核人核对）")

@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from edu_agent.skill_market import capability_registry as caps
+from edu_agent.skill_market import audit, capability_registry as caps
 from edu_agent.skill_market import manifest as mf
 from edu_agent.skill_market import paths
 
@@ -123,7 +123,9 @@ def _hint_hits(rx: re.Pattern, text: str) -> int:
 FIXTURE_FORBIDDEN: list[tuple[str, re.Pattern, str]] = [
     ("fixture.pii", re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"), "fixture 里出现手机号"),
     ("fixture.email", re.compile(r"[\w.+-]+@[\w-]+\.[\w.]{2,}"), "fixture 里出现邮箱"),
-    ("fixture.idcard", re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)"), "fixture 里出现身份证号"),
+    ("fixture.idcard", re.compile(r"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])"
+                                  r"(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)"),
+     "fixture 里出现身份证号"),
     ("fixture.name", re.compile(r"(姓名|学生名|真实姓名|学号)\s*[:：]"), "fixture 里出现学生姓名/学号字段"),
 ]
 
@@ -259,11 +261,13 @@ def scan(manifest: mf.SkillManifest, body: str = "", *,
 
     # ---- 匿名 fixture ----
     if fixture_text:
-        _scan_text(fixture_text, "fixture", declared, rep)
+        # 先剔掉自家摘要（sha256 十六进制），否则会被当成身份证号（实测踩过）
+        probe = audit.strip_digests(fixture_text)
+        _scan_text(probe, "fixture", declared, rep)
         for code, rx, msg in FIXTURE_FORBIDDEN:
             if not code.startswith("fixture."):
                 continue
-            if rx.search(fixture_text):
+            if rx.search(probe):
                 rep.findings.append(Finding("block", code,
                                             msg + "（匿名 fixture 不允许隐私明文）", "fixture"))
 

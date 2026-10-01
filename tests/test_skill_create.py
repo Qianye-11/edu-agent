@@ -258,6 +258,42 @@ class TestMiner(CreateTestCase):
         miner.scan()
         self.assertEqual(miner.list_candidates(), [])
 
+    def test_hash_not_mistaken_for_idcard(self):
+        """自家 sha256 里偶然出现的 18 位数字不能被当成身份证（曾随机拦住合法封装）。"""
+        fake_hash = "b51ac093cc74d42146c8e5a9a795a3c0ec" + "603900622131297069" + "cebbc5af45a0"
+        rec = {"hash": fake_hash, "prev_hash": fake_hash,
+               "trigger_text": "按图谱节点生成题目草稿", "seq": 23, "turn": 1}
+        self.assertFalse(miner._has_pii(rec))
+        # 真身份证（带合法生日）仍然要检出
+        self.assertTrue(miner._has_pii({"trigger_text": "身份证 110101199003071234"}))
+        self.assertTrue(miner._has_pii({"trigger_text": "手机 13800138000"}))
+        self.assertFalse(miner._has_pii({"trigger_text": "普通文本 2026-10-01"}))
+
+    def test_r4_passes_despite_hash_digits(self):
+        """整条链路回归：痕迹里的哈希含 18 位数字时，候选仍应通过 R4。"""
+        self.seed((SESS_A, SESS_B))
+        miner.scan()
+        c = [x for x in miner.list_candidates() if x["signature"].startswith("draft-question")][0]
+        self.assertTrue(c["criteria"]["R4"], c["blocking"])
+
+    def test_fixture_digest_not_mistaken_for_idcard(self):
+        from edu_agent.skill_market import fixture as fixture_mod
+
+        val = fixture_mod.validate_fixture({
+            "input": {"knowledge_id": "K1024"},
+            "expected_output_shape": {"fields": ["stem", "answer"]},
+            "assertions": ["输出字段与期望形状一致"],
+            "expected_digest": "sha256:603900622131297069abcdef",
+        })
+        self.assertTrue(val["ok"], val["blocking"])
+        bad = fixture_mod.validate_fixture({
+            "input": {"knowledge_id": "K1024"},
+            "expected_output_shape": {"fields": ["stem"]},
+            "assertions": ["非空"],
+            "note": "学生身份证 110101199003071234",
+        })
+        self.assertFalse(bad["ok"])
+
     def test_incomplete_trace_blocks_R2(self):
         # 触发语与答复里都不含任何可识别的标识（knowledge_id/学段/学科/难度）→ 痕迹不完整
         runs.record_turn("s1", 1, "帮我处理一下这个", "已完成：\n- 题干：x\n- 答案：y", steps=[])
