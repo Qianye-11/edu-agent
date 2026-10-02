@@ -3,18 +3,15 @@
 > 课本教练 × 教案 Agent：以教材为唯一事实来源的高中数学多 Agent 项目。
 > 本文档面向**团队本地部署与二次开发**。开发主文档见 README.md（架构/模块/测试）。
 
-> ### ⚠️ 本仓库（启思教育 agent · 苹果风 UI）与下述流程的四处差异
+> ### ⚠️ 本分支（`apple-ui` · 启思教育 agent 苹果风 UI）与下述流程的三处差异
 >
-> 1. **界面端口 5181**（下文 §2 写的 5174 是后端默认值）：入口是 **`start-qisi.bat`**，
->    它设置 `EDU_WEB_PORT=5181`，浏览器打开 http://127.0.0.1:5181。
->    `start_ui.cmd` / `start_web.cmd` / `启动课本教练.bat` / `run_ui.ps1` 已改为等价别名，
+> 1. **界面端口是 5181**（基座版 5174）；启动入口是 **`start-qisi.bat`**。
+>    `start_ui.cmd` / `start_web.cmd` / `启动课本教练.bat` 已改为等价别名，
 >    且都不再硬编码 `D:\edu-agent`，clone 到任何目录都能直接跑。
 > 2. **环境准备用 `setup.cmd`**（建 `.venv` + 装 `requirements.txt` + 由 `.env.example` 生成 `.env`），
 >    不必照 §2 手敲命令；`setup.ps1` 是 PowerShell 外包装。
-> 3. 本仓库**未随仓库分发教材源 PDF**，`TEXTBOOK_PDF` 保持注释掉即可
+> 3. 本分支**未随仓库分发教材源 PDF**，`TEXTBOOK_PDF` 保持注释掉即可
 >    （`/textbook` 原文跳转会 404；教材知识已在 `chroma_db` 内，检索不受影响）。
-> 4. 上传前的旧版内容完整保留在 ref 里：`main-backup-20260930`（`b53541d3`）与
->    `main-backup-20260928`（`a7060c03`），各有同名 tag，需要时可随时取回。
 
 ## 0. 仓库包含什么
 

@@ -1,45 +1,49 @@
 # edu-agent：课本教练（Agent A）× 教案 Agent（Agent B）× 总指挥（Agent S）
 
-> ## 🍎 本仓库 = 「启思教育 agent」本机在用版（启思 · CHESS，苹果风 UI）
+> ## 🍎 本分支 `apple-ui` = 「启思教育 agent（苹果风 UI）」完整快照
 >
-> **clone / fork 下来就是本机实际在用的那一版，不需要再切分支。**
-> 前端是单文件自包含的苹果风 UI（`static/index.html` 内联设计层），
-> 界面跑在 **5181** 端口（`start-qisi.bat` 设置 `EDU_WEB_PORT=5181`；后端默认值仍是 5174）。
->
-> ### 🚀 跑起来（三步）
->
-> ```bash
-> git clone https://github.com/Clayqi/edu-agent.git
-> cd edu-agent
-> ```
->
-> 1. 双击 **`setup.cmd`** —— 建 `.venv` + 装 `requirements.txt` + 由 `.env.example` 生成 `.env`
->    （需 Python 3.11+；`setup.ps1` 是 PowerShell 外包装）
-> 2. 编辑 `.env` 填 `DEEPSEEK_API_KEY`（申请 https://platform.deepseek.com/api_keys ）；
->    并装本机 Ollama 的 embedding 模型：`ollama pull bge-m3`，然后启动 Ollama
-> 3. 双击 **`start-qisi.bat`** → 浏览器自动打开 http://127.0.0.1:5181
->    停止用 `stop_ui.cmd`；换端口设 `EDU_WEB_PORT`
->
-> `start_ui.cmd` / `start_web.cmd` / `启动课本教练.bat` / `run_ui.ps1` 都是等价别名
-> （原来硬编码 `D:\edu-agent` 与 5174，会启动成另一个应用，已改成基于 `%~dp0` 的可移植写法）。
->
-> ### 仓库带了什么 / 没带什么
->
-> | | 内容 |
-> |---|---|
-> | ✅ 已入库 | `src/edu_agent/`（全部后端：Agent A/B/S、检索、host 层、教案/课件/PPT、知识库、权限等）、`static/`（苹果风 UI 单文件 + `kg.html` + vendor）、`content/`（教材切节文本 5 章 52 节 + 教案模板 + 知识图谱 + PPT 模板）、**`chroma_db/`（预建向量库，clone 后即可检索）**、`tests/`、`deploy/`、`scripts/`、`eval/`、`legacy/`、`mcp_servers/` |
-> | ❌ 未入库 | `.env`（密钥）、`data/`（会话库／上传／日志／页图缓存，首次启动自动创建）、`.venv/`（`setup.cmd` 一键重建）、`model_cache/`（rerank 模型约 2.2GB，可选） |
-> | ⚠️ 未随仓库分发 | 教材源 PDF（人教A版必修第一册，174MB：版权文件 + 超 GitHub 单文件 100MB 上限）。**教材知识已预建在 `chroma_db` 里，答疑／教案／课件照常可用**；仅「翻教材原文页」跳转会 404 |
->
-> ### 📦 历史备份（需要时可随时取回）
->
-> 上传前 `main` 上的两版工作都完整留在 ref 里，各有同名 tag：
-> `main-backup-20260930`（`b53541d3`，9/30 的知识库 + 教学工作台）与
-> `main-backup-20260928`（`a7060c03`，9/24 主线 tip）。
+> `apple-ui` 与 `main` 是**两套并行的树**，不是同一棵树的前后版本：
+> `main` 走基座界面并带 wiki／权限／WPS／skills 等更晚的模块；
+> 本分支则是**本机实际在用的苹果风 UI build**——单文件自包含前端（`static/index.html`
+> 内联 `_qisi-apple-ui` 的 `<style>`/`<script>`）、端口 **5181**
+> （基座 5174 / ark 5180 各占一个端口，三套界面可同时打开对比）。
+
+## 🚀 clone / fork 之后怎么跑起来（三步）
+
+```bash
+git clone https://github.com/Clayqi/edu-agent.git
+cd edu-agent
+git checkout apple-ui          # ← 苹果风 UI 在这个分支上
+```
+
+1. **准备环境**（建 `.venv` + 装依赖 + 由 `.env.example` 生成 `.env`）
+   双击 `setup.cmd`（或 `powershell -ExecutionPolicy Bypass -File setup.ps1`）
+2. **填 Key、起 embedding 服务**
+   - 编辑 `.env`：把 `DEEPSEEK_API_KEY=` 换成自己的真实 Key
+     （申请地址 https://platform.deepseek.com/api_keys ）
+   - 装本机 Ollama 的 embedding 模型：`ollama pull bge-m3`，然后启动 Ollama（`ollama serve` 或桌面端）
+3. **启动**：双击 `start-qisi.bat` → 浏览器自动打开 http://127.0.0.1:5181
+   停止：`stop_ui.cmd`；换端口：启动前设 `EDU_PORT`
+
+> `start_ui.cmd` / `start_web.cmd` / `启动课本教练.bat` 都是等价别名（原基座脚本曾硬编码
+> `D:\edu-agent` 与 5174，本分支已全部改成基于 `%~dp0` 的可移植写法）。
+
+### 仓库带了什么 / 没带什么
+
+| | 内容 |
+|---|---|
+| ✅ 已入库 | `src/`（全部后端）、`static/`（苹果风 UI + `kg.html` + vendor）、`tests/`、`content/`（教材切节文本 5 章 52 节 + 教案模板 + 知识图谱）、**`chroma_db/`（预建向量库，clone 后即可检索）** |
+| ❌ 未入库 | `.env`（密钥）、`data/`（会话库／上传／日志，首次启动自动创建）、`.venv/`（`setup.cmd` 一键重建）、`model_cache/`（rerank 模型约 2.2GB，可选） |
+| ⚠️ 未随仓库分发 | 教材源 PDF（人教A版必修第一册，182MB：版权文件 + 超 GitHub 单文件上限）。**教材知识已预建在 `chroma_db` 里，答疑／教案功能完整可用**；仅「翻教材原文页」跳转（`/textbook`）会 404 |
+
+自带 `chroma_db` 的意义：clone 下来**不需要**重新切节入库（那一步需要教材 PDF），
+配好 Key 与本机 Ollama 就能直接对着教材提问。
+
+---
 
 以教材为**唯一事实来源**的高中数学多 Agent 项目（施工版）：
 **Agent A 课本教练**（学生答疑）、**Agent B 教案 Agent**（老师备课）与 **Agent S 总指挥**
-（监督派单）是相互独立、各自完整的 Agent（独立性红线见 [docs/05-多Agent协作计划书.md](./docs/05-多Agent协作计划书.md) §0），
+（监督派单）是相互独立、各自完整的 Agent（独立性红线见 [多Agent协作计划书.md](./多Agent协作计划书.md) §0），
 共用同一只读教材向量库与检索/生成底座；web 网关（5174，唯一 UI）负责意图路由与会话编排。
 
 ## 双 Agent 现状（2026-09-07）
@@ -63,7 +67,7 @@
 | 轨 | 目录 | kind | 状态 |
 |---|---|---|---|
 | 人工精修细卡 | content/structured/ | concept/example/exercise | ⏳ S3 第一章施工中（用户决定暂缓） |
-| PDF 自动整节 | content/structured_auto/ | section | ✅ 5 章 52 节（296 个细粒度语义块） |
+| PDF 自动整节 | content/structured_auto/ | section | ✅ 5 章 52 节（151 chunk） |
 
 ## 工程补强（2026-09-07）：缺失项 #2/#3/#4 补齐 + 单测全绿
 按历史遗留的缺失项清单逐条补齐（对应模块 docstring 各标 #N）：
@@ -79,7 +83,7 @@
 **编排层 P1**（graph 把 A 的学情摘要 coach_summary 拼入 B 的 goal，B 无摘要照常独立出教案）。
 
 ### 单测
-当前离线测试套件共 **302 例全绿**（其中 2 例真实 WPS 联调按环境条件跳过；其余 300 例通过），默认不调用网络、Chroma 或真实 LLM：
+`tests/` 全 mock（检索+LLM+节点桩），零网络/零 Chroma/零 LLM。当前 **112 例全绿**（Ran 112 tests OK；一期收口后含新增 store/routing 15 例）：
 
 ```
 .venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
@@ -99,15 +103,14 @@
 ## 结构
 ```
 ./  (.env 不入库；.venv 已建，Python 3.11 via uv)
-├─ requirements.txt                        # S1 验收：A.DeepSeek B.bge-m3(1024) 全绿 PASS
+├─ requirements.txt / smoke_test.py      # S1 验收：A.DeepSeek B.bge-m3(1024) 全绿 PASS
 ├─ content/README.md                     # v3 契约（chunk 头行格式/坐标/边界）
 │  └─ templates/                          # Agent B 模板存档（orig/ 原件备份 + 认定 .json + _current.json）
 ├─ data/                                  # 运行数据（会话库/上传/日志；可经 EDU_DATA_DIR 整体外移）
 │  ├─ edu_sessions.db                     # 统一会话存储（web_sessions.json 已自动迁移并入）
 │  └─ logs/edu_agent.log                  # 滚动事件日志（logsetup）
 ├─ legacy/                                # 归档（Gradio UI api.py / 临时脚本 / 旧日志），不参与运行
-├─ deploy/                                # 启动/停止脚本（start_ui / start_web / stop_ui / run_ui.ps1）
-├─ docs/                                  # 文档（00 索引 / 01 架构 / 02 演示剧本 / 03 协作 / 04 部署 / 05 计划书）
+├─ docs/                                  # 架构对标与设计记录
 ├─ eval/                                 # 评测集与存档（golden_questions / s9_results / demo 兜底）
 └─ src/edu_agent/
    ├─ config.py            # 读 .env；运行参数收口（rerank/数据目录/日志）；LLM + 双 embedding
@@ -132,8 +135,6 @@
    ├─ plan_html.py         # 教案 markdown -> HTML 落盘（content/plans/）
    ├─ memory.py            # Agent A 长期记忆（SQLite data/memory.db，按 profile）
    ├─ math_verify.py       # 简易验算附加（出错兜底提示）
-   ├─ vision.py            # 图片/图象/公式 OCR + 多模态分析 + 受限 SymPy 复核
-   ├─ kg.py                # 知识星图校验/查询（数据源 content/kg/graph.json）
    ├─ pdf_upload.py        # 用户上传 PDF -> 独立向量库 + 检索
    └─ web_server.py        # 【唯一 UI 网关 5174】薄路由 + SSE（A/S/B/auto + 模板 + PDF）
 ```
@@ -141,20 +142,14 @@
 ## 进度勾选清单
 - [x] S1 基地：依赖装好（3.11）、**双连通冒烟全绿**、骨架就位
 - [x] S2.5 教材到手（数学必修一 PDF）+ 自动切节全册（52 节）
-- [x] S5 入库 Chroma **296 条**（临时 collection 校验后切换，旧版本可回滚）
-- [x] S4(节级) eval/golden_questions.json 15 条
-- [x] S6(细粒度) eval/golden_questions_v2.json 40 条（概念/方法/旁栏/显式坐标分组门槛）
-- [x] 图片与公式视觉分析：上传图片 / 教材原页 → OCR 与图象理解 → 本地公式复核
-- [x] 知识星图真实性优化：58 节点 / 77 关系，覆盖五章，进度与教材页坐标动态化
-- [x] 教案中心模板与多页编辑：4 类预置模板、加页/复制/删除、旧草稿迁移、DOCX 真分页
-- [x] 教案库与 Agent B 联动：保存当前教案、DOCX 入库、搜索筛选、多页还原、软删除、参考教案
-- [x] Agent B 可移动悬浮入口：点击开关面板、拖动防误触、位置记忆、窄屏边界约束
+- [x] S5 入库 Chroma **151 条**（幂等全量重建）
+- [x] S4(节级) eval/golden_questions.json 15 条（细卡版跳过，待精修后升级 chunk 级）
 - [x] S6 检索冒烟 **13/15**（>=12 达标；两处❌为第四章旁栏节措辞撞车，记录待调优）
 - [x] S7 ask() 合法 JSON + 坐标引用（实测：单调性/集合/正弦函数 3 例高质量作答）
 - [x] S8 越界题走降级分支（实测「不定积分」→ 低置信降级，不硬编）
 - [x] S9 全量 15 题质检 **15/15 合格**（eval/s9_results.json）
 - [x] S10(初) Gradio 问答界面 → 已随一期收口退役（归档 legacy/api_gradio.py，唯一 UI 迁移至 5174）
-- [x] S10 演示剧本 docs/02-演示剧本.md + 裸 GPT 对照存档（eval/s10_naked_compare.md）+ 排练第 1 遍（计时）
+- [x] S10 演示剧本 DEMO_SCRIPT.md + 裸 GPT 对照存档（eval/s10_naked_compare.md）+ 排练第 1 遍（计时）
 - [x] 工程补强（2026-09-07）：#2 会话 / #3 日志 / #4 查询预处理 + 重试 + 引用规整；**tests/ 97 例全绿**
 - [x] M0 模板认定（代码 + 样例）：content/templates/高中数学_函数的概念_教案.json（源自样例 .docx）
 - [x] M2 编排层 graph.py：LangGraph Router + 节点故障隔离 + P1 学情拼接（tests/test_graph.py 全绿）
@@ -165,10 +160,10 @@
 - [x] 一期架构收口（对齐 DSH，见下节）：**tests/ 112 例全绿**
 
 ## 乱码优化与检索调优记录（2026-09-06 下午）
-- **语料乱码清洗**（scripts/clean_corpus.py + scripts/repair_fm.py）：全角归一、人教字形替换字母映射（狓→x 犃→A…）、私用区/矢量垃圾行剔除。**注意**：pdf_import.py 重跑后需先跑 repair_fm（补 front-matter）再 clean。
+- **语料乱码清洗**（scripts_clean_corpus.py + scripts_repair_fm.py）：全角归一、人教字形替换字母映射（狓→x 犃→A…）、私用区/矢量垃圾行剔除。**注意**：pdf_import.py 重跑后需先跑 repair_fm（补 front-matter）再 clean。
 - **检索主节优先**（retrieve.py prefer_main）：编号节硬优先于旁栏（阅读与思考/小结/信息技术应用），S6 由 13/15 → **14/15**。
 - **已知弱点**：第四章 4.2 指数函数所在页含表格/图形，抽取文本受污染致向量偏差，检索该节问仍可能落到旁栏（黄金题 Q11 未命中，属公式/表格边界，未死磕）。
-- **慢题波动**：DeepSeek 偶发 60~113s（非代码问题），演示只选已验证快题（见 docs/02-演示剧本.md）。
+- **慢题波动**：DeepSeek 偶发 60~113s（非代码问题），演示只选已验证快题（见 DEMO_SCRIPT.md）。
 
 ## 一期架构收口（2026-10，对照 DSH DeepSeek Harness 架构）
 
@@ -187,48 +182,14 @@
 
 验收：`tests/ 112 例全绿`（原 97 + 新增 store/routing 15 例）；5174 全功能冒烟通过。
 
-## 2026-09-10 更新：看原页 / 图片公式防幻觉 / UI 细节
-
-背景：教材里公式与图象是图片、PDF 文字层抽不到（且带损：`750°` 抽成 `750c`、小节号 `5.1.1` 抽成 `511!`），
-模型读到半截乱码会"顺手补全" → 幻觉。本轮把「不许编」落成机制，并把原书那一页直接给用户看。
-
-**能力**
-| 能力 | 落点 | 说明 |
-|---|---|---|
-| 片段体检 | `src/edu_agent/figdetect.py` | 给每个片段判 `has_figure` / `fig_nums`(图号) / `fidelity`(文字层是否损坏)；口径与入库回填一致 |
-| 元数据回填 | `scripts/backfill_chunk_meta.py` | 兼容旧库的回填工具；新入库链路已原生写入图片与保真度元数据。当前 296 块中含图 209、低保真 42 |
-| 生成侧硬约束 | `src/edu_agent/prompts.py`（FIGURE_GUARD）+ `src/edu_agent/generate.py`（`_snippet_block()`） | 含图片段加 ⚠ 标注并附硬指令：片段文字里没出现的公式/符号**一律当"书上只有图"**，禁止写出/推导/用常识补全，只给页码+图号并提示看原页。非流式与流式两条链路共用同一函数，防口径漂移 |
-| 原页图接口 | `GET /api/page_image?page=N[&source=&dpi=]`（`src/edu_agent/page_image.py`） | 印刷页 → 物理页 `+6`；pymupdf 渲染 150dpi PNG，缓存 `data/page_cache/`；越界 404、非法 422 |
-| 看原页浏览器（前端） | `static/index.html` | 正文绿色引用 pill 与侧栏引用卡都可点开原书页：上一页/下一页、跳任意页、本节首/本章首、回到引用页、键盘 ←→、Esc |
-| 目录页码范围 | `scripts/build_toc_ranges.py` → `content/toc_ranges.json`；`GET /api/textbook/toc` | 回答"这个知识点在哪节、这一章从第几页到第几页"（第三章 p59–p102、3.3 幂函数 p89–p92、全书 p1–p260） |
-
-**UI 细节**：左侧栏可收起（对齐 DeepSeek Harness，品牌行右上角按钮，状态记 localStorage）；左上角面包屑显示当前对话名称（首问后自动命名）；引用随消息持久化（`store.append(meta=)`，刷新/重开会话后绿色 pill 与「复制/重新生成」仍在）；修复右侧面板圆钮标签被下一行圆遮挡、以及 `--ink-800` 变量未定义导致激活态标签白底白字看不见。
-
-**注意**：`src/edu_agent/prompts.py` / `src/edu_agent/generate.py` / `src/edu_agent/web_server.py` 改动需重启 5174；`static/` 前端改完刷新即可。向量库或教材更换后需重跑 `scripts/build_toc_ranges.py`。
-
-## 教案中心 = 教案 × PPT 可视化编排台（2026-09-10 晚）
-
-侧栏「教育能力 → 教案中心」（教师角色）不再进对话，而是打开编排工作台 `#view-design`：
-
-| 区域 | 内容 |
-|---|---|
-| 顶部 | 课题、学情/课时、生成骨架、＋添加环节、保存、导出 HTML、预览 PPT |
-| 左栏「教案结构」 | 每个环节一行：序号 / 名称 / 分钟 / 上移 ↓ / 下移 / 删除；要点文本框（每行一条） |
-| 右栏「PPT 幻灯片」 | 每页对应一个环节：缩略图显示标题+要点，底部标注「第 N 页 · X 分钟」；点卡片跳回左侧对应环节 |
-
-两侧由同一份状态驱动，任一侧改动另一侧即时同步；统计（共 N 个环节 · X 分钟）实时更新。
-数据自动存 `localStorage: edu_design_v1`；「导出 HTML」产出含教案全文 + PPT 大纲的独立 HTML；「预览 PPT」按 16:9 全屏逐页预览。
-侧栏「教育能力」分组也可伸缩（点标题或箭头收起/展开，状态记忆在 `localStorage: edu_cap_open`）。
-学生角色下同一入口仍是「AI 答疑」（对话视图）。
-
 ## 运行
-- **UI（唯一入口，Harness 风格聊天页）**：`deploy/start_web.cmd` / `启动课本教练.bat`（顶层） / `deploy/run_ui.ps1` → http://127.0.0.1:5174（先确保 Ollama bge-m3 在 localhost:11434 运行）；顶部切 Agent A（答疑多轮）/ B（教案）/ S（总指挥派单）/ 自动；B 按当前模板出教案（默认=已认定《函数的概念》模板），含 PDF 上传问答与模板认定；日志滚到 `data/logs/edu_agent.log`
+- **UI（唯一入口，Harness 风格聊天页）**：`start_web.cmd` / `启动课本教练.bat` / `run_ui.ps1` → http://127.0.0.1:5174（先确保 Ollama bge-m3 在 localhost:11434 运行）；顶部切 Agent A（答疑多轮）/ B（教案）/ S（总指挥派单）/ 自动；B 按当前模板出教案（默认=已认定《函数的概念》模板），含 PDF 上传问答与模板认定；日志滚到 `data/logs/edu_agent.log`
 - **Agent A CLI**：`.venv/Scripts/python.exe src/edu_agent/generate.py "怎么判断函数单调性？"`；多轮：`... generate.py --chat`
 - **Agent B CLI（出教案）**：`.venv/Scripts/python.exe src/edu_agent/planner.py "函数的单调性" "重点班45分钟"`
 - **编排层 CLI**：`.venv/Scripts/python.exe src/edu_agent/graph.py "帮我写一份函数的单调性的教案"`（普通问自动走 A）
 - **总指挥 CLI**：`.venv/Scripts/python.exe src/edu_agent/supervisor.py "帮我备一节 对数函数 的教案"`
-- **单测**：`.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"`（当前 **302 例全绿**；300 通过、2 例真实 WPS 联调按环境跳过）
-- 停止：`deploy/stop_ui.cmd`（查杀 5174）或 `netstat -ano | findstr :5174` 后 Stop-Process
+- **单测**：`.venv/Scripts/python.exe -m unittest discover -s tests -p "test_*.py"`（当前 **112 例全绿**，零网络/零 Chroma/零 LLM）
+- 停止：`stop_ui.cmd`（查杀 5174）或 `netstat -ano | findstr :5174` 后 Stop-Process
 - 注意：会话数据现在落 `data/edu_sessions.db`（SQLite），重启不丢；想整体搬数据根设 `EDU_DATA_DIR` 即可
 - 已知：个别题端到端偶发 60~113s（DeepSeek 波动），演示选已验证的快题；越界题自动降级
 - 公式策略：生成后统一 plainify（generate.plainify_math），输出纯文本/Unicode（⊆ ∈ √ x^2），不再输出 $…$/反斜杠命令——任何环境零乱码；复杂公式给页码翻书兜底
