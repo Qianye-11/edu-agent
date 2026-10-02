@@ -5,14 +5,14 @@ $ErrorActionPreference = "Continue"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $py   = Join-Path $root ".venv\Scripts\python.exe"
-if (-not $env:EDU_WEB_PORT) { $env:EDU_WEB_PORT = "5181" }
+if (-not $env:EDU_PORT) { $env:EDU_PORT = "5181" }
 
 Write-Output ("ROOT   " + $root)
 Write-Output ("PYTHON " + $py)
-Write-Output ("URL    http://127.0.0.1:" + $env:EDU_WEB_PORT)
+Write-Output ("URL    http://127.0.0.1:" + $env:EDU_PORT)
 
 if (-not (Test-Path $py)) {
-    Write-Output "[ERROR] venv not found. Run setup.cmd first (creates .venv and installs requirements.txt)."
+    Write-Output "[ERROR] venv not found. Run setup.cmd (or: python -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.txt) first."
     exit 1
 }
 if (-not (Test-Path (Join-Path $root ".env"))) {
