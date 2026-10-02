@@ -155,6 +155,17 @@ MCP_SPECS: tuple[McpSpec, ...] = (
         probe="stdio",
         requires=("sympy",),
     ),
+    # 2026-10-02：教材库 MCP 服务。把平台**已经连通**的教材读取（textbook_lib，
+    # 与 /api/textbook* 同一份实现）包成 MCP 工具，技能（如思维导图）只调工具、
+    # 不自己读文件/解析格式。只读：不写文件、不改向量库。
+    McpSpec(
+        id="textbook",
+        name="edu-textbook 教材服务",
+        desc="读本地教材库：章节目录、某一章的小节清单、章节思维导图 Markdown（只读）",
+        kind="python",
+        resolve=lambda: ROOT / "mcp_servers" / "textbook_server.py",
+        probe="stdio",
+    ),
     McpSpec(
         id="wps-office",
         name="WPS Office 服务",

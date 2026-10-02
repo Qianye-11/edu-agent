@@ -28,8 +28,8 @@ import time
 from dataclasses import replace as _replace
 from pathlib import Path
 
-from edu_agent.skill_market import audit, manifest as mf, perm_scan, store
-from edu_agent.skill_market import paths
+from edu_agent.skill_market import audit, manifest as mf, perm_scan, shadow, store
+from edu_agent.skill_market import paths, verifier
 
 # 状态机： (当前状态, 动作) -> 目标状态
 TRANSITIONS: dict[tuple[str, str], str] = {
@@ -124,7 +124,19 @@ def _gate(action: str, skill_id: str, actor: str, confirm: bool,
 
 # ---------------------------------------------------------------- 动作
 def submit(skill_id: str, actor: str = "E", *, session_id: str = "") -> dict:
-    """草稿 → 待审。要求：manifest 合法 + 有匿名 fixture + 静态扫描通过。"""
+    """草稿 → 待审。**三重校验在这里强制执行，任何调用方、任何模式都绕不过**（铁律 2）。
+
+        L1 静态权限扫描   perm_scan：能力白名单 / 网络 / 文件 / 执行 / 越界 / 语义
+        L2 manifest 校验  verifier.verify：allowed_capabilities 必须映射到真实能力 +
+                          声明式回放（实际调用 ⊆ 声明、产出形状一致）
+        L3 影子运行       shadow.shadow_run：草稿的 plugin.py 在子进程真跑一次，
+                          出站调用被记录桩拦下、fixture 断言必须过
+
+    三项任一不过 → **拒绝提交**，并把逐项结论写进返回值与审计。
+    注意：这里**不看 `SINGLE_USER_MODE`** —— 单用户调试只是"少一层教师隔离"，
+    不是"少一层质量闸门"（铁律 2 明确禁止因为单用户就绕过）。
+    纯提示词技能（没有 plugin.py）的 L3 会 skip，这是"没有代码可跑"而不是"跳过校验"。
+    """
     ok, cur, nxt = _check_transition(skill_id, "submit")
     if not ok:
         return _fail("submit", skill_id, actor, "状态 %s 不能提交审核" % cur, frm=cur)
@@ -137,24 +149,51 @@ def submit(skill_id: str, actor: str = "E", *, session_id: str = "") -> dict:
         return _fail("submit", skill_id, actor,
                      "缺少匿名 fixture（%s）：验收要求先过 fixture 才能提交审核" % fixture_path.name,
                      frm=cur)
+
+    # ---- L1 静态权限扫描 ----
     rep = perm_scan.scan(man, body, fixture_text=fixture_path.read_text(encoding="utf-8"),
                          fixture_path=fixture_path, skill_dir=d, for_publish=False)
     if not rep.ok:
-        return _fail("submit", skill_id, actor, rep.review_note(), frm=cur,
-                     gates={"perm_scan": rep.verdict},
+        return _fail("submit", skill_id, actor, "L1 未过：" + rep.review_note(), frm=cur,
+                     gates={"L1": rep.verdict, "L2": "skipped", "L3": "skipped"},
                      extra={"blocking": [f.to_dict() for f in rep.blocking]})
 
+    # ---- L2 manifest 权限校验（含声明式回放）----
+    v2 = verifier.verify(skill_id, actor=actor)
+    if not v2.get("ok"):
+        return _fail("submit", skill_id, actor,
+                     "L2 未过：" + str(v2.get("L2", {}).get("undeclared_calls")
+                                      or v2.get("L1", {}).get("blocking") or v2)[:200],
+                     frm=cur, gates={"L1": rep.verdict, "L2": "fail", "L3": "skipped"},
+                     extra={"L2": v2.get("L2")})
+
+    # ---- L3 影子运行（没有 plugin.py 则 skip，不是跳过校验）----
+    v3 = shadow.shadow_run(skill_id, actor=actor)
+    l3_ok = bool(v3.get("ok")) or bool(v3.get("skipped"))
+    if not l3_ok:
+        return _fail("submit", skill_id, actor, "L3 未过：" + str(v3.get("error") or "")[:200],
+                     frm=cur, gates={"L1": rep.verdict, "L2": "pass", "L3": "fail"},
+                     extra={"L3": v3.get("L3")})
+
+    gates = {"L1": rep.verdict, "L2": "pass",
+             "L3": ("skipped:no-plugin" if v3.get("skipped") else "pass")}
+    verification = {"l1": rep.verdict, "l2": True, "l3": bool(v3.get("ok")),
+                    "draft_digest": v2.get("draft_digest"), "at": time.time()}
     moved = store.move_area(skill_id, "draft", "submitted")
-    man = _write_status(moved, man, body, "submitted", review="已提交待审：" + rep.review_note())
+    man = _write_status(moved, man, body, "submitted",
+                        review="已提交待审：" + rep.review_note())
     store.write_state(skill_id, status="submitted", version=man.version,
-                      actor=actor, area="submitted", scan=rep.verdict)
+                      actor=actor, area="submitted", scan=rep.verdict,
+                      gates=gates, verification=verification)
     _log("skill.submit", skill=skill_id, version=man.version, actor=actor, frm=cur,
          to="submitted", session_id=session_id or man.session_id,
          input_text=man.description, result={"ok": True, "code": "submitted"},
-         gates={"perm_scan": rep.verdict, "fixture": "pass"})
+         gates={**gates, "fixture": "pass"})
     return {"ok": True, "action": "submit", "skill": skill_id, "status": "submitted",
             "version": man.version, "dir": str(moved),
-            "scan": rep.to_dict(), "message": "已提交待审：默认仍不安装、不共享、不联网"}
+            "scan": rep.to_dict(), "L2": v2.get("L2"), "L3": v3.get("L3"),
+            "gates": gates,
+            "message": "三重校验通过，已提交待审：默认仍不安装、不共享、不联网"}
 
 
 def approve(skill_id: str, reviewer: str = "G", *, note: str = "") -> dict:
@@ -212,7 +251,23 @@ def reject(skill_id: str, reviewer: str = "G", *, reason: str = "") -> dict:
 
 def publish(skill_id: str, actor: str = "E", *, confirm: bool = False,
             level: str = "patch", session_id: str = "") -> dict:
-    """审核通过 → 发布安装（**唯一**让 Agent 能加载它的动作）。"""
+    """审核通过 → 发布（**唯一**让 Agent 能加载它的动作）。
+
+    ## 发布只做三件事（约束 2）
+
+    1. 把技能**完整复制落盘**到全局 `data/skills/<id>/`（`store.install_to_runtime`）；
+    2. 状态改成 `published`（`state.json` + 注册表 `skill_registry.db` 同步）；
+    3. 写审计。
+
+    ## 明确不做的事（红线）
+
+    * **不调用 `isolation.bind()`** —— 会话加载哪些技能是"会话初始化"的事
+      （见 `session_bootstrap.ensure_session`）。发布是全局动作，跟任何会话无关；
+      把 bind 写进发布接口会造成"发布即悄悄改掉某些会话的加载面"这种难查的问题。
+    * **不写 `skill_installs`** —— "教师把技能装到自己名下"是多用户模式的独立动作，
+      与发布解耦（单用户模式完全不用它）。
+    * **不碰任何草稿区** —— 草稿依旧住在市场区，Agent 看不到。
+    """
     ok, cur, nxt = _check_transition(skill_id, "publish")
     if not ok:
         return _fail("publish", skill_id, actor,
@@ -248,8 +303,10 @@ def publish(skill_id: str, actor: str = "E", *, confirm: bool = False,
         installed = store.install_to_runtime(man, body, vdir)
         scan_verdict = "reused"
 
+    # 状态 → published（state.json 与注册表一起更新；file_path 指向全局落盘目录）
     store.write_state(skill_id, status="published", version=man.version, actor=actor,
-                      area="published", installed=True, dir=str(installed))
+                      area="published", installed=True, dir=str(installed),
+                      published_at=time.time())
     _log("skill.publish", skill=skill_id, version=man.version, actor=actor,
          frm=cur, to="published", session_id=session_id or man.session_id,
          input_text=man.description,
@@ -257,7 +314,7 @@ def publish(skill_id: str, actor: str = "E", *, confirm: bool = False,
          gates={"permission": "allow", "perm_scan": scan_verdict})
     return {"ok": True, "action": "publish", "skill": skill_id, "status": "published",
             "version": man.version, "installed_to": str(installed),
-            "message": "已发布：Agent 现在可加载它（前提是能力开关为开）"}
+            "message": "已发布：Agent 现在可加载它（会话下次初始化时自动带上，见 session_bootstrap）"}
 
 
 def disable(skill_id: str, actor: str = "E", *, reason: str = "",

@@ -64,9 +64,11 @@ app = FastAPI(title="课本教练 x 教案 Agent")
 try:
     from edu_agent.skill_market.api import router as _skill_market_router
     from edu_agent.skill_market.create_api import router as _skill_create_router
+    from edu_agent.skill_market.mode_api import router as _skill_mode_router
 
     app.include_router(_skill_market_router)
     app.include_router(_skill_create_router)
+    app.include_router(_skill_mode_router)
 except Exception as _e:  # noqa: BLE001
     log.warning("模块3（Skill 市场）路由未挂载：%s: %s", type(_e).__name__, _e)
 
@@ -976,6 +978,9 @@ class ChatReq(BaseModel):
     preset: str = "A"          # S | A | B | auto
     template_id: str = "default"
     corpus: str = "textbook"   # textbook | rj_textbooks | pdf:<source>
+    # 多教师正式模式用（SINGLE_USER_MODE=False）：会话必须带上教师身份，
+    # 才能按 MCP 用户服务的"已安装列表"加载技能。单用户调试模式下忽略此字段。
+    teacher_id: str = ""
 
 
 def _code(preset: str) -> str:
@@ -1072,6 +1077,15 @@ def _chat_gen(req: ChatReq, holder: dict | None = None):
 
         _runs.sweep_session(sid, session_reader=lambda s: _store.get(s))
         _runs.begin_turn(sid)
+    except Exception:  # noqa: BLE001
+        pass
+    # 技能会话初始化（约束 4）：按 SINGLE_USER_MODE 分支决定这个会话加载哪些技能。
+    #   单用户调试 → 自动加载全部 published；多教师正式 → 调 MCP 用户服务取"本人已安装 ∧ published"。
+    # isolation.bind 只发生在 session_bootstrap 里（publish 不碰会话绑定）。
+    try:
+        from edu_agent.skill_market import session_bootstrap as _boot
+
+        _boot.ensure_session(sid, str(getattr(req, "teacher_id", "") or ""))
     except Exception:  # noqa: BLE001
         pass
     # skill-create 半自动提示（docs/22 M8）：上一轮补记完成后，看看这个会话里跑过的流程
@@ -2556,69 +2570,31 @@ def api_textbook_toc():
 
     给「看原页」浏览器用：知道某个知识点在哪一节、这一章从第几页到第几页、全书多少页。
     数据源 = 向量库片段的 chapter/section/page 聚合 + PDF 章首页探测。
+    读取实现已抽到 `edu_agent/textbook_lib.py`（与 MCP 教材服务共用同一份）。
     """
-    if not _TOC_FILE.exists() and _TOC_FILE_LEGACY.exists():
-        return json.loads(_TOC_FILE_LEGACY.read_text(encoding="utf-8"))
-    if not _TOC_FILE.exists():
-        return JSONResponse({"ok": False, "error": "toc 未生成：请跑 scripts/build_toc_ranges.py"}, status_code=404)
+    from edu_agent import textbook_lib
+
     try:
-        return json.loads(_TOC_FILE.read_text(encoding="utf-8"))
+        return textbook_lib.toc()
+    except FileNotFoundError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": f"toc 解析失败：{e}"}, status_code=500)
 
 
 @app.get("/api/textbook/chapters")
 def api_textbook_chapters():
-    """解析整节教材 md -> 章/节结构（教材库章节浏览）。"""
-    out = []
-    if not _AUTO_DIR.exists():
-        return {"ok": True, "chapters": out}
-    for f in sorted(_AUTO_DIR.glob("*.md")):
-        text = f.read_text(encoding="utf-8", errors="ignore")
-        ch = re.search(r"^chapter:\s*(.+)$", text, re.M)
-        ct = re.search(r"^chapter_title:\s*(.+)$", text, re.M)
-        bk = re.search(r"^book:\s*(.+)$", text, re.M)
-        sections = []
-        for line in text.splitlines():
-            m = re.match(r"^【整节】([^|\r\n]*)\|([^|]*)\|([^|]*)\|p?([0-9]+)?", line)
-            if m:
-                sections.append({"id": m.group(1), "no": m.group(2),
-                                 "name": m.group(3), "page": int(m.group(4)) if m.group(4) else None})
-        out.append({"file": f.name,
-                    "chapter": ch.group(1).strip() if ch else "",
-                    "title": ct.group(1).strip() if ct else "",
-                    "book": bk.group(1).strip() if bk else "",
-                    "sections": sections})
-    return {"ok": True, "chapters": out}
+    """解析整节教材 md -> 章/节结构（教材库章节浏览）。实现见 textbook_lib.chapters()。"""
+    from edu_agent import textbook_lib
+
+    return textbook_lib.chapters()
 
 
 def _main_textbook_stats() -> dict:
     """内置官方教材统计；多本上传教材则由 /api/knowledge-bases 统一列出。"""
-    blocks = None
-    pages = None
-    try:
-        from langchain_chroma import Chroma
-        from edu_agent.config import get_embeddings
-        db = Chroma(collection_name="edu_textbook",
-                    embedding_function=get_embeddings(),
-                    persist_directory=str(ROOT / "chroma_db"))
-        blocks = db._collection.count()
-    except Exception:
-        blocks = None
-    n_ch = 0
-    if _AUTO_DIR.exists():
-        n_ch = len(list(_AUTO_DIR.glob("*.md")))
-    if _txt and _txt.exists():
-        try:
-            import pymupdf
-            doc = pymupdf.open(str(_txt))
-            pages = max(0, doc.page_count - _TXT_OFF)
-            doc.close()
-        except Exception:
-            pages = None
-    return {"book": "数学 · 必修第一册（人教A版2019课标版）",
-            "chapters": n_ch, "pages": pages, "blocks": blocks,
-            "source_pdf": str(ROOT / "content" / "raw") if (ROOT / "content" / "raw").exists() else None}
+    from edu_agent import textbook_lib
+
+    return textbook_lib.stats()
 
 
 @app.get("/api/textbook/stats")

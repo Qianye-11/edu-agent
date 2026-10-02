@@ -64,15 +64,34 @@ def api_registry():
 
 
 @router.get("/index")
-def api_index(q: str = ""):
-    """市场索引：四区合并 + 安装状态 + 版本数 + fixture 有无。"""
+def api_index(q: str = "", teacher_id: str = ""):
+    """市场索引：四区合并 + 安装状态 + 版本数 + fixture 有无。
+
+    **可见性分支**（业务分支只影响"市场查询"和"会话加载"，不影响任何流水线环节）：
+
+    * `SINGLE_USER_MODE=True`：展示**全部草稿 + 已发布**（只有你一个人，不需要隔离）；
+    * `SINGLE_USER_MODE=False`：展示已发布 + **本人（create_teacher_id）创建的**草稿；
+      注册表里查不到来源的技能按"只暴露已发布"处理（安全默认，不泄露来源不明的草稿）。
+    """
     try:
         rows = store.market_index(keyword=q)
+        from edu_agent.skill_market import mode, registry_db
+
+        single = mode.single_user_mode()
+        tid = mode.teacher_id(teacher_id)
+        scope = "全部草稿 + 已发布" if single else "已发布 + 本人创建的草稿"
+        if not single:
+            visible = {r["skill_id"] for r in registry_db.visible_for(tid, single_user=False)}
+            rows = [r for r in rows
+                    if r["name"] in visible or r.get("area") == "published"]
         for r in rows:
             ok, why = store.is_loadable(r["name"])
             r["loadable"] = ok
             r["loadable_reason"] = why
+            row = registry_db.get(r["name"]) or {}
+            r["create_teacher_id"] = row.get("create_teacher_id", "")
         return {"ok": True, "skills": rows, "count": len(rows),
+                "single_user_mode": single, "teacher_id": tid, "visibility": scope,
                 "sessions": isolation.stats()}
     except Exception as e:  # noqa: BLE001
         return _err(e)

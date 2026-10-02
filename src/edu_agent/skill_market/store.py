@@ -347,7 +347,12 @@ def read_state() -> dict:
 
 
 def write_state(skill_id: str, **fields) -> dict:
-    """更新某技能的生命周期状态（只动 state.json，不动历史版本）。"""
+    """更新某技能的生命周期状态（只动 state.json，不动历史版本）。
+
+    同时**镜像进注册表（SQLite）**：`state.json` 继续是生命周期镜像，
+    `skill_registry.db` 是"谁创建/什么状态/文件在哪/谁装了"的可查询存储。
+    镜像失败不影响主流程（注册表是新增能力，不是新的依赖）。
+    """
     paths.ensure_dirs()
     with _STATE_LOCK:
         st = read_state()
@@ -358,7 +363,13 @@ def write_state(skill_id: str, **fields) -> dict:
         tmp = state_file().with_suffix(".json.tmp")
         tmp.write_text(json.dumps(st, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(state_file())
-        return row
+    try:
+        from edu_agent.skill_market import registry_db
+
+        registry_db.sync_from_state(skill_id, row)
+    except Exception:  # noqa: BLE001  注册表镜像失败不能拖垮状态机
+        pass
+    return row
 
 
 def get_state(skill_id: str) -> dict:

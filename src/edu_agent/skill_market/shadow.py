@@ -122,11 +122,50 @@ def _declared_tokens(man: mf.SkillManifest) -> set[str]:
     return set(man.allowed_capabilities)
 
 
-def shadow_run(target: str, *, actor: str = "E", timeout: int = 60) -> dict:
+def _pair_digest(*paths) -> str:
+    """(插件 + fixture) 的内容摘要 —— L3 缓存键：**代码或用例一变就失效**。"""
+    import hashlib
+
+    h = hashlib.sha256()
+    for p in paths:
+        try:
+            h.update(Path(p).read_bytes())
+        except OSError:
+            h.update(b"<missing>")
+    return h.hexdigest()[:16]
+
+
+def _cache_get(skill_id: str, key: str) -> dict | None:
+    st = store.get_state(skill_id)
+    hit = (st.get("l3_cache") or {}).get(key)
+    return hit if isinstance(hit, dict) and hit.get("ok") else None
+
+
+def _cache_put(skill_id: str, key: str, ok: bool, ms: int, extra: dict | None = None) -> None:
+    """只缓存**成功**结果：失败必须重跑（可能是超时/环境抖动，不能一票否决到底）。"""
+    if not ok:
+        return
+    try:
+        st = store.get_state(skill_id)
+        cache = dict(st.get("l3_cache") or {})
+        cache[key] = {"ok": True, "ms": int(ms or 0), "at": time.time(),
+                      **(extra or {})}
+        if len(cache) > 4:                      # 只留最近 4 条
+            cache = dict(sorted(cache.items(), key=lambda kv: kv[1].get("at", 0))[-4:])
+        store.write_state(skill_id, l3_cache=cache)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def shadow_run(target: str, *, actor: str = "E", timeout: int = 60,
+               use_cache: bool = True) -> dict:
     """对一个草稿做影子运行（L3）。
 
     `target` 可以是**候选 id**（miner 挖出来的）或**技能 id**（人工导入的草稿）。
     没有 plugin.py 的纯提示词技能会 skip。
+
+    `use_cache=True` 时，**同一份插件 + 同一份 fixture** 已通过过就不再重跑
+    （提交审核时会调它，重复跑子进程太贵）；代码或用例一变，摘要就变，缓存自动失效。
     """
     from edu_agent.skill_market import verifier as _verifier
 
@@ -145,6 +184,18 @@ def shadow_run(target: str, *, actor: str = "E", timeout: int = 60) -> dict:
         return {"ok": False, "skipped": True, "candidate_id": cid, "skill": man.name,
                 "reason": "该技能没有 plugin.py（纯提示词技能）：L3 不适用，按 L1+L2 判定即可",
                 "L3": {"executed": False, "skipped": True}}
+    fixture_probe = Path(paths.fixtures_dir()) / ("%s.json" % man.name)
+    if not fixture_probe.exists():
+        fixture_probe = d / (man.fixture or "fixture.json")
+    cache_key = _pair_digest(plugin, fixture_probe)
+    if use_cache:
+        hit = _cache_get(man.name, cache_key)
+        if hit:
+            return {"ok": True, "cached": True, "candidate_id": cid, "skill": man.name,
+                    "L3": {"executed": True, "ok": True, "cached": True,
+                           "ms": hit.get("ms"), "at": hit.get("at"),
+                           "note": "同一份插件 + fixture 已通过过 L3，直接复用结论"},
+                    "message": "影子运行通过（缓存命中：代码与用例都没变）"}
 
     work = Path(paths.market_root()) / SHADOW_DIR
     work.mkdir(parents=True, exist_ok=True)
@@ -242,6 +293,8 @@ def shadow_run(target: str, *, actor: str = "E", timeout: int = 60) -> dict:
                         verification=ver)
     else:
         store.write_state(skill_id, verification=ver)
+    _cache_put(man.name, cache_key, ok, ms,
+               extra={"shape_match": round(shape_match, 4)})
     _audit(cid or skill_id, man.name, actor, {"ok": ok, "code": "shadow",
                                               "shape_match": round(shape_match, 4),
                                               "undeclared": undeclared_hosts})

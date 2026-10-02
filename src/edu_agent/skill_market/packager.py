@@ -305,6 +305,15 @@ def make_draft(candidate_id: str, *, actor: str = "E", confirm: bool = False,
 
     miner.set_state(cid, "drafted", skill_id=skill_id, draft_dir=str(d),
                     drafted_at=time.time())
+    # 注册表登记（草稿态 + 创建者）。create_teacher_id 是必留字段，单用户模式下写占位。
+    try:
+        from edu_agent.skill_market import mode as _mode
+
+        store.write_state(skill_id, status="draft", area="draft",
+                          teacher_id=_mode.teacher_id(actor), actor=actor,
+                          file_path=str(Path(d) / "SKILL.md"))
+    except Exception:  # noqa: BLE001
+        pass
     audit.append("skill-create.draft", skill=skill_id, actor=actor, input_text=cid,
                  result={"ok": True, "code": "drafted", "dir": str(d),
                          "perm_scan": rep.verdict},
@@ -405,8 +414,14 @@ def import_draft(text: str, *, actor: str = "E", confirm: bool = False,
     if fx:
         store.write_fixture(man.name, fx)
     # 导入 = 进入草稿态（若这个技能之前已发布，运行时那版照常服务，直到重新发布）
+    # teacher_id 只在**创建时**写一次：注册表的 create_teacher_id 是"谁创建的"，
+    # 之后的 publish/disable 带的是操作者 actor，不会覆盖它（见 registry_db.sync_from_state）。
+    from edu_agent.skill_market import mode as _mode
+
     store.write_state(man.name, status="draft", area="draft",
-                      verify_state="", verification={}, imported_at=time.time())
+                      verify_state="", verification={}, imported_at=time.time(),
+                      teacher_id=_mode.teacher_id(actor), actor=actor,
+                      file_path=str(Path(d) / "SKILL.md"))
     rep = perm_scan.scan(man, body, fixture_text=json.dumps(fx or {}, ensure_ascii=False),
                          fixture_path=(Path(d) / "fixture.json") if fx else None,
                          skill_dir=d)

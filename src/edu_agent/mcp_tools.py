@@ -53,10 +53,21 @@ _WPS_ALLOWED = frozenset({
     "wps_ppt_open_presentation",  # 打开/新建演示文稿
 })
 
+# 2026-10-02 新增 textbook：教材库**只读**服务（思维导图等技能用它取章节，
+# 与 /api/textbook* 共用 textbook_lib 同一份实现）
+_TEXTBOOK_ALLOWED = frozenset({
+    "textbook_info",        # 教材文件信息
+    "textbook_chapters",    # 全部章/节结构
+    "textbook_chapter",     # 某一章（含小节清单）
+    "textbook_mindmap",     # 某一章的 Markdown 思维导图
+    "textbook_stats",       # 章数/页数/片段数
+})
+
 # 每个服务的工具白名单（缺省 = 不限制；新服务务必显式登记，别留空）
 _WHITELIST: dict[str, frozenset[str]] = {
     "math": _MATH_ALLOWED,
     "wps-office": _WPS_ALLOWED,
+    "textbook": _TEXTBOOK_ALLOWED,
 }
 
 # MCP 调用开销较大，默认超时
