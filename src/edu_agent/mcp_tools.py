@@ -53,10 +53,43 @@ _WPS_ALLOWED = frozenset({
     "wps_ppt_open_presentation",  # 打开/新建演示文稿
 })
 
+# filesystem 白名单：只放读取类，杜绝写/删/移动（本机文件安全收口）
+_FETCH_ALLOWED = frozenset({"fetch", "fetch_multi"})
+_TIME_ALLOWED = frozenset({"get_current_time", "convert_time"})
+_GIT_ALLOWED = frozenset({
+    "git_status", "git_log", "git_branch", "git_create_branch",
+    "git_show", "git_diff", "git_diff_staged", "git_diff_unstaged",
+})
+_MEMORY_ALLOWED = frozenset({"read_graph", "search_nodes", "open_nodes", "get_node"})
+_SQLITE_ALLOWED = frozenset({"list_tables", "get_schema", "query"})
+_PLAYWRIGHT_ALLOWED = frozenset({
+    "browser_navigate", "browser_navigate_back", "browser_snapshot",
+    "browser_take_screenshot", "browser_tabs", "browser_find",
+    "browser_wait_for", "browser_console_messages",
+    "browser_network_request", "browser_network_requests",
+})
+
+_FILESYSTEM_ALLOWED = frozenset({
+    "list_allowed_directories",
+    "list_directory",
+    "directory_tree",
+    "read_file",
+    "read_multiple_files",
+    "get_file_info",
+    "search_files",
+})
+
 # 每个服务的工具白名单（缺省 = 不限制；新服务务必显式登记，别留空）
 _WHITELIST: dict[str, frozenset[str]] = {
     "math": _MATH_ALLOWED,
     "wps-office": _WPS_ALLOWED,
+    "filesystem": _FILESYSTEM_ALLOWED,
+    "fetch": _FETCH_ALLOWED,
+    "time": _TIME_ALLOWED,
+    "git": _GIT_ALLOWED,
+    "memory": _MEMORY_ALLOWED,
+    "sqlite": _SQLITE_ALLOWED,
+    "playwright": _PLAYWRIGHT_ALLOWED,
 }
 
 # MCP 调用开销较大，默认超时
@@ -95,9 +128,9 @@ def server_params(server_id: str):
         exe = shutil.which("node")
         if not exe:
             raise RuntimeError("未检测到 Node.js")
-        return StdioServerParameters(command=exe, args=[str(spec.entry())],
+        return StdioServerParameters(command=exe, args=[str(spec.entry())] + list(getattr(spec, "extra_args", ())),
                                      env=_server_env())
-    return StdioServerParameters(command=sys.executable, args=[str(spec.entry())],
+    return StdioServerParameters(command=sys.executable, args=[str(spec.entry())] + list(getattr(spec, "extra_args", ())),
                                  env=_server_env())
 
 

@@ -14,7 +14,7 @@
   /api/chat              流式（A 逐字 / S 总指挥派单 / B 整份教案 + HTML 落盘）
   另：/api/textbook、/api/pdfs、/api/pdf/ingest、/files、/static、/uploads、/textbook
 
-运行：.venv\\Scripts\\python.exe src/edu_agent/web_server.py（或 deploy/start_web.cmd）
+运行：.venv\\Scripts\\python.exe src/edu_agent/web_server.py（或 start_web.cmd）
 """
 from __future__ import annotations
 
@@ -23,29 +23,23 @@ import os
 import re
 import sys
 import threading
-import time
 import uuid
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 STATIC = ROOT / "static"
 
-from fastapi import FastAPI, UploadFile, File, Form, Query  # noqa: E402
-from fastapi.responses import StreamingResponse, HTMLResponse, Response, JSONResponse, FileResponse  # noqa: E402
+from fastapi import FastAPI, UploadFile, File  # noqa: E402
+from fastapi.responses import StreamingResponse, HTMLResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel, Field  # noqa: E402
-from starlette.concurrency import run_in_threadpool  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
-from edu_agent import kg, lesson_docx, lesson_library, logsetup, pdf_upload, plan_html, planner, routing  # noqa: E402
-from edu_agent import capabilities, wps_export  # noqa: E402  能力开关 + WPS 导出
-from edu_agent import slide_deck  # noqa: E402  PPT 工作台：预览与导出共用同一份 SVG 版式
+from edu_agent import capabilities, kg, logsetup, pdf_upload, plan_html, planner, routing, workbench  # noqa: E402
 from edu_agent.config import load_settings  # noqa: E402
 from edu_agent.host.store import SessionStore  # noqa: E402
 from edu_agent.template_spec import (  # noqa: E402
-    get_current, get_template, list_templates, recognize_docx, save_template, set_current,
-    template_sketch,
+    get_template, list_templates, recognize_docx, save_template, set_current, template_sketch,
 )
 
 log = logsetup.get_logger("web_server")
@@ -56,9 +50,6 @@ app = FastAPI(title="课本教练 x 教案 Agent")
 _settings = load_settings()
 _store = SessionStore(path=_settings.sessions_db,
                       migrate_legacy=ROOT / "data" / "web_sessions.json")
-
-# 长期记忆归属的 profile（分隔不同老师/学生的记忆；将来做多用户时按登录身份替换这里）
-MEM_PROFILE = "default"
 
 
 # ---------- 静态 ----------
@@ -76,128 +67,124 @@ pdf_upload.PDF_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(pdf_upload.PDF_DIR)), name="uploads")
 
 
-async def _read_upload_limited(file: UploadFile, limit: int) -> bytes:
-    """分块读取上传，拒绝超过部署配置的文件，避免 `read()` 无上限占满内存。"""
-    chunks: list[bytes] = []
-    size = 0
-    while True:
-        chunk = await file.read(1024 * 1024)
-        if not chunk:
-            return b"".join(chunks)
-        size += len(chunk)
-        if size > limit:
-            raise ValueError(f"文件超过上限（{limit // 1024 // 1024} MB）")
-        chunks.append(chunk)
-
-
-# 自选导出目录不一定在仓库内，因此下载接口不能靠「目录前缀」判断。
-# 改为仅接受本进程刚刚生成并登记的随机一次性标识，15 分钟后自动失效。
-_DOWNLOAD_TTL_SECS = 15 * 60
-_downloads: dict[str, tuple[Path, float]] = {}
-_downloads_lock = threading.Lock()
-
-
-def register_download(path: str | Path) -> str:
-    p = Path(path).resolve()
-    if not p.is_file():
-        raise FileNotFoundError(p)
-    now = time.monotonic()
-    with _downloads_lock:
-        for key, (_, created) in list(_downloads.items()):
-            if now - created > _DOWNLOAD_TTL_SECS:
-                _downloads.pop(key, None)
-        token = uuid.uuid4().hex
-        _downloads[token] = (p, now)
-    return token
-
-
-def take_download(token: str) -> Path | None:
-    now = time.monotonic()
-    with _downloads_lock:
-        entry = _downloads.pop(token, None)  # 一次性，避免 URL 被浏览器历史重复暴露
-    if entry is None:
-        return None
-    path, created = entry
-    if now - created > _DOWNLOAD_TTL_SECS or not path.is_file():
-        return None
-    return path
-
-
 @app.get("/", response_class=HTMLResponse)
 def index():
-    # 每次读盘点取最新产物；并显式禁用缓存 ——
-    # 否则改完 UI 后浏览器会拿旧副本，「重新打开应用」看到的仍是上一版。
-    # （这一段是本地补丁：上游版本没有它，更新代码后需要重新加回。）
-    return HTMLResponse(
-        content=(STATIC / "index.html").read_text(encoding="utf-8"),
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-        },
-    )
+    return (STATIC / "index.html").read_text(encoding="utf-8")
 
 
-# ---------- 知识星图 ----------
-@app.get("/api/kg/graph")
-def api_kg_graph():
-    return kg.get_kg().get_graph()
+@app.get("/kg.html", response_class=HTMLResponse)
+def kg_page():
+    """知识图谱页面"""
+    return (STATIC / "kg.html").read_text(encoding="utf-8")
 
 
-@app.get("/api/kg/node/{node_id}")
-def api_kg_node(node_id: str):
-    return kg.get_kg().get_node_info(node_id)
+# ---------- MCP 服务 / 能力（移植自主项目 5174） ----------
+@app.get("/api/capabilities")
+def api_capabilities(deep: int = 0):
+    """能力清单：enabled=开关（默认全开），running/detail=运行状态，tools=工具数（deep=1）。"""
+    return capabilities.snapshot(deep=bool(deep))
 
 
-@app.get("/api/kg/related/{node_id}")
-def api_kg_related(node_id: str, hops: int = 1):
-    return kg.get_kg().get_related(node_id, hops)
+class CapToggle(BaseModel):
+    kind: str = "mcp"
+    id: str = ""
+    enabled: bool = True
 
 
-@app.get("/api/ontology/graph")
-def api_ontology_graph():
-    """全科教材本体；与仅覆盖数学必修一的知识星图保持独立。"""
-    try:
-        import json
-        from edu_agent.ontology import DEFAULT_PATH, Ontology
-
-        raw = json.loads(DEFAULT_PATH.read_text(encoding="utf-8"))
-        graph = Ontology(raw)
-        return {"ok": True, "meta": raw.get("meta") or {},
-                "nodes": list(graph.nodes.values()), "links": graph.edges}
-    except FileNotFoundError:
-        return {"ok": False, "error": "全科教材本体尚未构建"}
-    except Exception as exc:
-        return {"ok": False, "error": f"本体读取失败：{type(exc).__name__}: {exc}"}
+@app.post("/api/capabilities/toggle")
+def api_capabilities_toggle(body: CapToggle):
+    """开 / 关一个 MCP 服务或 Skill（落 data/capabilities.json 持久化）。"""
+    return capabilities.set_enabled(body.kind, body.id, body.enabled)
 
 
-@app.get("/api/ontology/search")
-def api_ontology_search(q: str, limit: int = 12):
-    try:
-        from edu_agent.ontology import Ontology
-
-        return {"ok": True, "items": Ontology.from_file().search(q, limit=max(1, min(limit, 30)))}
-    except FileNotFoundError:
-        return {"ok": False, "error": "全科教材本体尚未构建", "items": []}
-    except Exception as exc:
-        return {"ok": False, "error": f"本体检索失败：{type(exc).__name__}: {exc}", "items": []}
+@app.get("/api/mcp/status")
+def api_mcp_status():
+    """右栏「运行状态」面板用的轻量快照（不做工具握手）。"""
+    snap = capabilities.snapshot(deep=False)
+    return {"mcp": snap["mcp"], "skills": snap["skills"],
+            "wps_export_ready": capabilities.wps_available()[0],
+            "session_doc_preview_ready": capabilities.session_preview_ready(),
+            "ppt_polish_ready": capabilities.ppt_polish_ready()}
 
 
-@app.get("/api/kg/search")
-def api_kg_search(q: str = ""):
-    return {"results": kg.get_kg().search(q)}
+# ---------- 教师工作台（身份 / 课程表 / 校历） ----------
+@app.get("/api/workbench")
+def api_workbench():
+    """工作台完整数据 + 可选项（身份配置 / 课程表 / 校历）。"""
+    return workbench.snapshot()
 
 
-@app.get("/api/kg/health")
-def api_kg_health():
-    graph = kg.get_kg()
-    return {**graph.validate(), "meta": graph.get_graph().get("meta", {})}
+class WbProfile(BaseModel):
+    name: str = ""
+    school: str = ""
+    grade_level: str = ""
+    grade: str = ""
+    subject: str = ""
+
+
+@app.post("/api/workbench/profile")
+def api_wb_profile(body: WbProfile):
+    return workbench.set_profile({
+        "name": body.name, "school": body.school,
+        "grade_level": body.grade_level, "grade": body.grade, "subject": body.subject,
+    })
+
+
+class WbCourse(BaseModel):
+    name: str = ""
+    subject: str = ""
+    weekday: int = 1
+    period: int = 1
+    grade: str = ""
+    room: str = ""
+    color: str = ""
+
+
+@app.post("/api/workbench/courses")
+def api_wb_courses(body: WbCourse):
+    return workbench.add_course({
+        "name": body.name, "subject": body.subject, "weekday": body.weekday,
+        "period": body.period, "grade": body.grade, "room": body.room, "color": body.color,
+    })
+
+
+@app.delete("/api/workbench/courses/{cid}")
+def api_wb_courses_del(cid: str):
+    return workbench.del_course(cid)
+
+
+class WbTerm(BaseModel):
+    term: str = ""
+    start: str = ""
+
+
+@app.post("/api/workbench/calendar/term")
+def api_wb_term(body: WbTerm):
+    return workbench.set_term(body.term, body.start)
+
+
+class WbEvent(BaseModel):
+    date: str = ""
+    title: str = ""
+    type: str = "event"
+
+
+@app.post("/api/workbench/calendar/events")
+def api_wb_events(body: WbEvent):
+    return workbench.add_event({"date": body.date, "title": body.title, "type": body.type})
+
+
+@app.delete("/api/workbench/calendar/events/{eid}")
+def api_wb_events_del(eid: str):
+    return workbench.del_event(eid)
+
+
 
 
 # ---------- 模板 ----------
 @app.get("/api/templates")
 def api_templates():
-    # 注意：current 必须走 get_current()（读 _current.json）；get_template("") 会直接回默认模板
-    cur = get_current().template_id
+    cur = get_template("").template_id
     return {"templates": list_templates(), "current": cur}
 
 
@@ -213,14 +200,8 @@ def api_tpl_set(body: TplSet):
 
 @app.post("/api/template/upload")
 async def api_tpl_upload(file: UploadFile = File(...)):
-    if not (file.filename or "").lower().endswith(".docx"):
-        return {"ok": False, "error": "仅支持 .docx（Word 教案模板）"}
-    tmp = _settings.data_dir / ("upload_" + uuid.uuid4().hex + ".docx")
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        tmp.write_bytes(await _read_upload_limited(file, _settings.upload_max_bytes))
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
+    tmp = ROOT / "data" / ("upload_" + uuid.uuid4().hex + ".docx")
+    tmp.write_bytes(await file.read())
     try:
         spec = recognize_docx(tmp)
         save_template(spec, tmp)
@@ -230,571 +211,36 @@ async def api_tpl_upload(file: UploadFile = File(...)):
         tmp.unlink(missing_ok=True)
 
 
-# ---------- 富模板（教案中心：导入 -> 全量编辑 -> 保存 -> 导出） ----------
-class TplRichSave(BaseModel):
-    template: dict
-    set_current: bool = True
-    confirm: bool = False      # 权限确认：gate=permission 时前端重试带上（见 edu_agent/permissions.py）
 
 
-@app.post("/api/template/import")
-async def api_tpl_rich_import(file: UploadFile = File(...)):
-    """导入自有 .docx 教案模板 -> 富模型（板块/段落/表格 + 格式），**先不落盘**供用户编辑。"""
-    from edu_agent import template_rich
+# ---------- 知识图谱 ----------
+@app.get("/api/kg/graph")
+def api_kg_graph():
+    """获取完整知识图谱数据"""
+    return kg.get_kg().get_graph()
 
-    if not (file.filename or "").lower().endswith(".docx"):
-        return {"ok": False, "error": "仅支持 .docx（Word 教案模板）"}
-    tmp = _settings.data_dir / ("tpl_" + uuid.uuid4().hex + ".docx")
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        tmp.write_bytes(await _read_upload_limited(file, _settings.upload_max_bytes))
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-    try:
-        from edu_agent import template_spec as _ts
 
-        stem = (file.filename or "").rsplit(".", 1)[0] or "模板"
-        rich = template_rich.docx_to_rich(tmp, template_id=_ts._slugify(stem), name=stem)
-        rich["_upload_path"] = str(tmp)          # 保存时用它把原件备份到 orig/
-        return {"ok": True, "template": rich, "stats": template_rich.stats(rich)}
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
-    finally:
-        pass          # 原件要留到「保存」时备份，故不在此删除
+@app.get("/api/kg/prereq/{node_id}")
+def api_kg_prereq(node_id: str):
+    """查询前置知识点"""
+    return {"prerequisites": kg.get_kg().get_prerequisites(node_id)}
 
 
-@app.post("/api/template/upgrade")
-def api_tpl_upgrade(body: dict):
-    """把已有模板「升级」为可编辑富模板：解析它在 orig/ 里备份的原件 .docx。"""
-    from edu_agent import template_rich
+@app.get("/api/kg/related/{node_id}")
+def api_kg_related(node_id: str, hops: int = 1):
+    """查询相关子图"""
+    return kg.get_kg().get_related(node_id, hops=hops)
 
-    tid = str(body.get("template_id") or "").strip()
-    if not tid:
-        return {"ok": False, "error": "缺少 template_id"}
-    src = template_rich.ORIG_DIR / f"{tid}.docx"
-    if not src.exists():
-        return {"ok": False, "error": "没找到该模板的原件（content/templates/orig/），请直接「导入 .docx」"}
-    try:
-        rich = template_rich.docx_to_rich(src, template_id=tid, name=tid)
-        # 注意：这里**绝不能**写 _upload_path —— 保存时会 unlink 该路径，
-        # 而 src 是模板自己的原件（content/templates/orig/），删了就丢了。
-        rich["_keep_source"] = True
-        rich["source"] = f"orig/{tid}.docx"
-        return {"ok": True, "template": rich, "stats": template_rich.stats(rich)}
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
 
+@app.get("/api/kg/search")
+def api_kg_search(q: str):
+    """搜索知识点"""
+    return {"results": kg.get_kg().search_node(q)}
 
-@app.get("/api/template/rich")
-def api_tpl_rich_get(id: str = ""):
-    """读富模板（供编辑器加载）；非富模板返回 ok=False 并附简单骨架预览。"""
-    from edu_agent import template_rich
 
-    if not id:
-        return {"ok": False, "error": "缺少 id"}
-    rich = template_rich.load_rich(id)
-    if rich is None:
-        spec = get_template(id)
-        return {"ok": False, "error": "该模板不是富模板（只有板块骨架）",
-                "preview": template_sketch(spec)}
-    return {"ok": True, "template": rich, "stats": template_rich.stats(rich)}
-
-
-@app.get("/api/template/canvas")
-def api_tpl_canvas(id: str = "default"):
-    """把任意模板转换为教案画布可直接渲染的富模型。
-
-    模板中心同时允许两种存量格式：旧版 v1 只有板块骨架，v2 则保存段落、表格和
-    字符格式。教案中心不应该把这种实现差异暴露给老师，因此这里统一返回 v2；
-    旧骨架会在内存中转换，不改写用户原有模板文件。
-    """
-    from edu_agent import plan_sync, template_rich
-
-    template_id = str(id or "default").strip() or "default"
-    available = {str(item.get("template_id") or "") for item in list_templates()}
-    if template_id not in available:
-        return JSONResponse({"ok": False, "error": f"没有模板「{template_id}」"}, status_code=404)
-
-    rich = template_rich.load_rich(template_id)
-    source = "rich"
-    if rich is None:
-        original = template_rich.ORIG_DIR / f"{template_id}.docx"
-        if original.exists():
-            # v1 JSON 只是早期识别出的板块索引；真正的字体、段落和表格样式仍在原始
-            # DOCX 中。教案中心加载时必须优先解析原稿，不能降级成纯标题骨架。
-            rich = template_rich.docx_to_rich(
-                original, template_id=template_id, name=get_template(template_id).name
-            )
-            source = "original-docx"
-        else:
-            rich = plan_sync.rich_from_skeleton(get_template(template_id))
-            source = "skeleton"
-    return {"ok": True, "template": rich, "source": source,
-            "stats": template_rich.stats(rich)}
-
-
-@app.post("/api/template/rich/save")
-def api_tpl_rich_save(body: TplRichSave):
-    """保存编辑后的富模板（落 content/templates/<id>.json，可同时设为 Agent B 的当前模板）。"""
-    from edu_agent import permissions, template_rich
-
-    blocked = permissions.guard("template_save", bool(getattr(body, "confirm", False)))
-    if blocked:
-        return blocked
-
-    rich = dict(body.template or {})
-    src = rich.pop("_upload_path", None)
-    keep_source = bool(rich.pop("_keep_source", False))
-    rich.pop("_sync", None)          # 填充报告只是界面态，别落进模板 JSON
-    rich.pop("_sync_report", None)
-    # 只有「上传到数据目录的临时件」才允许删；其余（如模板原件）一律保留
-    tmp_path: Path | None = None
-    if src and not keep_source:
-        try:
-            cand = Path(src).resolve()
-            data_root = load_settings().data_dir.resolve()   # 跟随 EDU_DATA_DIR 配置
-            if data_root in cand.parents:
-                tmp_path = cand
-        except Exception:
-            tmp_path = None
-    try:
-        path = template_rich.save_rich(rich, docx_source=(None if keep_source else src),
-                                       set_current=body.set_current)
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
-    if tmp_path is not None:
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-    saved = template_rich.load_rich(rich.get("template_id", "")) or {}
-    return {"ok": True, "path": str(path), "template_id": saved.get("template_id"),
-            "name": saved.get("name"), "spec_version": saved.get("spec_version"),
-            "stats": template_rich.stats(saved), "current": get_current().template_id}
-
-
-@app.post("/api/template/delete")
-def api_tpl_delete(body: dict):
-    """删除一个已保存的模板（**软删**：移到 content/templates/_trash/，可手工找回）。
-
-    删的正是当前模板时，当前会自动切回内置 `default`——否则 Agent B 会指向一个不存在的模板。
-    """
-    from edu_agent import permissions, template_rich
-
-    blocked = permissions.guard("template_delete", bool(body.get("confirm")))
-    if blocked:
-        return blocked
-    try:
-        return template_rich.delete_template(str(body.get("template_id") or ""))
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-
-
-@app.get("/api/template/blank")
-def api_tpl_blank(name: str = "新模板"):
-    """空白富模板（编辑器「新建」用）。"""
-    from edu_agent import template_rich
-
-    rich = template_rich.blank_rich(name)
-    return {"ok": True, "template": rich, "stats": template_rich.stats(rich)}
-
-
-# ---------- 选项①：让教案 Agent 依据课题产出「教案模板」（2026-09-12 一期） ----------
-class PlanTemplateReq(BaseModel):
-    topic: str = ""             # 课题；不传则取会话里最近一份教案的课题
-    goal: str = ""
-    session_id: str = ""
-    save: bool = True
-    set_current: bool = False
-
-
-def _last_plan_topic(sid: str) -> str:
-    """取会话里最近一条教案回答的课题（`# 标题`）。"""
-    sess = _store.get(sid) if sid else None
-    if not sess:
-        return ""
-    for m in reversed(sess.get("messages") or []):
-        if m.get("role") != "assistant":
-            continue
-        c = m.get("content") or ""
-        if (m.get("meta") or {}).get("mode") == "B" or "Agent B" in c[:60]:
-            mm = re.search(r"^#\s+(.+)$", c, re.M)
-            if mm:
-                return mm.group(1).strip()
-    return ""
-
-
-@app.post("/api/plan/template")
-def api_plan_template(body: PlanTemplateReq):
-    """产出一份可复用的教案模板：板块骨架 + 每板块填写提示 + 表格板块表头。"""
-    from edu_agent import planner, template_rich
-
-    topic = (body.topic or "").strip() or _last_plan_topic(body.session_id.strip())
-    if not topic:
-        return {"ok": False, "error": "缺少课题：先问一句或让教案 Agent 生成一份教案，再点「生成教案模板」"}
-    try:
-        rich = planner.make_template(topic, goal=(body.goal or "").strip())
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"模板生成失败：{type(e).__name__}: {e}"}
-    if not (rich.get("blocks") or []):
-        return {"ok": False, "error": "模型没有产出板块，请再点一次重试"}
-
-    path = None
-    if body.save:
-        try:
-            path = template_rich.save_rich(rich, set_current=body.set_current)
-        except Exception as e:  # noqa: BLE001
-            return {"ok": False, "error": f"模板保存失败：{type(e).__name__}: {e}"}
-    return {"ok": True, "template": rich, "template_id": rich["template_id"],
-            "name": rich["name"], "stats": template_rich.stats(rich),
-            "skeleton": planner.template_to_markdown(rich),
-            "path": str(path) if path else None}
-
-
-# ---------- 选项③：把会话里的教案按板块填进模板（2026-09-12 二期） ----------
-class PlanFromTemplateReq(BaseModel):
-    markdown: str = ""          # 不传则取会话里最近一条教案（Agent B）
-    session_id: str = ""
-    template_id: str = ""       # 不传则用 Agent B 当前模板
-    save: bool = False          # 默认不落盘：交给教案中心编辑器继续改，满意后再「保存为模板」
-
-
-class PlanAssistantReq(BaseModel):
-    """教案中心内 Agent B 的一次对话请求。"""
-    instruction: str = ""
-    plan: dict = {}
-    reference_ids: list[str] = Field(default_factory=list)
-    history: list[dict] = Field(default_factory=list)
-
-
-def _plan_assistant_instruction(instruction: str, history: list[dict] | None = None,
-                                memory_prefix: str = "", reference_text: str = "") -> str:
-    """为 Agent B 组合当前指令、最近对话、长期记忆与用户选定的规范教案。"""
-    blocks = ["【用户本次指令】\n" + str(instruction or "").strip()]
-    recent = []
-    for item in (history or [])[-10:]:
-        if not isinstance(item, dict):
-            continue
-        role = "教师" if str(item.get("role") or "") == "user" else "Agent B"
-        text = " ".join(str(item.get("text") or "").split()).strip()
-        if text:
-            recent.append(f"{role}：{text[:500]}")
-    if recent:
-        blocks.append("【最近对话（用于理解追问与连续修改）】\n" + "\n".join(recent))
-    if str(memory_prefix or "").strip():
-        blocks.append("【教师长期记忆（跨对话偏好，若与本次指令冲突则以本次为准）】\n"
-                      + str(memory_prefix).strip())
-    if str(reference_text or "").strip():
-        blocks.append(
-            "【规范教案参考】\n以下材料仅用于借鉴结构、课堂活动与评价方式，不要照抄无关课题。\n"
-            + str(reference_text).strip()
-        )
-    return "\n\n".join(blocks)
-
-
-def _design_to_record(plan: dict) -> planner.PlanRecord:
-    """浏览器规范表格模型 -> Agent B 的结构化输入。"""
-    src = plan if isinstance(plan, dict) else {}
-    goals = src.get("goals") if isinstance(src.get("goals"), dict) else {}
-    objectives = [str(goals.get(k) or "").strip() for k in ("knowledge", "method", "value")]
-    objectives = [x for x in objectives if x]
-    if str(src.get("objective") or "").strip():
-        objectives.append(str(src.get("objective")).strip())
-    flow = []
-    for item in src.get("steps") or []:
-        if not isinstance(item, dict):
-            continue
-        content = str(item.get("points") or "").strip()
-        activity = str(item.get("activity") or "").strip()
-        if activity:
-            content += ("\n师生活动：" if content else "师生活动：") + activity
-        try:
-            minutes = max(1, int(item.get("minutes") or 5))
-        except (TypeError, ValueError):
-            minutes = 5
-        flow.append(planner.FlowStep(phase=str(item.get("name") or "教学环节"),
-                                     minutes=minutes, content=content))
-    key_points = [str(src.get("focus") or "").strip()] if str(src.get("focus") or "").strip() else []
-    return planner.PlanRecord(title=str(src.get("title") or "").strip(), objectives=objectives,
-                              key_points=key_points, flow_steps=flow)
-
-
-def _record_to_design(rec: planner.PlanRecord, previous: dict) -> dict:
-    """Agent B 的结果 -> 浏览器规范表格模型，保留不在 Agent 契约内的表格字段。"""
-    old = previous if isinstance(previous, dict) else {}
-    goals = list(rec.objectives or [])
-    old_steps = {str(x.get("name") or ""): x for x in (old.get("steps") or []) if isinstance(x, dict)}
-    steps = []
-    for step in rec.flow_steps:
-        old_step = old_steps.get(step.phase, {})
-        content = str(step.content or "")
-        marker = "师生活动："
-        points, activity = content, str(old_step.get("activity") or "")
-        if marker in content:
-            points, activity = content.split(marker, 1)
-        steps.append({"name": step.phase or "教学环节", "minutes": max(1, int(step.minutes or 5)),
-                      "points": points.strip(), "activity": activity.strip()})
-    if not steps:
-        steps = old.get("steps") or []
-    old_goals = old.get("goals") if isinstance(old.get("goals"), dict) else {}
-    return {
-        "title": rec.title or str(old.get("title") or ""),
-        "grade": str(old.get("grade") or ""), "mode": "table",
-        "lessonType": str(old.get("lessonType") or "讲授"),
-        "objective": "\n".join(goals),
-        "goals": {
-            "knowledge": goals[0] if len(goals) > 0 else str(old_goals.get("knowledge") or ""),
-            "method": goals[1] if len(goals) > 1 else str(old_goals.get("method") or ""),
-            "value": goals[2] if len(goals) > 2 else str(old_goals.get("value") or ""),
-        },
-        "focus": "；".join(rec.key_points or []) or str(old.get("focus") or ""),
-        "homework": str(old.get("homework") or ""), "steps": steps,
-    }
-
-
-def _plan_assistant_result(rec: planner.PlanRecord, body: PlanAssistantReq,
-                           references: list[dict]) -> dict:
-    """把 Agent B 结果整理成同步与流式接口共用的最终事件。"""
-    design = _record_to_design(rec, body.plan)
-    message = (f"已参考 {len(references)} 份规范教案并更新当前教案。" if references else
-               "已按你的要求更新当前教案；你可以继续追问或让我调整其中一个环节。")
-    remembered = ""
-    memory_state = {"enabled": False, "count": 0, "remembered": ""}
-    try:
-        from edu_agent import memory, memory_auto
-
-        fact = memory_auto.explicit_fact(body.instruction)
-        if fact and memory.add_fact(MEM_PROFILE, fact, kind="preference", source="user"):
-            remembered = fact
-        memory_auto.extract_async(body.instruction, message, MEM_PROFILE)
-        memory_state = {"enabled": memory.memory_enabled(MEM_PROFILE),
-                        "count": memory.stats(MEM_PROFILE).get("facts", 0),
-                        "remembered": remembered}
-    except Exception:  # noqa: BLE001 记忆落库失败不影响当前教案结果
-        pass
-    return {"ok": True, "plan": design, "title": rec.title,
-            "steps": len(design.get("steps") or []), "message": message,
-            "memory": memory_state, "references": references,
-            "citations": [c.model_dump() for c in rec.citations]}
-
-
-@app.post("/api/plan/assistant")
-def api_plan_assistant(body: PlanAssistantReq):
-    """Agent B 在教案中心按对话编辑表格；只返回数据，不落盘、不调用 WPS。"""
-    instruction = (body.instruction or "").strip()
-    if not instruction:
-        return {"ok": False, "error": "请先输入希望 Agent B 怎么修改教案"}
-    current = _design_to_record(body.plan)
-    topic = current.title or instruction
-    reference_text, references = lesson_library.context(body.reference_ids)
-    memory_prefix = ""
-    try:
-        from edu_agent import memory
-
-        memory_prefix = memory.profile_memory_prefix(MEM_PROFILE)
-    except Exception:  # noqa: BLE001 记忆不可用不能阻断教案编辑
-        pass
-    agent_instruction = _plan_assistant_instruction(
-        instruction, body.history, memory_prefix, reference_text
-    )
-    try:
-        rec = planner.revise_plan(topic, agent_instruction, current)
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"Agent B 未能完成：{e}"}
-    return _plan_assistant_result(rec, body, references)
-
-
-def _plan_assistant_stream_events(body: PlanAssistantReq):
-    """教案中心 Agent B SSE：模型片段实时下发，完整校验通过后才发送 plan。"""
-    instruction = (body.instruction or "").strip()
-    if not instruction:
-        yield {"t": "error", "text": "请先输入希望 Agent B 怎么修改教案"}
-        return
-    current = _design_to_record(body.plan)
-    topic = current.title or instruction
-    reference_text, references = lesson_library.context(body.reference_ids)
-    memory_prefix = ""
-    try:
-        from edu_agent import memory
-
-        memory_prefix = memory.profile_memory_prefix(MEM_PROFILE)
-    except Exception:  # noqa: BLE001
-        pass
-    agent_instruction = _plan_assistant_instruction(
-        instruction, body.history, memory_prefix, reference_text
-    )
-    try:
-        for event in planner.revise_plan_stream(topic, agent_instruction, current):
-            kind = event.get("type")
-            if kind == "status":
-                yield {"t": "status", "text": event.get("text", "正在生成教案…")}
-            elif kind == "delta":
-                yield {"t": "d", "text": event.get("text", "")}
-            elif kind == "done" and event.get("record") is not None:
-                result = _plan_assistant_result(event["record"], body, references)
-                result["t"] = "done"
-                yield result
-                return
-        yield {"t": "error", "text": "Agent B 未返回完整教案，请重试"}
-    except Exception as e:  # noqa: BLE001
-        yield {"t": "error", "text": f"Agent B 未能完成：{e}"}
-
-
-@app.post("/api/plan/assistant/stream")
-def api_plan_assistant_stream(body: PlanAssistantReq):
-    return _sse(_plan_assistant_stream_events(body))
-
-
-# ---------- 教案中心：规范教案知识库 ----------
-class LessonLibraryReq(BaseModel):
-    id: str = ""
-    title: str = ""
-    subject: str = ""
-    grade: str = ""
-    lesson_type: str = ""
-    category: str = ""
-    tags: list[str] = []
-    source: str = "current"
-    html: str = ""
-
-
-@app.get("/api/lesson-library")
-def api_lesson_library(query: str = "", category: str = ""):
-    items = lesson_library.list_entries(query=query, category=category)
-    categories = sorted({str(x.get("category")) for x in items if x.get("category")})
-    return {"ok": True, "items": items, "categories": categories, "count": len(items)}
-
-
-@app.get("/api/lesson-library/{entry_id}")
-def api_lesson_library_item(entry_id: str):
-    item = lesson_library.get(entry_id)
-    if not item:
-        return JSONResponse({"ok": False, "error": "教案条目不存在"}, status_code=404)
-    return {"ok": True, "item": item}
-
-
-@app.post("/api/lesson-library")
-def api_lesson_library_save(body: LessonLibraryReq):
-    try:
-        item = lesson_library.save(body.model_dump())
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-    return {"ok": True, "item": item}
-
-
-@app.delete("/api/lesson-library/{entry_id}")
-def api_lesson_library_delete(entry_id: str):
-    return lesson_library.delete(entry_id)
-
-
-class LessonDocxReq(BaseModel):
-    title: str = "教案"
-    html: str = ""
-
-
-@app.post("/api/lesson/export-docx")
-def api_lesson_export_docx(body: LessonDocxReq):
-    """把教案中心当前页面直接生成 DOCX；使用 python-docx，不调用 WPS。"""
-    try:
-        path = lesson_docx.export_html(body.html, body.title)
-        token = register_download(path)
-        return {"ok": True, "filename": path.name, "path": str(path),
-                "download_url": "/api/wps/download?id=" + token,
-                "engine": "python-docx", "detail": f"已生成 {path.name}（未调用 WPS）"}
-    except (ValueError, OSError) as e:
-        return {"ok": False, "error": str(e)}
-
-
-def _last_plan_markdown(sid: str) -> str:
-    """取会话里最近一条教案回答（Agent B / 总指挥出的）的原文。"""
-    sess = _store.get(sid) if sid else None
-    if not sess:
-        return ""
-    for m in reversed(sess.get("messages") or []):
-        if m.get("role") != "assistant":
-            continue
-        text = m.get("content") or ""
-        if (m.get("meta") or {}).get("mode") == "B" or "Agent B" in text[:60]:
-            return _strip_agent_tag(text)
-    return ""
-
-
-@app.post("/api/plan/from-template")
-def api_plan_from_template(body: PlanFromTemplateReq):
-    """把一份教案正文按标题匹配填进所选模板的对应板块（返回填充后的富模板，默认不落盘）。
-
-    与「选项② 按模板生成」的区别：② 是让模型**重新生成**一份教案；这里不花模型调用，
-    而是把**已有**的教案正文灌进模板板块——老师可以在教案中心接着改，再「保存为模板」。
-    """
-    from edu_agent import plan_sync, template_rich
-
-    md = (body.markdown or "").strip()
-    if not md:
-        md = (_last_plan_markdown(body.session_id.strip())
-              or _last_plan_markdown(_store.current_id() or ""))
-        if not md:                       # 兜底：扫最近几个会话里的教案
-            for row in (_store.list_sessions() or [])[:10]:
-                md = _last_plan_markdown(row.get("id") or "")
-                if md:
-                    break
-    if not md:
-        return {"ok": False, "error": "没拿到教案内容：请先在会话里让教案 Agent 生成一份教案"}
-
-    tid = (body.template_id or "").strip() or get_current().template_id
-    known = {t.get("template_id") for t in list_templates()}
-    if tid not in known:
-        return {"ok": False, "error": f"没有模板「{tid}」：它可能已被删除，请重新选一个"}
-    rich = template_rich.load_rich(tid)
-    source_kind = "rich"
-    if rich is None:                     # 不是 v2 富模板
-        src = template_rich.ORIG_DIR / f"{tid}.docx"
-        if src.exists():                 # 有原件 -> 现场升级成富模板再填
-            rich = template_rich.docx_to_rich(src, template_id=tid, name=tid)
-            rich["_keep_source"] = True  # 原件不可删（见 api_tpl_rich_save）
-            source_kind = "upgraded"
-        else:                            # 骨架模板（含内置 default）-> 用板块名现搭结构
-            rich = plan_sync.rich_from_skeleton(get_template(tid))
-            source_kind = "skeleton"
-
-    res = plan_sync.sync(md, rich)
-    if not res.get("ok"):
-        return res
-    if body.save:
-        try:
-            template_rich.save_rich(res["template"], docx_source=None, set_current=False)
-        except Exception as e:  # noqa: BLE001
-            return {"ok": False, "error": f"填充结果保存失败：{type(e).__name__}: {e}"}
-    res["template_id"] = tid
-    res["template_name"] = rich.get("name")
-    res["template_source"] = source_kind
-    res["template_upgraded"] = source_kind == "upgraded"
-    res["stats"] = template_rich.stats(res["template"])
-    res["blank_blocks"] = plan_sync.blank_blocks(res["template"])
-    return res
-
-
-# ---------- 三期：教案 PPT 预览（与真正生成共用同一解析，不写文件、不需要 WPS 能力） ----------
-@app.post("/api/plan/preview")
-def api_plan_preview(body: dict):
-    """教案 Markdown -> PPT 页结构（预览用）。
-
-    刻意**不查能力开关**：这只是看一眼会生成什么，不落盘、不碰 WPS。
-    导出（`/api/wps/export`）仍然受开关约束。
-    """
-    md = str(body.get("markdown") or "").strip() or _last_plan_markdown(
-        str(body.get("session_id") or "").strip() or (_store.current_id() or ""))
-    if not md:
-        return {"ok": False, "error": "没有可预览的教案内容：先让教案 Agent 生成一份教案"}
-    try:
-        data = wps_export.slides_from_markdown(md)
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    if not data.get("slides"):
-        return {"ok": False, "error": "这份内容里没有解析出可成页的环节/板块"}
-    return {"ok": True, "title": data.get("title") or "教案",
-            "slides": data["slides"], "source": data.get("source"),
-            "note": "每页 6 条要点；表格内容不进 PPT（留给 Word）"}
-
+@app.get("/api/kg/node/{node_id}")
+def api_kg_node(node_id: str):
+    return kg.get_kg().get_node_info(node_id)
 
 # ---------- 会话 ----------
 @app.post("/api/session/new")
@@ -822,17 +268,12 @@ def api_sess_branch(body: dict):
 
 @app.post("/api/project/new")
 def api_project_new(body: dict):
-    """新建项目文件夹（防路径穿越）。name=目录名, base=父目录（默认取 settings.fs_root）"""
+    """新建项目文件夹（限 D 盘；防路径穿越）。name=目录名, base=父目录(默认 D:/hermes)"""
     name = (body.get("name") or "").strip()
     if not name:
         return {"ok": False, "error": "项目名不能为空"}
-    from edu_agent import permissions
-
-    blocked = permissions.guard("project_new", bool(body.get("confirm")))   # 建目录 = 有副作用
-    if blocked:
-        return blocked
     name = re.sub(r'[\\/:*?"<>|]', "_", name)
-    base = _fs_safe((body.get("base") or _FS_ROOT))
+    base = _fs_safe((body.get("base") or "D:/hermes"))
     if base is None:
         return {"ok": False, "error": "位置不在允许范围（仅本机 C/D/E 盘）"}
     target = (base / name).resolve()
@@ -847,17 +288,13 @@ def api_project_new(body: dict):
 
 
 def _drives() -> list[Path]:
-    """探测本机存在的盘（C-Z），作为可浏览根。
-
-    2026-09-10 修正：原写死 "CDEF"，项目迁到 F: 之后其它盘（如移动硬盘 / 网络盘）
-    在选择器里根本看不到；改为全盘探测。
-    """
+    """探测本机存在的固定盘（C/D/E…），作为可浏览根。"""
     out = []
-    for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
+    for letter in "CDEF":
         try:
-            p = Path(f"{letter}:/")
+            p = Path(f"{letter}:/").resolve()
             if p.exists():
-                out.append(p.resolve())
+                out.append(p)
         except Exception:
             continue
     return out
@@ -865,12 +302,6 @@ def _drives() -> list[Path]:
 
 _FS_BAD = ("$RECYCLE", "System Volume", "Windows", "$WinRE", "Recovery",
            "Program Files", "Program Files (x86)", "ProgramData")
-
-# 「新建项目 / 文件浏览」的默认根目录：来自 settings.fs_root（.env 的 EDU_FS_ROOT 可覆盖）
-# 原先写死 "D:/hermes"，团队每人机器目录不同 → 现在默认 = 用户主目录；
-# 若显式配置的目录不存在，退回用户主目录，保证前端一定能拿到一个可读的位置
-_cfg_fs_root = _settings.fs_root
-_FS_ROOT = str(_cfg_fs_root if _cfg_fs_root.exists() else Path.home())
 
 
 def _fs_safe(p: str) -> Path | None:
@@ -891,14 +322,10 @@ def api_fs_drives():
     return {"ok": True, "drives": [str(d) for d in _drives()]}
 
 
-
-
-
-
 @app.get("/api/fs/list")
-def api_fs_list(path: str = ""):
-    """列出目录（只读；限本机盘，系统目录过滤）。path 为空回落到 settings.fs_root。"""
-    cur = _fs_safe(path or _FS_ROOT)
+def api_fs_list(path: str = "D:/hermes"):
+    """列出目录（只读；限本机 C/D/E 盘，系统目录过滤）。"""
+    cur = _fs_safe(path or "D:/hermes")
     if cur is None:
         return {"ok": False, "error": "路径不在允许范围"}
     try:
@@ -920,7 +347,7 @@ def api_fs_list(path: str = ""):
 @app.post("/api/fs/mkdir")
 def api_fs_mkdir(body: dict):
     """在指定目录下新建子文件夹。"""
-    base = _fs_safe((body.get("path") or _FS_ROOT))
+    base = _fs_safe((body.get("path") or "D:/hermes"))
     name = (body.get("name") or "").strip()
     if base is None:
         return {"ok": False, "error": "路径不在允许范围"}
@@ -957,7 +384,7 @@ class ChatReq(BaseModel):
     session_id: str | None = None
     preset: str = "A"          # S | A | B | auto
     template_id: str = "default"
-    corpus: str = "textbook"   # textbook | rj_textbooks | pdf:<source>
+    corpus: str = "textbook"   # textbook | pdf:<source>
 
 
 def _code(preset: str) -> str:
@@ -974,40 +401,6 @@ def _tag(mode: str) -> str:
     if mode == "S":
         return "**【总指挥 · 监督 Agent】**\n\n"
     return "**【Agent A · 课本教练（答疑）】**" if mode == "A" else "**【Agent B · 教案 Agent】**"
-
-
-_TAG_PREFIX_RE = re.compile(r"^(?:\*\*)?\s*【\s*(?:Agent\s*[ABS]\b|总指挥)[^】]*】\s*(?:\*\*)?[ \t]*")
-
-
-def _strip_agent_tag(md: str) -> str:
-    """摘掉正文**开头**那个 Agent 标签（`_tag()` 加的「**【Agent B · 教案 Agent】**」）。
-
-    会话里存的回答正文带这个标签，但它属于聊天装饰、不属于文档：不摘掉会渲染进右侧预览、
-    跟着进导出文件，还会让预览标题退化成「未命名文档」（首行不是标题，取不到题名）。
-
-    坑：mode B/A 的标签**后面没有换行**，和正文首个标题粘在同一行
-    （`**【Agent B · 教案 Agent】**# 3.3 幂函数`），所以按"行首前缀"摘，而不是"整行匹配"；
-    只认开头，且括号里必须是 Agent/总指挥，正文里的【…】不动。
-    """
-    s = str(md or "")
-    head = re.match(r"[ \t\r\n]*", s)          # 跳过开头的空白行
-    rest = s[head.end():]
-    hit = _TAG_PREFIX_RE.match(rest)
-    if not hit:
-        return s
-    return rest[hit.end():].lstrip("\r\n")
-
-
-def _tagged(mode: str, md: str) -> str:
-    """会话存储统一只保留一个 Agent 标签，兼容模型自己输出标签的情况。"""
-    clean = str(md or "")
-    while True:
-        stripped = _strip_agent_tag(clean)
-        if stripped == clean:
-            break
-        clean = stripped
-    return _tag(mode) + clean
-
 
 
 def _sse(gen):
@@ -1046,60 +439,12 @@ def _chat_gen(req: ChatReq):
         code = routing.decide(text)
 
     if code == "A":
-        yield from _with_plan_options(_stream_coach(sid, req, text), req, text, code)
+        yield from _stream_coach(sid, req, text)
         return
     if code == "S":
-        yield from _with_plan_options(_stream_supervisor(sid, req, text), req, text, code)
+        yield from _stream_supervisor(sid, req, text)
         return
-    yield from _with_plan_options(_stream_planner(sid, req, text), req, text, code)
-
-
-# ---------- 教案/PPT 联动：生成「生成教案模板 / 按模板生成」两个选项（2026-09-12 一期） ----------
-def _plan_options_event(req: ChatReq, text: str, code: str, last: dict | None) -> dict | None:
-    """是否需要给用户那两个选项。B（教案 Agent）恒给；A/S 看生成层带回的信号。"""
-    if code == "B":
-        reason = "plan_mode"
-    else:
-        po = (last or {}).get("plan_options") or {}
-        if not po.get("suggest"):
-            return None
-        reason = po.get("reason") or "intent"
-    try:
-        templates = list_templates()
-        current = get_current().template_id
-    except Exception:
-        templates, current = [], "default"
-    # 有没有「可以填进模板的教案正文」：本轮就是教案，或会话里已经出过教案
-    sid = (getattr(req, "session_id", "") or "").strip() or (_store.current_id() or "")
-    has_plan = code == "B" or bool(_last_plan_markdown(sid))
-    options = [
-        {"id": "gen_template", "label": "生成教案模板",
-         "hint": "把这节课抽成板块骨架（含填写提示与表格表头），存进模板库可反复套用"},
-        {"id": "use_template", "label": "按模板生成",
-         "hint": "选一个模板，教案 Agent 会严格按它的板块名称与顺序产出",
-         "templates": templates, "current": current},
-    ]
-    if has_plan:
-        options.append(
-            {"id": "fill_center", "label": "按模板填入",
-             "hint": "不重新生成：按标题填进模板对应板块，结果直接进右侧预览面板"})
-    return {
-        "t": "options", "kind": "plan", "reason": reason,
-        "topic": (text or "").strip()[:40],
-        "options": options,
-    }
-
-
-def _with_plan_options(gen, req: ChatReq, text: str, code: str):
-    """把 Agent 流原样透传，收尾时按需补一个 options 事件。"""
-    last = None
-    for ev in gen:
-        if isinstance(ev, dict) and ev.get("t") == "done":
-            last = ev
-        yield ev
-    opt = _plan_options_event(req, text, code, last)
-    if opt:
-        yield opt
+    yield from _stream_planner(sid, req, text)
 
 
 def _stream_coach(sid: str, req: ChatReq, text: str):
@@ -1109,33 +454,7 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
 
     sess = _store.get(sid) or {"messages": []}
     history = sess["messages"][:-1][-4:]
-    # 长期记忆：所有模式都注入（原来只在 corpus=textbook 时注入，导致备课时记不住老师偏好）；
-    # 关掉记忆开关时 profile_memory_prefix 自身返回空串（见 memory.memory_enabled）。
-    prefix = profile_memory_prefix(MEM_PROFILE)
-    # 2026-09-19 追加两路（都失败静默，绝不影响回答）：
-    #   ① 自己积累的技能清单（经验→技能回路的"读回"端，见 skills_local）
-    #   ② 相关历史对话片段（跨会话检索，见 session_search）
-    try:
-        from edu_agent import session_search, skills_local
-
-        session_search.refresh()                       # 增量重建（只有新消息的会话才重做）
-        extra = [skills_local.prompt_block(),
-                 session_search.past_prefix(text, exclude_sid=sid)]
-        prefix = "；".join([p for p in ([prefix] + extra) if p])
-    except Exception:  # noqa: BLE001
-        pass
-    # 2026-09-22 追加第三路：知识库 wiki（"学会的讲义"，见 edu_agent/wiki_index.py）。
-    #   与上面两路同一哲学：失败静默、绝不影响回答；命中时把概念页小节拼进前缀，
-    #   并要求回答引用 [[页面名]]（wiki 页本身带 ^[pXX] 页码溯源）。
-    wiki_evidence = ""
-    if req.corpus == "textbook":
-        try:
-            from edu_agent import wiki_index
-
-            wiki_evidence = wiki_index.prompt_block(text, k=2)
-        except Exception:  # noqa: BLE001
-            pass
-
+    prefix = profile_memory_prefix("default") if req.corpus == "textbook" else ""
     src = None
     pdir = None
     pcol = None
@@ -1144,25 +463,13 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
         pdir = pdf_upload.VDB_DIR
         pcol = pdf_upload.COLLECTION
         yield {"t": "status", "text": "正在检索 PDF《" + src + "》并作答…"}
-    elif req.corpus == "rj_textbooks" or req.corpus.startswith("rj_textbooks:"):
-        from edu_agent.rj_textbooks import COLLECTION as RJ_TEXTBOOKS_COLLECTION, VDB_DIR as RJ_TEXTBOOKS_DIR
-
-        pcol = RJ_TEXTBOOKS_COLLECTION
-        pdir = RJ_TEXTBOOKS_DIR
-        if req.corpus.startswith("rj_textbooks:"):
-            src = req.corpus.split(":", 1)[1]
-            yield {"t": "status", "text": "正在检索选定教材并作答…"}
-        else:
-            yield {"t": "status", "text": "正在检索人教版全科教材库并作答…"}
     else:
         yield {"t": "status", "text": "正在检索教材并作答…"}
     acc = ""
     final_answer = ""
     citations = []
-    plan_opt: dict = {}
     try:
-        for ev in ask_stream(text, history=history, memory_prefix=prefix,
-                             evidence_prefix=wiki_evidence, source=src,
+        for ev in ask_stream(text, history=history, memory_prefix=prefix, source=src,
                              persist_dir=pdir, collection=pcol):
             ty = ev.get("type")
             if ty == "delta":
@@ -1171,44 +478,12 @@ def _stream_coach(sid: str, req: ChatReq, text: str):
             elif ty == "done":
                 final_answer = ev.get("answer_md") or acc
                 citations = ev.get("citations") or []
-                plan_opt = ev.get("plan_options") or {}
                 record_sections("default", citations)
     except Exception as e:
         yield {"t": "error", "text": "A 出错：" + type(e).__name__ + ": " + str(e)}
         return
-    _store.append(sid, "assistant", _tagged("A", final_answer),
-                  meta={"mode": "A", "citations": citations,
-                        "pages": sorted({c.get("page") for c in citations if c.get("page")})})
-    # 长期记忆（对齐 DeepSeek「记忆」）：
-    #  ① 显式「记住：xxx」→ 立刻落库，并在流里回执给用户（让用户看得见、可去设置里删）
-    #  ② 其余交给后台线程自动抽取，不阻塞回答、失败静默
-    try:
-        from edu_agent import memory as _mem, memory_auto as _ma, skills_local as _sk
-
-        fact = _ma.explicit_fact(text)
-        if fact and _mem.add_fact(MEM_PROFILE, fact, kind="preference", source="user"):
-            yield {"t": "status", "text": "已记住：" + fact}
-        _ma.extract_async(text, final_answer, MEM_PROFILE)
-        # 经验→技能（2026-09-19）：用户说「存成技能：名字」→ 把这一轮的有效做法写成 SKILL.md，
-        # 下次回答前会随技能清单注入提示词（这才是"自我迭代"的闭环）。
-        hint = _sk.skill_intent(text)
-        if hint is not None and final_answer.strip():
-            saved = _sk.save_from_answer(text, final_answer, hint)
-            if saved and saved.get("ok"):
-                yield {"t": "status", "text": "已存成技能：" + saved["name"]}
-        drop = _sk.delete_intent(text)
-        if drop:
-            gone = _sk.delete_skill(drop)
-            if gone.get("ok"):
-                yield {"t": "status", "text": "已归档技能：" + drop}
-    except Exception:  # noqa: BLE001
-        pass
-    done = {"t": "done", "mode": "A", "text": final_answer, "citations": citations}
-    if plan_opt.get("suggest"):
-        done["plan_options"] = plan_opt
-    if _deck_flag(text):                      # 显式「生成课件」→ 前端据此给导出入口
-        done["deck"] = True
-    yield done
+    _store.append(sid, "assistant", _tag("A") + final_answer)
+    yield {"t": "done", "mode": "A", "text": final_answer, "citations": citations}
 
 
 def _stream_supervisor(sid: str, req: ChatReq, text: str):
@@ -1237,67 +512,9 @@ def _stream_supervisor(sid: str, req: ChatReq, text: str):
         elif ty == "error":
             yield ev
             return
-    # 总指挥如果产出了教案（html_name 非空），同样下发结构化 payload
-    doc = (_doc_payload(final_text) if (html_name and capabilities.session_preview_ready()) else None)
-    meta = {"mode": "S", "citations": citations,
-            "pages": sorted({c.get("page") for c in citations if c.get("page")})}
-    if doc:
-        meta["doc"] = doc
-    _store.append(sid, "assistant", _tagged("S", final_text), meta=meta)
-    done = {"t": "done", "mode": "S", "agent": "A" if not html_name else "B",
-            "text": final_text, "citations": citations, "html": html_name}
-    if doc:
-        done["doc"] = doc
-    if _deck_flag(text):
-        done["deck"] = True
-    yield done
-
-
-def _deck_flag(text: str) -> bool:
-    """这句话是不是「显式要课件」——决定 done 事件要不要带 deck 标记。
-
-    判定权在 courseware.wants_deck（只认「动作词 + 课件/PPT」相邻，疑问句不算），
-    这里只做一层吞异常的包装：课件模块出问题也绝不能让对话链路出错。
-    """
-    try:
-        from edu_agent import courseware
-
-        return courseware.wants_deck(text)
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def _doc_payload(md: str, title: str = "", grade: str = "") -> dict:
-    """把一份教案 Markdown 整理成「结构化文档 payload」（纯内存，不落盘、不调 WPS）。
-
-    形状沿用 wps 导出 payload 的字段命名，前端 4 个 Tab 共用这一份数据源。
-    """
-    md = _strip_agent_tag(str(md or ""))
-    slides: list[dict] = []
-    title_from_md = ""
-    if md.strip():
-        try:
-            data = wps_export.slides_from_markdown(md)
-            slides = data.get("slides") or []
-            title_from_md = str(data.get("title") or "")
-        except Exception:  # noqa: BLE001 纯整理，解析失败不该让对话出错
-            slides = []
-    blocks = _plan_blocks(md) if md.strip() else []
-    minutes = 0
-    for s in slides:
-        try:
-            minutes += int(s.get("minutes") or 0)
-        except (TypeError, ValueError):
-            pass
-    return {
-        "title": str(title or "").strip() or title_from_md or "未命名文档",
-        "grade": grade,
-        "markdown": md,
-        "slides": slides,
-        "blocks": blocks,
-        "stats": {"chars": len(md), "blocks": len(blocks),
-                  "slides": len(slides), "minutes": minutes},
-    }
+    _store.append(sid, "assistant", _tag("S") + final_text)
+    yield {"t": "done", "mode": "S", "agent": "A" if not html_name else "B",
+           "text": final_text, "citations": citations, "html": html_name}
 
 
 def _stream_planner(sid: str, req: ChatReq, text: str):
@@ -1313,20 +530,9 @@ def _stream_planner(sid: str, req: ChatReq, text: str):
         html_path = plan_html.save_html(md, rec.title)
         html_name = html_path.name
         _store.set_last_html(sid, html_name)
-        # 结构化 payload：skill 开着才下发给前端（含落库，历史恢复时还能重载）
-        doc = (_doc_payload(md, title=rec.title) if capabilities.session_preview_ready() else None)
-        meta = {"mode": "B", "citations": [c.model_dump() for c in rec.citations],
-                "pages": sorted({c.page for c in rec.citations if c.page})}
-        if doc:
-            meta["doc"] = doc
-        _store.append(sid, "assistant", _tagged("B", md), meta=meta)
-        done = {"t": "done", "mode": "B", "text": md, "html": html_name,
-                "title": rec.title, "citations": [c.model_dump() for c in rec.citations]}
-        if doc:
-            done["doc"] = doc
-        if _deck_flag(text):                  # 「帮我备一节…要课件」→ 出完教案直接给课件入口
-            done["deck"] = True
-        yield done
+        _store.append(sid, "assistant", _tag("B") + md)
+        yield {"t": "done", "mode": "B", "text": md, "html": html_name,
+               "title": rec.title, "citations": [c.model_dump() for c in rec.citations]}
     except Exception as e:
         yield {"t": "error", "text": "B 出错：" + type(e).__name__ + ": " + str(e)}
 
@@ -1342,127 +548,13 @@ def api_last_html(body: dict):
     return {"html": sess.get("last_html", "")}
 
 
-# ---------- 会话内文档预览（2026-09-12）----------
-# 与「WPS 落盘导出」是**两条独立链路**：
-#   · 本接口：payload / markdown → 结构化预览模型（标题 / 板块 / 幻灯片页 / 统计），
-#             **纯内存计算：不落盘、不调用 WPS MCP、不查 WPS 能力开关**；
-#   · /api/wps/export：同一份 payload / markdown → 落盘 docx / pptx，受 wps-office 开关约束。
-# 前端渲染与否由 skill 开关 `doc-session-preview` 决定（见 capabilities.session_preview_ready）。
-class DocPreviewReq(BaseModel):
-    payload: dict | None = None      # 编排台结构（可选）
-    markdown: str = ""               # 教案 Markdown（可选）
-    session_id: str = ""
-
-
-@app.post("/api/session/doc-preview")
-def api_session_doc_preview(body: DocPreviewReq):
-    """结构化文档 → 前端预览：**只透传**，无任何磁盘 IO、不调用 WPS MCP。
-
-    与 /api/wps/export 是两条独立链路：
-      · 本接口：payload → 原样回传（+ 派生页结构供幻灯片 Tab 用），内存计算；
-      · 导出接口：同一份 payload → 落盘 docx/pptx，受 wps-office 开关约束。
-    """
-    payload = body.payload if isinstance(body.payload, dict) else {}
-    # markdown 优先取请求体，其次取 payload.markdown；都没有再用会话里最近一份教案兜底
-    md = _strip_agent_tag(str(body.markdown or payload.get("markdown") or ""))
-    if not md.strip():
-        md = _last_plan_markdown(str(body.session_id or "").strip()
-                                 or (_store.current_id() or ""))
-
-    # payload 自带的 slides/blocks 优先（Agent 已结构化），否则由 markdown 纯计算派生
-    slides = payload.get("slides") if isinstance(payload.get("slides"), list) else []
-    blocks = payload.get("blocks") if isinstance(payload.get("blocks"), list) else []
-    title = str(payload.get("title") or "").strip()
-    title_from_md = ""
-    if md.strip():
-        try:
-            data = wps_export.slides_from_markdown(md)
-            title_from_md = str(data.get("title") or "")
-            if not slides:
-                slides = data.get("slides") or []
-        except Exception:  # noqa: BLE001 纯预览，解析失败不该 500
-            slides = slides or []
-        if not blocks:
-            blocks = _plan_blocks(md)
-    # 标题优先级：payload 标题 > 正文首个标题 > 占位
-    # （历史会话兜底进来的正文原本带「**【Agent B · 教案 Agent】**」标签，
-    #   已由 _strip_agent_tag 摘掉，否则这里只会取到标签、退化成「未命名文档」）
-    if not title:
-        title = title_from_md or "未命名文档"
-
-    minutes = 0
-    for s in slides:
-        try:
-            minutes += int(s.get("minutes") or 0)
-        except (TypeError, ValueError):
-            pass
-    return {
-        "ok": True,
-        "enabled": capabilities.session_preview_ready(),   # 前端据此决定渲染 or 清空面板
-        "title": title,
-        "payload": payload,                                # 原样回传（结构 Tab 的原始 JSON）
-        "markdown": md,                                    # 原样回传（Markdown Tab 的输入）
-        "blocks": blocks,
-        "slides": slides,
-        "stats": {"chars": len(md), "blocks": len(blocks),
-                  "slides": len(slides), "minutes": minutes},
-        "note": "内存预览：不落盘、不调用 WPS；需要落盘请走 /api/wps/export",
-    }
-
-
-def _plan_blocks(md: str) -> list[dict]:
-    """从教案 Markdown 里抽出板块清单（纯文本处理，不落盘）。"""
-    out: list[dict] = []
-    for raw in (md or "").splitlines():
-        st = raw.strip()
-        m = re.match(r"^\*\*(.+?)\*\*\s*$", st)
-        if m:
-            out.append({"title": m.group(1).strip(), "level": 2, "chars": 0})
-            continue
-        m = re.match(r"^(#{1,4})\s+(.+?)\s*$", st)
-        if m:
-            out.append({"title": m.group(2).strip(), "level": len(m.group(1)), "chars": 0})
-            continue
-        if out and st and not st.startswith("|"):
-            out[-1]["chars"] += len(st)
-    return out
-
-
-def _clean_doc_meta(msg: dict) -> dict:
-    """历史消息里已落库的 `meta.doc` 兜底清洗。
-
-    为什么需要：`meta.doc` 是**当时**那份代码算出来的、直接存进了会话库。修复前生成的
-    payload 会把正文开头的「**【Agent B · 教案 Agent】**」当成正文（标题因此退化成
-    「未命名文档」），前端做历史重载时是原样复用的——不清洗，老会话永远带着这个瑕疵。
-    只在真的带标签时才重算（不带标签时原对象返回，零成本）。
-    """
-    if not isinstance(msg, dict):
-        return msg
-    meta = msg.get("meta")
-    doc = meta.get("doc") if isinstance(meta, dict) else None
-    if not isinstance(doc, dict):
-        return msg
-    md = str(doc.get("markdown") or "")
-    if _strip_agent_tag(md) == md:
-        return msg
-    title = str(doc.get("title") or "").strip()
-    if title == "未命名文档":
-        title = ""
-    cleaned = dict(msg)
-    cleaned["meta"] = dict(meta)
-    cleaned["meta"]["doc"] = _doc_payload(_strip_agent_tag(md), title=title,
-                                          grade=str(doc.get("grade") or ""))
-    return cleaned
-
-
 @app.post("/api/session/get")
 def api_sess_get(body: dict):
     sess = _store.get(body.get("id", ""))
     if sess is None:
         return {"id": body.get("id", ""), "title": "新会话", "messages": [], "last_html": ""}
     return {"id": sess["id"], "title": sess["title"],
-            "messages": [_clean_doc_meta(m) for m in sess["messages"]],
-            "last_html": sess["last_html"]}
+            "messages": sess["messages"], "last_html": sess["last_html"]}
 
 
 @app.post("/api/session/del")
@@ -1478,174 +570,7 @@ def api_textbook():
     return {"file": _TXT_NAME, "offset": _TXT_OFF, "exists": _TXT_DIR is not None}
 
 
-@app.get("/api/page_image")
-def api_page_image(page: int = Query(..., ge=1, le=999), source: str = "", dpi: int = 150):
-    """教材/上传 PDF 的某一页渲染成 PNG（引用卡「看原页」，2026-09-10 P0）。
-
-    page   教材 = 引用里的**印刷页码**（内部 +_TXT_OFF 换算物理页）；
-           上传件 = **物理页**（pdf_upload 入库记的就是物理页，offset=0）。
-    source 上传资料标识（source 或文件名）；空 = 教材原文。
-    只读：渲染产物写 data/page_cache/，不动 PDF 与向量库。
-    """
-    try:
-        data, cache_file, phys = _render_page_png(page, source, dpi)
-    except FileNotFoundError as e:
-        return JSONResponse({"ok": False, "error": f"PDF 不可用：{e}"}, status_code=404)
-    except IndexError as e:
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=404)
-    except Exception as e:  # noqa: BLE001 —— 渲染失败不该把网关带崩
-        log.warning("page_image failed page=%s: %s", page, e)
-        return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {e}"}, status_code=500)
-    return Response(
-        content=data,
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400",
-                 "X-Physical-Page": str(phys), "X-Cache-File": cache_file.name},
-    )
-
-
-def _render_page_png(page: int, source: str = "", dpi: int = 150):
-    """解析受控 PDF 来源并渲染页面；原页展示与视觉分析共用同一安全入口。"""
-    from edu_agent import page_image
-
-    dpi = max(72, min(int(dpi or 150), 300))
-    if source:
-        hit = next((s for s in pdf_upload.list_sources()
-                    if source in (str(s.get("source") or ""), str(s.get("file") or ""))), None)
-        if hit is None:
-            raise FileNotFoundError("上传资料不存在")
-        # 原始展示名与真实落盘名分离；只经 stored_path 取受控 basename，
-        # 这样“官方教材”直达原页和普通上传资料都能正确渲染。
-        pdf = pdf_upload.stored_path(hit.get("stored_file") or hit.get("file") or "")
-        off, prefix = 0, "up"
-    else:
-        s = load_settings()
-        pdf = s.textbook_pdf if (s.textbook_pdf and s.textbook_pdf.exists()) else None
-        off, prefix = _TXT_OFF, "tb"
-    return page_image.get_page_image(pdf, page, offset=off, dpi=dpi, prefix=prefix)
-
-
-class VisionPageReq(BaseModel):
-    page: int = Field(ge=1, le=999)
-    source: str = ""
-    question: str = ""
-    session_id: str = ""
-    dpi: int = Field(default=200, ge=72, le=300)
-    confirm: bool = False
-
-
-def _vision_session(session_id: str, user_text: str, markdown: str, meta: dict) -> str:
-    sid = str(session_id or "").strip()
-    if not sid or _store.get(sid) is None:
-        sid = _store.new()
-    _store.append(sid, "user", user_text, meta={"mode": "V", **meta})
-    _store.append(sid, "assistant", _tagged("A", markdown), meta={"mode": "V", **meta})
-    _store.set_title_if_new(sid, user_text.splitlines()[0][:18])
-    return sid
-
-
-@app.get("/api/vision/status")
-def api_vision_status():
-    from edu_agent import vision
-
-    ready, detail = vision.available()
-    settings = load_settings()
-    return {"ok": True, "ready": ready, "detail": detail,
-            "model": settings.vision_model,
-            "formats": ["JPEG", "PNG", "GIF", "WebP"],
-            "max_bytes": settings.vision_max_bytes}
-
-
-@app.post("/api/vision/analyze")
-async def api_vision_analyze(file: UploadFile = File(...), question: str = Form(""),
-                             session_id: str = Form(""), confirm: bool = Form(False)):
-    """分析用户图片；原文件不落盘，发送远程模型前经过权限闸门。"""
-    from edu_agent import permissions, vision
-
-    blocked = permissions.guard("vision_analyze", confirm)
-    if blocked:
-        return blocked
-    settings = load_settings()
-    try:
-        data = await _read_upload_limited(file, min(settings.upload_max_bytes,
-                                                    settings.vision_max_bytes))
-        result = await run_in_threadpool(
-            vision.analyze_image, data, file.filename or "image", question,
-        )
-    except (ValueError, vision.VisionError) as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("vision analyze failed")
-        return JSONResponse({"ok": False, "error": f"视觉分析失败：{type(exc).__name__}"},
-                            status_code=500)
-    markdown = vision.to_markdown(result, file.filename or "image")
-    user_text = "分析图片《" + (file.filename or "image") + "》"
-    if question.strip():
-        user_text += "：" + question.strip()
-    sid = _vision_session(session_id, user_text, markdown, {
-        "vision": {"filename": file.filename or "image",
-                   "confidence": result.get("confidence"),
-                   "image_type": result.get("image_type")},
-    })
-    return {"ok": True, "session_id": sid, "markdown": markdown, "result": result}
-
-
-@app.post("/api/vision/page")
-async def api_vision_page(body: VisionPageReq):
-    """直接分析教材或已上传 PDF 的受控页面，不接收任意服务器路径。"""
-    from edu_agent import permissions, vision
-
-    blocked = permissions.guard("vision_analyze", body.confirm)
-    if blocked:
-        return blocked
-    try:
-        data, _cache_file, physical_page = await run_in_threadpool(
-            _render_page_png, body.page, body.source, body.dpi,
-        )
-        result = await run_in_threadpool(
-            vision.analyze_image, data, f"page-{body.page}.png", body.question,
-        )
-    except (FileNotFoundError, IndexError, ValueError, vision.VisionError) as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("vision page analyze failed")
-        return JSONResponse({"ok": False, "error": f"原页分析失败：{type(exc).__name__}"},
-                            status_code=500)
-    label = ("上传资料" if body.source else "教材") + f"第 {body.page} 页"
-    markdown = vision.to_markdown(result, label)
-    user_text = "分析" + label
-    if body.question.strip():
-        user_text += "：" + body.question.strip()
-    sid = _vision_session(body.session_id, user_text, markdown, {
-        "vision": {"source": body.source, "page": body.page,
-                   "physical_page": physical_page,
-                   "confidence": result.get("confidence"),
-                   "image_type": result.get("image_type")},
-    })
-    return {"ok": True, "session_id": sid, "markdown": markdown,
-            "page": body.page, "physical_page": physical_page, "result": result}
-
-
 _AUTO_DIR = ROOT / "content" / "structured_auto"
-_TOC_FILE = ROOT / "content" / "toc_ranges.json"        # 现行位置（随仓库走）
-_TOC_FILE_LEGACY = ROOT / "data" / "toc_ranges.json"    # 旧位置（data/ 不入库，仅本地兼容）
-
-
-@app.get("/api/textbook/toc")
-def api_textbook_toc():
-    """教材目录页码范围（由 scripts/build_toc_ranges.py 生成）。
-
-    给「看原页」浏览器用：知道某个知识点在哪一节、这一章从第几页到第几页、全书多少页。
-    数据源 = 向量库片段的 chapter/section/page 聚合 + PDF 章首页探测。
-    """
-    if not _TOC_FILE.exists() and _TOC_FILE_LEGACY.exists():
-        return json.loads(_TOC_FILE_LEGACY.read_text(encoding="utf-8"))
-    if not _TOC_FILE.exists():
-        return JSONResponse({"ok": False, "error": "toc 未生成：请跑 scripts/build_toc_ranges.py"}, status_code=404)
-    try:
-        return json.loads(_TOC_FILE.read_text(encoding="utf-8"))
-    except Exception as e:  # noqa: BLE001
-        return JSONResponse({"ok": False, "error": f"toc 解析失败：{e}"}, status_code=500)
 
 
 @app.get("/api/textbook/chapters")
@@ -1673,10 +598,10 @@ def api_textbook_chapters():
     return {"ok": True, "chapters": out}
 
 
-def _main_textbook_stats() -> dict:
-    """内置官方教材统计；多本上传教材则由 /api/knowledge-bases 统一列出。"""
+@app.get("/api/textbook/stats")
+def api_textbook_stats():
+    """教材知识库统计（块数取自向量库计数）。"""
     blocks = None
-    pages = None
     try:
         from langchain_chroma import Chroma
         from edu_agent.config import get_embeddings
@@ -1689,142 +614,14 @@ def _main_textbook_stats() -> dict:
     n_ch = 0
     if _AUTO_DIR.exists():
         n_ch = len(list(_AUTO_DIR.glob("*.md")))
-    if _txt and _txt.exists():
-        try:
-            import pymupdf
-            doc = pymupdf.open(str(_txt))
-            pages = max(0, doc.page_count - _TXT_OFF)
-            doc.close()
-        except Exception:
-            pages = None
-    return {"book": "数学 · 必修第一册（人教A版2019课标版）",
-            "chapters": n_ch, "pages": pages, "blocks": blocks,
+    return {"ok": True, "book": "数学 · 必修第一册（人教A版2019课标版）",
+            "chapters": n_ch, "blocks": blocks,
             "source_pdf": str(ROOT / "content" / "raw") if (ROOT / "content" / "raw").exists() else None}
-
-
-@app.get("/api/textbook/stats")
-def api_textbook_stats():
-    """兼容旧前端的内置教材统计。"""
-    return {"ok": True, **_main_textbook_stats()}
-
-
-def _source_library(item: dict) -> str:
-    """旧上传件没有 library 字段时，安全地归入“个人资料”。"""
-    try:
-        return pdf_upload.normalize_library(item.get("library"))
-    except ValueError:
-        return "personal"
-
-
-@app.get("/api/knowledge-bases")
-def api_knowledge_bases():
-    """知识库目录：内置教材 + 被标记为官方教材的 PDF 都可直达。"""
-    primary = _main_textbook_stats()
-    sources = [{**item, "library": _source_library(item)} for item in pdf_upload.list_sources()]
-    official = [{
-        "id": "textbook", "corpus": "textbook", "title": primary["book"],
-        "kind": "built_in", "readonly": True, "chapters": primary["chapters"],
-        "pages": primary["pages"], "blocks": primary["blocks"],
-    }]
-    try:
-        from edu_agent.rj_textbooks import catalog as rj_textbook_catalog, stats as rj_textbook_stats
-
-        rj_blocks = rj_textbook_stats().get("collection_count", 0)
-        if rj_blocks:
-            official.append({
-                "id": "rj_textbooks", "corpus": "rj_textbooks", "title": "人教版高中全科教材",
-                "kind": "built_in", "readonly": True, "chapters": None,
-                "pages": None, "blocks": rj_blocks,
-            })
-            for book in rj_textbook_catalog():
-                official.append({
-                    "id": "rj_textbooks:" + book["source"],
-                    "corpus": "rj_textbooks:" + book["source"],
-                    "title": book["title"], "kind": "built_in", "readonly": True,
-                    "subject": book["subject"], "edition": book["edition"],
-                    "source": book["source"], "pages": None, "chapters": None,
-                    "blocks": book["blocks"], "pdf_available": book["pdf_available"],
-                })
-    except Exception:
-        pass
-    for item in sources:
-        if item["library"] != "official":
-            continue
-        official.append({
-            "id": "pdf:" + str(item.get("source") or ""), "corpus": "pdf:" + str(item.get("source") or ""),
-            "title": str(item.get("file") or item.get("source") or "官方教材"), "kind": "uploaded",
-            "readonly": False, "source": str(item.get("source") or ""),
-            "pages": item.get("pages"), "blocks": item.get("chunks"), "chapters": None,
-        })
-    personal = [item for item in sources if item["library"] == "personal"]
-    return {"ok": True, "official_books": official, "personal_documents": personal}
-
-
-@app.get("/api/official-books/{source}/pdf")
-def api_official_book_pdf(source: str):
-    """在浏览器中打开一册公共教材的本地原始 PDF，不接受任意文件路径。"""
-    try:
-        from edu_agent.rj_textbooks import official_pdf_path
-
-        pdf = official_pdf_path(source)
-        if pdf is None:
-            return JSONResponse(status_code=404, content={"ok": False, "error": "该教材未找到可打开的 PDF"})
-        return FileResponse(str(pdf), media_type="application/pdf", filename=pdf.name)
-    except Exception as exc:
-        return JSONResponse(status_code=500, content={"ok": False, "error": f"打开教材失败：{type(exc).__name__}"})
-
-
-@app.get("/api/official-books/{source}/chapters")
-def api_official_book_chapters(source: str):
-    """公共教材的章/节导航及其对应 PDF 物理页。"""
-    try:
-        from edu_agent.rj_textbooks import chapters, official_pdf_path
-
-        if official_pdf_path(source) is None:
-            return JSONResponse(status_code=404, content={"ok": False, "error": "该教材未找到可打开的 PDF"})
-        return {"ok": True, "chapters": chapters(source)}
-    except Exception as exc:
-        return JSONResponse(status_code=500, content={"ok": False, "error": f"读取教材目录失败：{type(exc).__name__}"})
-
-
-@app.get("/api/knowledge-health")
-def api_knowledge_health():
-    """只读检查索引版本、源文件、embedding 配置和 PDF 目录一致性。"""
-    try:
-        from edu_agent.knowledge_health import audit
-
-        return audit()
-    except Exception as e:  # noqa: BLE001 健康接口本身也要给出可诊断结果
-        return {"ok": False, "status": "error", "issues": [{
-            "level": "error", "code": "audit_failed",
-            "message": f"{type(e).__name__}: {e}",
-        }]}
 
 
 @app.get("/api/pdfs")
 def api_pdfs():
-    return {"sources": [{**item, "library": _source_library(item)}
-                        for item in pdf_upload.list_sources()]}
-
-
-class PdfLibraryReq(BaseModel):
-    source: str
-    library: str
-    confirm: bool = False
-
-
-@app.post("/api/pdf/library")
-def api_pdf_library(body: PdfLibraryReq):
-    """切换已上传 PDF 的知识库归属；索引不动，因此立即生效。"""
-    from edu_agent import permissions
-
-    blocked = permissions.guard("pdf_library_manage", body.confirm)
-    if blocked:
-        return blocked
-    try:
-        return pdf_upload.set_library(body.source.strip(), body.library)
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
+    return {"sources": pdf_upload.list_sources()}
 
 
 @app.post("/api/pdf/del")
@@ -1840,8 +637,7 @@ def api_pdf_del(body: dict):
         return {"ok": False, "error": "资料不存在"}
     pdf_upload._save_meta(keep)
     try:
-        # 新版元数据存服务端生成的 stored_file；旧版才回退 file，仍经过 basename 校验。
-        f = pdf_upload.stored_path(hit.get("stored_file") or hit.get("file") or "")
+        f = pdf_upload.PDF_DIR / (hit.get("file") or "")
         if f.exists():
             f.unlink()
     except Exception:
@@ -1859,652 +655,15 @@ def api_pdf_del(body: dict):
 
 
 @app.post("/api/pdf/ingest")
-async def api_pdf_ingest(file: UploadFile = File(...), confirm: bool = False,
-                         library: str = "personal"):
-    from edu_agent import permissions
-
-    blocked = permissions.guard("pdf_ingest", confirm)     # 写本地向量库 = 有副作用，先过权限闸门
-    if blocked:
-        return blocked
+async def api_pdf_ingest(file: UploadFile = File(...)):
     if not (file.filename or "").lower().endswith(".pdf"):
         return {"ok": False, "error": "仅支持 .pdf"}
+    data = await file.read()
     try:
-        library = pdf_upload.normalize_library(library)
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-    try:
-        data = await _read_upload_limited(file, _settings.upload_max_bytes)
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-    try:
-        info = pdf_upload.ingest_pdf(data, file.filename or "doc.pdf",
-                                     max_pages=_settings.upload_max_pdf_pages,
-                                     library=library)
+        info = pdf_upload.ingest_pdf(data, file.filename or "doc.pdf")
         return {"ok": True, **info}
     except Exception as e:
         return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
-
-
-# ---------- 能力（MCP 服务 / Skill）：开关 + 运行状态 ----------
-@app.get("/api/capabilities")
-def api_capabilities(deep: int = 0):
-    """能力清单：enabled=开关（默认全开），running/detail=运行状态，tools=工具数（deep=1）。"""
-    return capabilities.snapshot(deep=bool(deep))
-
-
-@app.post("/api/capabilities/toggle")
-def api_capabilities_toggle(body: dict):
-    """开 / 关一个 MCP 服务或 Skill（落 data/capabilities.json 持久化）。"""
-    return capabilities.set_enabled(str(body.get("kind") or ""),
-                                    str(body.get("id") or ""),
-                                    bool(body.get("enabled")))
-
-
-@app.get("/api/mcp/status")
-def api_mcp_status():
-    """右栏「运行状态」面板用的轻量快照（不做工具握手）。"""
-    snap = capabilities.snapshot(deep=False)
-    return {"mcp": snap["mcp"], "skills": snap["skills"],
-            "wps_export_ready": capabilities.wps_available()[0],
-            # 会话内文档预览是否启用（skill: doc-session-preview；只影响会话页右侧预览面板）
-            "session_doc_preview_ready": capabilities.session_preview_ready()}
-
-
-# ---------- WPS 导出（教案中心 -> .docx / .pptx） ----------
-@app.post("/api/wps/export")
-def api_wps_export(body: dict):
-    """教案 -> WPS 文件。payload=教案中心 DZ 模型；markdown=Agent B 教案时改用。
-
-    body: {"payload": {...}, "markdown": "...", "kind": "docx"|"pptx", "outDir": "F:\\导出目录"}
-    能力关闭时返回 {ok:false, gate:'capability'}，与 MCP/skill 开关状态一致。
-    """
-    try:
-        from edu_agent import permissions
-
-        _kind = str(body.get("kind") or "docx").lower()
-        blocked = permissions.guard("export_pptx" if _kind in ("pptx", "ppt") else "export_docx",
-                                    bool(body.get("confirm")))      # 落盘 = 有副作用，先过权限闸门
-        if blocked:
-            return blocked
-        # WPS 可用 → 照旧；WPS 不可用且本机有 WSL 后路 → 改道 WSL 渲染（见 edu_agent/wsl_docx.py）
-        from edu_agent import wsl_docx
-
-        result = wsl_docx.export_best(body.get("payload") or {},
-                                      markdown=str(body.get("markdown") or ""),
-                                      kind=str(body.get("kind") or "docx").lower(),
-                                      out_dir=(body.get("outDir") or "").strip() or None,
-                                      template=body.get("template") or None)
-        if result.get("ok") and result.get("path"):
-            token = register_download(result["path"])
-            result["download_url"] = "/api/wps/download?id=" + token
-        return result
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
-
-
-@app.get("/api/wps/download")
-def api_wps_download(id: str = ""):
-    """下载本进程刚导出的 Office 文件；不接受客户端给出的任意本机路径。"""
-    p = take_download(id)
-    if p is None or p.suffix.lower() not in (".docx", ".pptx", ".doc", ".ppt", ".pdf"):
-        return JSONResponse({"ok": False, "error": "下载链接无效或已过期，请重新导出"}, status_code=404)
-    return FileResponse(str(p), filename=p.name)
-
-
-# ---------- 课件生成（对话链路 → 原生 PPTX，2026-09-26）----------
-class CoursewareReq(BaseModel):
-    markdown: str = ""          # 会话里那份教案（前端把它贴回来）
-    payload: dict | None = None # 教案中心 DZ 结构（可选，优先）
-    title: str = ""
-    session_id: str = ""
-    outDir: str = ""
-    confirm: bool = False       # 权限动作 ask 时，前端确认后带 true 重试
-
-
-class SlideWorkbenchReq(BaseModel):
-    """教案中心 PPT 面板的轻量合同：当前教案 → 同源 SVG 预览 / PPTX。"""
-
-    slides: list[dict] | None = None
-    title: str = ""
-    theme_id: str = ""
-    template_id: str = ""       # ppt-master 原生母版；为空时沿用画布主题导出
-    confirm: bool = False
-
-
-class SlideSlotEditReq(BaseModel):
-    """原版工作台的文字槽位编辑请求（不落盘，由教案中心持有草稿）。"""
-
-    slides: list[dict] | None = None
-    index: int = 0
-    slot: str = ""
-    text: str | None = None
-    patch: dict | None = None
-
-
-class SlideObjectEditReq(BaseModel):
-    """原版画布自由对象：文本框或形状的新增、修改、删除与层级调整。"""
-
-    slides: list[dict] | None = None
-    index: int = 0
-    action: str = "add"
-    id: str = ""
-    kind: str = "shape"
-    shape: str = "rect"
-    patch: dict | None = None
-    title: str = ""
-    theme_id: str = ""
-    src: str = ""  # kind=image 时：data/uploads 下的受限相对路径
-
-
-@app.get("/api/slide/themes")
-def api_slide_themes():
-    """原版 PPT 工作台的主题目录；读取失败不影响教案编辑。"""
-    try:
-        return {"ok": True, "default": slide_deck.default_theme_id(),
-                "themes": slide_deck.themes()}
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "default": "", "themes": [],
-                "error": f"主题读取失败：{type(exc).__name__}: {exc}"}
-
-
-@app.get("/api/ppt-master/templates")
-def api_ppt_master_templates():
-    """公开当前已安装 ppt-master 的课堂可用母版，避免前端写死一个并不存在的模板。"""
-    from edu_agent import ppt_master
-
-    root = ppt_master.engine_root() / "skills" / "ppt-master" / "templates" / "layouts"
-    catalog = [
-        {"id": "presentation_core_43", "name": "PPT Master · 课堂母版（4:3）",
-         "description": "16 个课堂与投影版式，含标题、对比、流程、图表、表格"},
-        {"id": "presentation_core", "name": "PPT Master · 通用母版（16:9）",
-         "description": "20 个通用演示版式，适合课堂、公开课与说课"},
-    ]
-    return {"ok": True, "templates": [item for item in catalog
-            if (root / item["id"] / "templates" / "design_spec.md").is_file()]}
-
-
-@app.get("/api/ppt/templates")
-def api_ppt_templates():
-    """教案中心的 PPT 模板库：视觉主题与真实 PPT Master 母版分开陈列。"""
-    themes = []
-    for item in slide_deck.themes():
-        palette = item.get("palette") or {}
-        imported = item.get("kind") == "pptx"
-        themes.append({
-            "id": f"theme:{item.get('id')}", "kind": "theme", "theme_id": item.get("id"),
-            "master_id": "", "name": item.get("name") or item.get("id"),
-            "description": ("原 PPTX 模板：保留母版、背景和版式，Agent 只填充文字槽"
-                            if imported else "用于编辑器预览和普通可编辑导出"),
-            "tags": (["原模板填充", f"{item.get('pages') or 0} 页原稿"] if imported
-                     else ["视觉主题", "16:9"]),
-            "source_pptx": imported,
-            "palette": {"background": (item.get("canvas") or {}).get("bg", "#FFFFFF"),
-                        "text": palette.get("text", "#172033"),
-                        "accent": palette.get("accent", "#2563EB"),
-                        "sub": palette.get("sub", "#64748B"),
-                        "soft": palette.get("soft", "#EFF6FF"),
-                        "line": palette.get("line", "#CBD5E1")},
-        })
-    master_response = api_ppt_master_templates()
-    masters = master_response.get("templates", [])
-    for item in masters:
-        is_classroom = item["id"] == "presentation_core_43"
-        themes.insert(0 if is_classroom else 1, {
-            "id": f"master:{item['id']}", "kind": "master", "theme_id": "tech-editorial",
-            "master_id": item["id"],
-            "name": "课堂规范 4:3" if is_classroom else "通用演示 16:9",
-            "description": item["description"],
-            "tags": ["PPT Master 原生母版", "16 个版式" if is_classroom else "20 个版式"],
-            "palette": {"background": "#FFFFFF", "text": "#1E293B", "accent": "#2563EB",
-                        "sub": "#64748B", "soft": "#EFF6FF", "line": "#CBD5E1"},
-        })
-    return {"ok": True, "templates": themes}
-
-
-@app.get("/api/ppt/templates/preview")
-def api_ppt_template_preview(id: str = Query("", min_length=1, max_length=80)):
-    """返回上传 PPTX 的第 1 页真实缩略图；内置主题没有原稿，不走这条路径。"""
-    from edu_agent import ppt_polish, slide_fill, slide_template
-
-    template = slide_template.get(id)
-    if not template or template.get("kind") != "pptx":
-        return JSONResponse({"ok": False, "error": "未找到可预览的上传模板"}, status_code=404)
-
-    source = slide_template.root() / slide_template._slug(id) / "template.pptx"
-    if not source.is_file():
-        return JSONResponse({"ok": False, "error": "模板原稿不存在"}, status_code=404)
-
-    # 转换器会写临时 SVG；读入第 1 页后立即清理，不能在模板目录留下任何派生文件。
-    import shutil
-
-    job = ppt_polish.workroot() / f"template-preview-{uuid.uuid4().hex}"
-    try:
-        job.mkdir(parents=True, exist_ok=False)
-        pages = slide_fill.preview_pages(source, job, limit=1)
-        if not pages:
-            return JSONResponse({"ok": False, "error": "模板缩略图生成失败"}, status_code=503)
-        return Response(content=pages[0], media_type="image/svg+xml",
-                        headers={"Cache-Control": "private, max-age=300"})
-    finally:
-        shutil.rmtree(job, ignore_errors=True)
-
-
-@app.delete("/api/ppt/templates/{template_id}")
-def api_ppt_template_delete(template_id: str):
-    """软删除老师上传的模板；内置主题与 PPT Master 母版始终只读。"""
-    from edu_agent import slide_template
-
-    template = slide_template.get(template_id)
-    if not template or template.get("kind") != "pptx":
-        return JSONResponse({"ok": False, "error": "只能删除自己上传的 PPTX 模板"}, status_code=404)
-    result = slide_template.delete_template(template_id, soft=True)
-    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
-
-
-@app.post("/api/ppt/templates/upload")
-async def api_ppt_template_upload(file: UploadFile = File(...)):
-    """上传一份 PPTX/POTX 并纳入本地模板库；原稿只保存副本，从不回写上传文件。"""
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in {".pptx", ".potx"}:
-        return JSONResponse({"ok": False, "error": "仅支持 .pptx 或 .potx 演示模板"}, status_code=400)
-    tmp = _settings.data_dir / f"ppt_template_{uuid.uuid4().hex}{suffix}"
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        tmp.write_bytes(await _read_upload_limited(file, _settings.upload_max_bytes))
-        if not zipfile.is_zipfile(tmp):
-            return JSONResponse({"ok": False, "error": "文件不是有效的 Office 演示文稿包"}, status_code=400)
-        with zipfile.ZipFile(tmp) as archive:
-            entries = archive.infolist()
-            if "ppt/presentation.xml" not in archive.namelist():
-                return JSONResponse({"ok": False, "error": "文件不是有效的 PowerPoint 演示模板"}, status_code=400)
-            if len(entries) > 20_000 or sum(item.file_size for item in entries) > _settings.upload_max_bytes * 8:
-                return JSONResponse({"ok": False, "error": "模板解压后的内容过大，未导入"}, status_code=400)
-        from edu_agent import slide_template
-
-        result = slide_template.import_pptx(tmp, name=Path(file.filename or "导入模板").stem)
-        return result
-    except ValueError as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("PPT template import failed")
-        return JSONResponse({"ok": False, "error": f"模板导入失败：{type(exc).__name__}: {exc}"}, status_code=500)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
-@app.post("/api/slide/render")
-def api_slide_render(body: SlideWorkbenchReq):
-    """工作台预览：上传 PPTX 走原模板填充，普通主题走 SVG 渲染。"""
-    try:
-        slides = slide_deck.clean_slides(body.slides or [])
-        # 上传的模板不能只借一组颜色：先填到原稿副本，再把那份真实 PPTX 转为 SVG。
-        # 这保证预览里的母版、背景图和导出的 PPTX 来自同一个原模板。
-        from edu_agent import slide_template
-
-        imported = slide_template.get(body.theme_id)
-        if imported and imported.get("kind") == "pptx":
-            from edu_agent import slide_fill
-
-            filled = slide_fill.fill_pptx(body.theme_id, slides, title=body.title,
-                                           with_preview=True, preview_only=True, preview_limit=30)
-            if not filled.get("ok"):
-                return JSONResponse({"ok": False, "error": filled.get("error") or "原模板预览生成失败",
-                                     "warnings": filled.get("warnings") or []}, status_code=400)
-            pages = filled.get("preview") or []
-            if not pages:
-                return JSONResponse({"ok": False,
-                                     "error": "已填充原模板，但本机无法生成预览图；请检查 PPT 预览组件",
-                                     "warnings": filled.get("warnings") or []}, status_code=503)
-            return {"ok": True, "theme_id": body.theme_id, "pages": pages,
-                    "layouts": [p.get("layout") or "原模板版式" for p in (filled.get("plan") or {}).get("pages") or []],
-                    "boxes": [], "warnings": filled.get("warnings") or [],
-                    "template_mode": "source-pptx", "template_pages": len((filled.get("plan") or {}).get("pages") or []),
-                    "stats": {"pages": len(pages), "chars": sum(len(str(x)) for s in slides for x in (s.get("bullets") or []))}}
-        return {**slide_deck.build_deck(body.theme_id, slides, title=body.title,
-                                        annotate=True), "enabled": True}
-    except (FileNotFoundError, ValueError) as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("PPT SVG render failed")
-        return JSONResponse({"ok": False, "error": f"渲染失败：{type(exc).__name__}: {exc}"}, status_code=500)
-
-
-@app.post("/api/slide/slot")
-def api_slide_slot(body: SlideSlotEditReq):
-    """把原版 SVG 的文字槽写回当前 PPT 草稿，再由同一引擎重排。"""
-    slides = slide_deck.clean_slides(body.slides or [])
-    if not slides:
-        return JSONResponse({"ok": False, "error": "请先生成 PPT 页面"}, status_code=400)
-    if body.index < 0 or body.index >= len(slides):
-        return JSONResponse({"ok": False, "error": "页面编号无效"}, status_code=400)
-    result: dict = {"ok": True, "slot": body.slot}
-    if body.text is not None:
-        changed = slide_deck.apply_slot(slides[body.index], body.slot, body.text)
-        if not changed.get("ok"):
-            return JSONResponse(changed, status_code=400)
-        result.update(changed)
-    if body.patch:
-        changed = slide_deck.apply_override(slides[body.index], body.slot, body.patch)
-        if not changed.get("ok"):
-            return JSONResponse(changed, status_code=400)
-        result.update(changed)
-    if body.text is None and not body.patch:
-        return JSONResponse({"ok": False, "error": "需要文字或画布位置修改"}, status_code=400)
-    return {"ok": True, "slides": slide_deck.clean_slides(slides), **result}
-
-
-@app.post("/api/slide/object")
-def api_slide_object(body: SlideObjectEditReq):
-    """为教案中心的 PPT 画布维护自由文本框 / 形状；结果只保存在当前草稿。"""
-    slides = slide_deck.clean_slides(body.slides or [])
-    if not slides:
-        return JSONResponse({"ok": False, "error": "请先生成 PPT 页面"}, status_code=400)
-    if body.index < 0 or body.index >= len(slides):
-        return JSONResponse({"ok": False, "error": "页面编号无效"}, status_code=400)
-    page = dict(slides[body.index])
-    objects = slide_deck.clean_objects(page.get("objects"))
-    action = str(body.action or "add").lower()
-    focus = ""
-    if action == "add":
-        focus = slide_deck.next_object_id(objects)
-        pic = None
-        if str(body.kind) == "image":
-            from edu_agent import slide_image
-
-            info = slide_image.probe(slide_image.uploads_root() / str(body.src or ""))
-            if info.get("width") and info.get("height"):
-                pic = (float(info["width"]), float(info["height"]))
-        objects.append(slide_deck.new_object(body.kind, body.shape, oid=focus,
-                                              theme=slide_deck.theme(body.theme_id),
-                                              src=str(body.src or ""), pic=pic))
-    elif action == "patch":
-        changed = slide_deck.patch_object(objects, body.id, body.patch)
-        if not changed.get("ok"):
-            return JSONResponse(changed, status_code=400)
-        objects, focus = changed["objects"], str(body.id)
-    elif action == "delete":
-        objects = [obj for obj in objects if str(obj.get("id")) != str(body.id)]
-    elif action in ("up", "down"):
-        ids = [str(obj.get("id")) for obj in objects]
-        if str(body.id) not in ids:
-            return JSONResponse({"ok": False, "error": "找不到这个对象"}, status_code=400)
-        position = ids.index(str(body.id))
-        target = position + (1 if action == "up" else -1)
-        if not (0 <= target < len(objects)):
-            return JSONResponse({"ok": False, "error": "已经到达层级边界"}, status_code=400)
-        objects[position], objects[target] = objects[target], objects[position]
-        focus = str(body.id)
-    else:
-        return JSONResponse({"ok": False, "error": f"不支持的对象操作：{action}"}, status_code=400)
-    if objects:
-        page["objects"] = objects
-    else:
-        page.pop("objects", None)
-    slides[body.index] = page
-    cleaned = slide_deck.clean_slides(slides)
-    return {"ok": True, "slides": cleaned, "objects": cleaned[body.index].get("objects", []),
-            "id": focus, "index": body.index, "action": action}
-
-
-@app.post("/api/slide/image/upload")
-async def api_slide_image_upload(file: UploadFile = File(...)):
-    """接收 PPT 本地配图；只写入受限 uploads 目录，返回可安全内联的相对路径。"""
-    from edu_agent import slide_image
-
-    try:
-        data = await _read_upload_limited(file, 20 * 1024 * 1024)
-        result = slide_image.save_upload(data, file.filename or "upload.png", "lesson-center")
-    except ValueError as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    if not result.get("ok"):
-        return JSONResponse({"ok": False, "error": result.get("error") or "图片上传失败"}, status_code=400)
-    return {"ok": True, "path": result["path"], "width": result.get("width"),
-            "height": result.get("height"), "detail": "图片已加入当前 PPT 草稿"}
-
-
-@app.post("/api/slide/deck")
-def api_slide_deck(body: SlideWorkbenchReq):
-    """导出原版工作台所预览的同一份原生可编辑 PPTX。"""
-    try:
-        from edu_agent import permissions
-
-        blocked = permissions.guard("export_pptx", bool(body.confirm))
-        if blocked:
-            return blocked
-        slides = slide_deck.clean_slides(body.slides or [])
-        from edu_agent import slide_template
-
-        imported = slide_template.get(body.theme_id)
-        if imported and imported.get("kind") == "pptx":
-            # 优先：老师上传的原稿。保留其母版、图片、背景与版式，只替换可填文字。
-            from edu_agent import slide_fill
-
-            out = slide_fill.fill_pptx(body.theme_id, slides, title=body.title, with_preview=False)
-        elif body.template_id:
-            # 走 ppt-master 的原生 Layout 原型，而非当前画布的轻量 SVG 版式。
-            from edu_agent import ppt_master
-
-            out = ppt_master.generate(slides, name=body.title or "课堂课件",
-                                      template_id=body.template_id)
-            if out.get("ok") and out.get("pptx"):
-                out["file"] = out["pptx"]
-                out["filename"] = Path(str(out["pptx"])).name
-        else:
-            out = slide_deck.export_deck_pptx(body.theme_id, slides, title=body.title)
-        if out.get("ok") and out.get("file"):
-            out["download_url"] = "/api/wps/download?id=" + register_download(out["file"])
-        return out
-    except Exception as exc:  # noqa: BLE001
-        log.exception("PPT deck export failed")
-        return {"ok": False, "error": f"PPTX 生成失败：{type(exc).__name__}: {exc}"}
-
-
-@app.post("/api/ppt/courseware")
-def api_ppt_courseware(req: CoursewareReq):
-    """教案 / 会话内容 → **原生可编辑** .pptx（引擎在 WSL 里跑，实测约 15~30s，首次含冷启动）。
-
-    两道闸门（与「导出 PPT · WPS」一致，不新造概念）：
-      ① 能力开关 skill:ppt-master（关掉 → gate=capability）
-      ② 权限动作 export_pptx（他当前是 ask → 第一次返回 gate=permission，前端确认后带 confirm=true）
-    内容来源优先级：payload（教案中心）> markdown（请求体，前端贴回当前回答）> 会话里最近一份教案。
-    交付沿用 WPS 导出那套**一次性下载令牌**，不接受客户端给任意路径。
-    """
-    try:
-        if not capabilities.is_enabled("skill", "ppt-master"):
-            return {"ok": False, "gate": "capability",
-                    "error": "「课件生成」能力已关闭（右栏「运行状态」里可以打开）"}
-        from edu_agent import permissions
-
-        blocked = permissions.guard("export_pptx", bool(req.confirm))
-        if blocked:
-            return blocked
-        from edu_agent import courseware
-
-        md = str(req.markdown or "").strip()
-        if not md and not (req.payload or {}).get("steps"):
-            md = _last_plan_markdown(str(req.session_id or "").strip() or (_store.current_id() or ""))
-        r = courseware.generate(markdown=md, payload=req.payload, title=req.title,
-                                out_dir=(req.outDir or "").strip() or None)
-        if r.get("ok") and r.get("pptx"):
-            token = register_download(r["pptx"])
-            r["download_url"] = "/api/wps/download?id=" + token
-        return r
-    except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": type(e).__name__ + ": " + str(e)}
-
-
-# ---------- 长期记忆（对齐 DeepSeek「记忆」：跨会话 · 可见 · 可删 · 可关） ----------
-@app.get("/api/memory")
-def api_memory_get():
-    """记忆面板数据：开关状态 + 全部条目 + 当前会注入的整段前缀（便于自证）。"""
-    from edu_agent import memory
-
-    return {"ok": True, "enabled": memory.memory_enabled(MEM_PROFILE), "profile": MEM_PROFILE,
-            "facts": memory.list_facts(MEM_PROFILE),
-            "stats": memory.stats(MEM_PROFILE),
-            "conflicts": memory.list_conflicts(MEM_PROFILE),
-            "prefix": memory.profile_memory_prefix(MEM_PROFILE)}
-
-
-@app.post("/api/memory/add")
-def api_memory_add(body: dict):
-    from edu_agent import memory
-
-    fid = memory.add_fact(MEM_PROFILE, str(body.get("text") or ""),
-                          kind=str(body.get("kind") or "preference"),
-                          source=str(body.get("source") or "user"))
-    if not fid:
-        return {"ok": False, "error": "内容为空，或与已有记忆重复", "facts": memory.list_facts(MEM_PROFILE)}
-    return {"ok": True, "id": fid, "facts": memory.list_facts(MEM_PROFILE)}
-
-
-@app.post("/api/memory/delete")
-def api_memory_delete(body: dict):
-    from edu_agent import memory
-
-    try:
-        fid = int(body.get("id") or 0)
-    except (TypeError, ValueError):
-        return {"ok": False, "error": "id 非法"}
-    ok = memory.delete_fact(MEM_PROFILE, fid)
-    return {"ok": ok, "facts": memory.list_facts(MEM_PROFILE)}
-
-
-@app.post("/api/memory/clear")
-def api_memory_clear():
-    from edu_agent import memory
-
-    return {"ok": True, "removed": memory.clear_facts(MEM_PROFILE), "facts": []}
-
-
-@app.post("/api/memory/toggle")
-def api_memory_toggle(body: dict):
-    """记忆总开关：关掉后不注入、不自动抽取（已存条目保留）。"""
-    from edu_agent import memory
-
-    memory.set_memory_enabled(MEM_PROFILE, bool(body.get("enabled", True)))
-    return {"ok": True, "enabled": memory.memory_enabled(MEM_PROFILE)}
-
-
-@app.post("/api/memory/extract")
-def api_memory_extract(body: dict):
-    """手动跑一次抽取（补记/调试）：显式规则 + 一次低温模型抽取。"""
-    from edu_agent import memory, memory_auto
-
-    added = memory_auto.extract_and_store(str(body.get("text") or ""),
-                                         str(body.get("answer") or ""), MEM_PROFILE)
-    return {"ok": True, "added": added, "facts": memory.list_facts(MEM_PROFILE)}
-
-
-# ---------- 记忆治理 / 冲突确认（2026-09-19，见 edu_agent.memory 的治理段） ----------
-@app.post("/api/memory/prune")
-def api_memory_prune(body: dict):
-    """整理记忆：合并近重复 + 过期衰减 + 超量裁剪（钉住的永不删）。"""
-    from edu_agent import memory
-
-    r = memory.prune(MEM_PROFILE,
-                     cap=int(body.get("cap") or 30),
-                     ttl_days=float(body.get("ttl_days") or 180))
-    r.update({"ok": True, "stats": memory.stats(MEM_PROFILE),
-              "facts": memory.list_facts(MEM_PROFILE)})
-    return r
-
-
-@app.post("/api/memory/pin")
-def api_memory_pin(body: dict):
-    """钉住/取消钉住某条记忆（钉住的不参与衰减与裁剪）。"""
-    from edu_agent import memory
-
-    ok = memory.set_pinned(MEM_PROFILE, int(body.get("id") or 0), bool(body.get("pinned", True)))
-    return {"ok": ok, "facts": memory.list_facts(MEM_PROFILE)}
-
-
-@app.post("/api/memory/conflict/resolve")
-def api_memory_conflict_resolve(body: dict):
-    """用户裁决冲突：keep='new' 用新说法，keep='old' 保留旧说法。"""
-    from edu_agent import memory
-
-    r = memory.resolve_conflict(MEM_PROFILE, int(body.get("id") or 0), str(body.get("keep") or "new"))
-    r["facts"] = memory.list_facts(MEM_PROFILE)
-    r["conflicts"] = memory.list_conflicts(MEM_PROFILE)
-    r["stats"] = memory.stats(MEM_PROFILE)
-    return r
-
-
-# ---------- 经验→技能：agent 自己写 SKILL.md（见 edu_agent/skills_local.py） ----------
-@app.get("/api/skills/local")
-def api_skills_local():
-    """本机自建技能（与第三方 wps-skills 分开列）。"""
-    from edu_agent import skills_local
-
-    return {"ok": True, "skills": skills_local.list_skills(),
-            "dir": str(skills_local.skills_dir())}
-
-
-@app.post("/api/skill/save")
-def api_skill_save(body: dict):
-    from edu_agent import skills_local
-
-    r = skills_local.save_skill(str(body.get("id") or body.get("name") or ""),
-                                str(body.get("name") or ""),
-                                str(body.get("description") or ""),
-                                str(body.get("body") or ""),
-                                tags=[t for t in (body.get("tags") or []) if isinstance(t, str)])
-    r["skills"] = skills_local.list_skills()
-    return r
-
-
-@app.get("/api/skill/get")
-def api_skill_get(id: str = ""):
-    from edu_agent import skills_local
-
-    return {"ok": True, "id": id, "text": skills_local.read_skill(id)}
-
-
-@app.post("/api/skill/delete")
-def api_skill_delete(body: dict):
-    """删除=归档到 skills/_archive/（不物理删，可找回）。"""
-    from edu_agent import skills_local
-
-    r = skills_local.delete_skill(str(body.get("id") or ""))
-    r["skills"] = skills_local.list_skills()
-    return r
-
-
-# ---------- 跨会话检索（FTS5+trigram，见 edu_agent/session_search.py） ----------
-@app.get("/api/session/search")
-def api_session_search(q: str = "", limit: int = 5, sid: str = ""):
-    from edu_agent import session_search
-
-    return {"ok": True,
-            "hits": session_search.search(q, limit=max(1, min(limit, 20)),
-                                          exclude_sid=sid or None)}
-
-
-@app.post("/api/session/reindex")
-def api_session_reindex():
-    from edu_agent import session_search
-
-    return {"ok": True, **session_search.refresh(force=True)}
-
-
-# ---------- 操作权限（动作级 allow / ask / deny，见 edu_agent/permissions.py） ----------
-@app.get("/api/permissions")
-def api_permissions_get():
-    """权限面板数据：所有可授权动作 + 当前策略（含未表态时的默认值）。"""
-    from edu_agent import permissions
-
-    return {"ok": True, "actions": permissions.list_policies()}
-
-
-@app.post("/api/permissions/set")
-def api_permissions_set(body: dict):
-    """改一个动作的策略：allow（总是允许）/ ask（每次问）/ deny（禁止）。"""
-    from edu_agent import permissions
-
-    r = permissions.set_policy(str(body.get("id") or ""), str(body.get("policy") or ""))
-    r["actions"] = permissions.list_policies()
-    return r
 
 
 # ---------- 启动预热（自 api.py 移植：embedding + rerank 常驻） ----------
@@ -2538,6 +697,7 @@ if __name__ == "__main__":
     logsetup.setup(level=os.getenv("EDU_LOG_LEVEL", "INFO"),
                    log_file=str(s.log_file))
     _warmup()
-    # 端口：默认 5174；EDU_WEB_PORT 可覆盖（演示/多实例并存，如 EDU_WEB_PORT=5181）
-    uvicorn.run(app, host=os.getenv("EDU_WEB_HOST", "127.0.0.1"),
-                port=int(os.getenv("EDU_WEB_PORT", "5174")), log_level="warning")
+    # 端口可配：EDU_PORT 环境变量优先，默认 5181
+    # （与原版 5174 / 改造版 5180 各占一个端口，三套界面可同时打开对比）
+    _port = int(os.getenv("EDU_PORT", "5181"))
+    uvicorn.run(app, host="127.0.0.1", port=_port, log_level="warning")

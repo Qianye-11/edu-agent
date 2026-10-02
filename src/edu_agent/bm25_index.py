@@ -27,12 +27,6 @@ def zh_tokens(text: str) -> list[str]:
 _cache = {"docs": None, "bm25": None, "ids": []}
 
 
-def clear_cache() -> None:
-    """教材 collection 切换后使稀疏索引在下次查询时重建。"""
-    _cache.clear()
-    _cache.update({"docs": None, "bm25": None, "ids": []})
-
-
 def _load():
     from edu_agent.retrieve import _get_db
 
@@ -51,14 +45,7 @@ def ensure(refresh: bool = False):
     if _cache["bm25"] is not None and not refresh:
         return _cache
     ids, docs, metas = _load()
-    # 稀疏检索必须把坐标与标题纳入词项；只索引正文会让“第一章小结”这类
-    # 明确标题查询偏到正文更长的复习题或相邻章节。
-    corpus = [
-        zh_tokens(" ".join((str((m or {}).get("chapter") or ""),
-                            str((m or {}).get("section") or ""),
-                            str((m or {}).get("heading") or ""), t or "")))
-        for t, m in zip(docs, metas)
-    ]
+    corpus = [zh_tokens(t) for t in docs]
     _cache["ids"] = ids
     _cache["docs"] = dict(zip(ids, docs))
     _cache["metas"] = dict(zip(ids, metas))
@@ -90,36 +77,5 @@ def search(query: str, top_k: int = 8, kinds=None, chapter=None) -> list[str]:
             continue
         out.append(cid)
         if len(out) >= top_k:
-            break
-    return out
-
-
-def lookup(ids: list[str]) -> dict[str, tuple[str, dict]]:
-    """取回 BM25 独有候选，使混合召回能够形成真正的候选并集。"""
-    c = ensure()
-    return {
-        cid: (c["docs"].get(cid, ""), c["metas"].get(cid, {}))
-        for cid in ids if cid in c.get("docs", {})
-    }
-
-
-def select_metadata(*, chapter: str | None = None, section: str | None = None,
-                    heading_contains: str | None = None, kinds=None,
-                    limit: int = 24) -> list[str]:
-    """按确定性教材坐标选择候选，供显式章/节/旁栏查询补充召回。"""
-    c = ensure()
-    out: list[str] = []
-    for cid in c.get("doc_ids", []):
-        md = c["metas"].get(cid, {})
-        if chapter and md.get("chapter") != chapter:
-            continue
-        if section and str(md.get("section") or "") != str(section):
-            continue
-        if heading_contains and heading_contains not in str(md.get("heading") or ""):
-            continue
-        if kinds and md.get("kind") not in kinds:
-            continue
-        out.append(cid)
-        if len(out) >= limit:
             break
     return out
