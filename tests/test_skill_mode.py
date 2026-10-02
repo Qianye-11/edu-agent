@@ -110,6 +110,56 @@ class TestRegistrySchema(ModeTestCase):
         self.assertIn("manifest", snap["columns"])
         self.assertTrue(snap["ok"])
 
+    def test_registry_db_follows_redirected_market(self):
+        """**回归**：市场目录被重定向时，注册表库必须跟着走。
+
+        早先库路径只看 `EDU_SKILL_REGISTRY_DB` / `<data_dir>`，于是"重定向了市场、
+        没重定向库"的调用方（测试、多实例部署）会把数据写进**真实库** ——
+        实测污染过线上数据：`file_path` 指向 `.tmp-*`、线上技能状态被覆盖成 draft。
+        """
+        import os as _os
+
+        from edu_agent.skill_market import paths
+
+        self.assertIn(str(self.tmp), str(registry_db.db_path()), registry_db.db_path())
+        self.assertIn(str(self.tmp), str(paths.market_root()))
+        # 显式指定时仍然优先
+        prev = _os.environ.get("EDU_SKILL_REGISTRY_DB")
+        _os.environ["EDU_SKILL_REGISTRY_DB"] = str(self.tmp / "explicit.db")
+        try:
+            self.assertEqual(registry_db.db_path(), self.tmp / "explicit.db")
+        finally:
+            if prev is None:
+                _os.environ.pop("EDU_SKILL_REGISTRY_DB", None)
+            else:
+                _os.environ["EDU_SKILL_REGISTRY_DB"] = prev
+
+    def test_file_path_points_at_current_location(self):
+        """**回归**：发布后 `file_path` 必须指向当前位置，不能停在创建时的草稿路径。"""
+        self.make_published("loc-skill")
+        row = registry_db.get("loc-skill")
+        self.assertIn("published", str(row["file_path"]).replace("\\", "/"), row["file_path"])
+        self.assertTrue(Path(row["file_path"]).exists())
+
+    def test_resync_and_reconcile(self):
+        self.make_published("resync-skill")
+        registry_db._exec("UPDATE skills SET status='draft', file_path='' WHERE skill_id=?",
+                          ("resync-skill",))               # noqa: SLF001  人为弄坏
+        r = registry_db.resync_from_state()
+        self.assertGreaterEqual(r["synced"], 1)
+        self.assertEqual(registry_db.get("resync-skill")["status"], "published")
+        rec = registry_db.reconcile()
+        self.assertEqual(rec["stale_published"], [])
+        self.assertTrue(registry_db.get("resync-skill")["installed"])
+
+    def test_reconcile_flags_published_without_runtime_files(self):
+        """状态 published 但运行时目录里没有 → 报陈旧，且**不偷偷改状态**。"""
+        registry_db.upsert("ghost-skill", status="published", file_path="/nope/SKILL.md")
+        rec = registry_db.reconcile()
+        self.assertTrue(any(s["skill"] == "ghost-skill" for s in rec["stale_published"]))
+        self.assertEqual(registry_db.get("ghost-skill")["status"], "published")   # 状态没被改
+        self.assertFalse(registry_db.get("ghost-skill")["installed"])             # 但 installed=0
+
     def test_install_table_exists(self):
         """多用户用的安装关系表也先建好（单用户模式不用，但表结构留着）。"""
         snap = registry_db.ensure_schema()

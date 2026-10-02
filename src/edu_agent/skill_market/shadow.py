@@ -35,6 +35,10 @@ import json
 import sys
 from pathlib import Path
 
+# 关键：**不要写 .pyc**。否则 import 插件会在技能目录里留下 __pycache__，
+# 文件集合一变，教师批准绑定的内容哈希就失效（实测踩过这个连环坑）。
+sys.dont_write_bytecode = True
+
 plugin_path, fixture_path, src_path = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, src_path)
 
@@ -157,6 +161,55 @@ def _cache_put(skill_id: str, key: str, ok: bool, ms: int, extra: dict | None = 
         pass
 
 
+def _static_check(man: mf.SkillManifest, plugin: Path, fixture_path: Path,
+                  cid: str, skill_id: str) -> dict:
+    """静态核对（不执行代码）：AST 读插件返回键，比对 fixture 期望字段。
+
+    这是 `SKILL_STUDIO_EXECUTE_PLUGIN=0` 时的 L3 形态 —— 比真跑弱，但比不查强：
+    它能抓出"插件根本不返回期望字段"这类问题，只是抓不到运行期行为。
+    """
+    import json as _json
+
+    keys = _plugin_return_keys_static(plugin)
+    expected: list[str] = []
+    try:
+        fx = _json.loads(Path(fixture_path).read_text(encoding="utf-8"))
+        expected = list(((fx.get("expected_output_shape") or {}).get("fields")) or [])
+    except (OSError, ValueError):
+        pass
+    matched = sorted(set(expected) & set(keys))
+    shape_match = (len(matched) / len(expected)) if expected else 0.0
+    ok = bool(keys) and shape_match >= 1.0
+    l3 = {"executed": False, "mode": "static", "ok": ok,
+          "plugin_return_keys": sorted(keys), "expected_fields": expected,
+          "matched": matched, "shape_match": round(shape_match, 4),
+          "note": "SKILL_STUDIO_EXECUTE_PLUGIN=0：按 doc 34 §1.3 不执行脚本，只做静态核对"}
+    ver = dict((store.get_state(skill_id).get("verification") or {}))
+    ver.update({"l3": ok, "l3_at": time.time(), "l3_mode": "static"})
+    store.write_state(skill_id, verification=ver)
+    _audit(cid or skill_id, man.name, "static",
+           {"ok": ok, "code": "shadow-static", "shape_match": round(shape_match, 4)})
+    return {"ok": ok, "candidate_id": cid, "skill": man.name, "L3": l3,
+            "message": "静态核对通过（未执行脚本）" if ok else "静态核对未通过：插件返回键与期望字段不一致"}
+
+
+def _plugin_return_keys_static(plugin: Path) -> set[str]:
+    """AST 读插件里所有 `return {...}` 的字符串键（不 import、不执行）。"""
+    import ast
+
+    try:
+        tree = ast.parse(Path(plugin).read_text(encoding="utf-8", errors="replace"))
+    except (SyntaxError, OSError):
+        return set()
+    keys: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Dict):
+            for k in node.value.keys:
+                if isinstance(k, ast.Constant) and isinstance(k.value, str):
+                    keys.add(k.value)
+    return keys
+
+
 def shadow_run(target: str, *, actor: str = "E", timeout: int = 60,
                use_cache: bool = True) -> dict:
     """对一个草稿做影子运行（L3）。
@@ -188,6 +241,19 @@ def shadow_run(target: str, *, actor: str = "E", timeout: int = 60,
     if not fixture_probe.exists():
         fixture_probe = d / (man.fixture or "fixture.json")
     cache_key = _pair_digest(plugin, fixture_probe)
+
+    # doc 34 §1.3「第一版不自动执行 Skill 内脚本」：SKILL_STUDIO_EXECUTE_PLUGIN=0 时
+    # 改成**静态核对**（AST 读返回键 vs fixture 期望字段 + 声明能力核对），不跑子进程。
+    # 默认是 1（真跑，验证更强）；这是配置开关，不是"按模式跳过校验"。
+    try:
+        from edu_agent.skill_market import skill_studio
+
+        execute = bool(skill_studio.config().get("execute_plugin", True))
+    except Exception:  # noqa: BLE001
+        execute = True
+    if not execute:
+        return _static_check(man, plugin, fixture_probe, cid, skill_id)
+
     if use_cache:
         hit = _cache_get(man.name, cache_key)
         if hit:
@@ -215,6 +281,8 @@ def shadow_run(target: str, *, actor: str = "E", timeout: int = 60,
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=timeout, cwd=str(d.resolve()),
             env={"PYTHONIOENCODING": "utf-8", "EDU_SKILL_SHADOW": "1",
+                 # 双保险：即使插件自己 import 别的模块，也不在技能目录里落 .pyc
+                 "PYTHONDONTWRITEBYTECODE": "1",
                  "PATH": __import__("os").environ.get("PATH", ""),
                  "SYSTEMROOT": __import__("os").environ.get("SYSTEMROOT", "")},
         )

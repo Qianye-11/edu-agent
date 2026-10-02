@@ -37,10 +37,21 @@ _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 def market_root() -> Path:
-    """市场根目录（EDU_SKILL_MARKET_DIR 可整体迁移，测试里也用它做隔离）。"""
-    env = (os.getenv("EDU_SKILL_MARKET_DIR") or "").strip()
-    if env:
-        return Path(env)
+    """市场根目录。
+
+    取值顺序：`EDU_SKILL_MARKET_DIR`（测试/多实例隔离用）→ `SKILL_STUDIO_DIR`
+    （doc 34 §7.1 的配置名，可把市场整体指到 `data/skill_studio`）→ `<data_dir>/skill_market`（默认）。
+
+    默认**不动**：历史数据都在 `<data_dir>/skill_market`，改默认值等于让已有技能凭空消失。
+    """
+    for env in ("EDU_SKILL_MARKET_DIR", "SKILL_STUDIO_DIR"):
+        v = (os.getenv(env) or "").strip()
+        if v:
+            p = Path(v)
+            # 相对路径按 data 目录解析（doc 里写的就是 data/skill_studio 这种相对形式）
+            if not p.is_absolute():
+                p = Path(load_settings().data_dir).parent / p
+            return p
     return Path(load_settings().data_dir) / "skill_market"
 
 

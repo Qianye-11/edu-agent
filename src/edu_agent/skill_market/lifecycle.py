@@ -36,6 +36,9 @@ TRANSITIONS: dict[tuple[str, str], str] = {
     ("draft", "submit"): "submitted",
     ("submitted", "approve"): "approved",
     ("submitted", "reject"): "draft",
+    # 审核通过后教师又发现要改（还没安装）：撤回草稿重改。
+    # 少了这条，approved 就成了"死状态"——只能硬改文件，绕过状态机（实测踩过）。
+    ("approved", "revise"): "draft",
     ("approved", "publish"): "published",
     ("published", "disable"): "disabled",
     ("disabled", "publish"): "published",          # 重新启用
@@ -48,13 +51,15 @@ ACTION_GATE: dict[str, str | None] = {
     "submit": None,                 # 提交只是进队列，无副作用
     "approve": None,                # 审核是判断，不改运行时
     "reject": None,
+    "revise": None,                 # 撤回重改：只动市场区，不碰运行时
     "publish": "skill_publish",     # 会让 Agent 能加载它 → 高风险
     "disable": "skill_disable",     # 会撤下正在被用的技能 → 高风险
     "rollback": "skill_rollback",   # 会换掉正在被用的版本 → 高风险
 }
 
 ACTION_LABEL = {"submit": "提交审核", "approve": "审核通过", "reject": "审核驳回",
-                "publish": "发布安装", "disable": "停用", "rollback": "回滚上一版"}
+                "revise": "撤回重改", "publish": "发布安装", "disable": "停用",
+                "rollback": "回滚上一版"}
 
 
 def _now() -> str:
@@ -375,6 +380,33 @@ def rollback(skill_id: str, actor: str = "E", *, to_version: str = "",
 
 
 # ---------------------------------------------------------------- 查询
+def revise(skill_id: str, actor: str = "E", *, reason: str = "") -> dict:
+    """**审核通过后又发现要改** → 撤回草稿重改（approved → draft）。
+
+    为什么需要它：少了这条转移，`approved` 就是个死状态 —— 教师改完内容只能
+    "硬改文件"或"重新导入"，两种都会绕过状态机与审计（实测踩过）。
+    已发布（published）的技能不走这里，走 `new_draft()`（线上版本继续服务）。
+    """
+    ok, cur, _ = _check_transition(skill_id, "revise")
+    if not ok:
+        return _fail("revise", skill_id, actor,
+                     "状态 %s 不能撤回重改（已发布的请用 new_draft）" % cur, frm=cur)
+    got = store.read_area("submitted", skill_id)
+    if got is None:
+        return _fail("revise", skill_id, actor, "待审/已批准目录不存在", frm=cur)
+    man, body, d = got
+    moved = store.move_area(skill_id, "submitted", "draft")
+    man = _write_status(moved, man, body, "draft",
+                        review="撤回重改：%s" % (reason or "内容需修改"))
+    store.write_state(skill_id, status="draft", version=man.version, actor=actor,
+                      area="draft", verify_state="", review=reason)
+    _log("skill.revise", skill=skill_id, version=man.version, actor=actor,
+         frm=cur, to="draft", input_text=reason,
+         result={"ok": True, "code": "revised"})
+    return {"ok": True, "action": "revise", "skill": skill_id, "status": "draft",
+            "version": man.version, "dir": str(moved), "reason": reason}
+
+
 def new_draft(skill_id: str, actor: str = "E", *, from_version: str = "",
               version: str = "", note: str = "") -> dict:
     """已发布/停用/回滚过的技能 → **派生一份新草稿**继续编辑。

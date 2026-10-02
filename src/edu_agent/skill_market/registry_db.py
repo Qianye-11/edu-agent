@@ -97,9 +97,25 @@ _lock = threading.RLock()
 
 
 def db_path() -> Path:
+    """注册表数据库路径。
+
+    取值顺序：
+
+    1. `EDU_SKILL_REGISTRY_DB`（显式指定，最高优先）
+    2. **市场被重定向时，跟着市场走**：设了 `EDU_SKILL_MARKET_DIR` / `SKILL_STUDIO_DIR`
+       就把库放进那个市场目录里
+    3. 默认 `<data_dir>/skill_registry.db`
+
+    第 2 条是踩坑换来的：早先只有第 1/3 条，结果**测试重定向了市场目录、却没重定向库路径**，
+    于是测试数据写进了真实库（`file_path` 指向 `.tmp-*/…`，还把线上技能的状态覆盖成 draft）。
+    让库路径**跟着市场走**，任何重定向（测试、多实例部署）都自动隔离。
+    """
     env = (os.getenv("EDU_SKILL_REGISTRY_DB") or "").strip()
     if env:
         return Path(env)
+    if (os.getenv("EDU_SKILL_MARKET_DIR") or "").strip() or \
+            (os.getenv("SKILL_STUDIO_DIR") or "").strip():
+        return paths.market_root() / "skill_registry.db"
     return Path(load_settings().data_dir) / "skill_registry.db"
 
 
@@ -186,6 +202,35 @@ def upsert(skill_id: str, **fields) -> dict:
     return {"ok": True, "skill_id": sid, "created": existing is None, "row": get(sid)}
 
 
+def _locate_skill_md(skill_id: str) -> str:
+    """在市场的四个区里找这个技能**当前**的 SKILL.md（版本区按版本号倒序取最新）。
+
+    为什么不只信 state.json 里的 `dir`/`file_path`：那些字段由各个写入点自己填，
+    漏填一次库里的路径就永久过期（实测：发布后的技能在库里还指着草稿区）。
+    直接看磁盘最可靠，而且只有几次 stat。
+    """
+    sid = str(skill_id or "").strip()
+    if not sid:
+        return ""
+    root = paths.market_root()
+    for area in ("published", "submitted", "draft", "archive"):
+        base = root / area / sid
+        direct = base / "SKILL.md"
+        if direct.exists():
+            return str(direct)
+        if base.is_dir():
+            try:
+                versions = sorted((p for p in base.iterdir() if p.is_dir()),
+                                  key=lambda p: p.name, reverse=True)
+            except OSError:
+                versions = []
+            for v in versions:
+                f = v / "SKILL.md"
+                if f.exists():
+                    return str(f)
+    return ""
+
+
 def sync_from_state(skill_id: str, state: dict, *, file_path: str = "") -> dict:
     """把 `<market>/state.json` 里的一行镜像进注册表（`store.write_state` 会调它）。
 
@@ -196,8 +241,10 @@ def sync_from_state(skill_id: str, state: dict, *, file_path: str = "") -> dict:
     否则"谁创建的"会在发布那一刻被改掉（这是个很容易埋进去的坑）。
     """
     st = dict(state or {})
-    # file_path 的取值顺序：显式传入 → 状态里的 file_path → 状态里的 dir（老写法）
-    fp = str(file_path or st.get("file_path") or st.get("dir") or "")
+    # file_path 的取值顺序：显式传入 → **磁盘上的当前位置**（最可靠）→ state 里的 dir
+    # → state 里的 file_path（创建时记录，可能过期）。
+    fp = str(file_path or _locate_skill_md(skill_id) or st.get("dir")
+             or st.get("file_path") or "")
     if fp:
         try:
             fp = str(Path(fp).resolve())        # 存绝对路径，换 cwd 也找得到
@@ -330,6 +377,30 @@ def migrate_from_state_file() -> dict:
     return {"ok": True, "imported": n, "total": len(st or {})}
 
 
+def resync_from_state(*, prune_unknown: bool = False) -> dict:
+    """用 `state.json` **覆盖**注册表里的对应行（修"库与状态不一致"）。
+
+    什么时候用：历史遗留、测试污染、手工改过 state.json 之后。
+    `prune_unknown=True` 时还会删掉"注册表里有、state.json 里没有"的行
+    （默认不删，只在返回值里列出来 —— 删行是破坏性动作，要显式要求）。
+    """
+    from edu_agent.skill_market import store
+
+    st = store.read_state() or {}
+    fixed = 0
+    for sid, row in st.items():
+        if isinstance(row, dict):
+            sync_from_state(sid, row)
+            fixed += 1
+    unknown = [r["skill_id"] for r in list_skills() if r["skill_id"] not in st]
+    pruned: list[str] = []
+    if prune_unknown:
+        for sid in unknown:
+            _exec("DELETE FROM skills WHERE skill_id=?", (sid,))
+            pruned.append(sid)
+    return {"ok": True, "synced": fixed, "unknown_rows": unknown, "pruned": pruned}
+
+
 def migrate_from_dirs() -> dict:
     """扫市场四区，把还没有登记的技能补进表（file_path 指向其 SKILL.md）。"""
     from edu_agent.skill_market import store
@@ -351,24 +422,30 @@ def migrate_from_dirs() -> dict:
 
 
 def reconcile() -> dict:
-    """对账：检查每行的 file_path 是否还在磁盘上，同步 `installed` 标志。
+    """对账：检查每个技能**是否真的在运行时目录**里，同步 `installed` 标志。
+
+    `installed` 的含义是"文件在 `data/skills/<id>/`（Agent 能加载的地方）"，
+    **不是**"市场里有它的快照" —— 停用的技能市场快照还在，但它没装。
 
     **不改 status** —— 状态是生命周期事实（谁在什么时候发布的），
     磁盘文件缺失是运维事实。两者分开记，才不会出现"程序偷偷把 published 改成 disabled"。
     """
+    from edu_agent.skill_market import paths as _paths
+
     stale: list[dict] = []
     fixed = 0
-    for row in list_skills():
+    rows = list_skills()
+    for row in rows:
         sid = str(row.get("skill_id") or "")
-        fp = str(row.get("file_path") or "")
-        exists = bool(fp) and Path(fp).exists()
+        exists = bool(_paths.is_inside_runtime(sid))
         if bool(row.get("installed")) != exists:
             upsert(sid, installed=exists)
             fixed += 1
         if not exists and str(row.get("status")) == "published":
             stale.append({"skill": sid, "status": row.get("status"),
-                          "file_path": fp, "why": "状态是 published 但文件不在了"})
-    return {"ok": True, "checked": len(list_skills()), "installed_flag_fixed": fixed,
+                          "file_path": row.get("file_path"),
+                          "why": "状态是 published 但运行时目录里没有文件"})
+    return {"ok": True, "checked": len(rows), "installed_flag_fixed": fixed,
             "stale_published": stale}
 
 

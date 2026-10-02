@@ -65,10 +65,12 @@ try:
     from edu_agent.skill_market.api import router as _skill_market_router
     from edu_agent.skill_market.create_api import router as _skill_create_router
     from edu_agent.skill_market.mode_api import router as _skill_mode_router
+    from edu_agent.skill_market.studio_api import router as _skill_studio_router
 
     app.include_router(_skill_market_router)
     app.include_router(_skill_create_router)
     app.include_router(_skill_mode_router)
+    app.include_router(_skill_studio_router)
 except Exception as _e:  # noqa: BLE001
     log.warning("模块3（Skill 市场）路由未挂载：%s: %s", type(_e).__name__, _e)
 
