@@ -1,0 +1,22 @@
+{
+  "profile": {
+    "name": "",
+    "school": "",
+    "grade_level": "高中",
+    "grade": "高一",
+    "subject": "数学"
+  },
+  "courses": [],
+  "calendar": {
+    "term": "2026 秋季学期",
+    "start": "2026-09-01",
+    "events": [
+      {
+        "id": "2b631befb9",
+        "date": "2026-10-01",
+        "title": "国庆节",
+        "type": "holiday"
+      }
+    ]
+  }
+}
