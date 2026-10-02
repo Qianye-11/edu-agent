@@ -1,15 +1,14 @@
 @echo off
 rem ============================================================
-rem  启思教育 agent（启思 · CHESS / 苹果风 UI）· 一键环境准备
+rem  启思教育 agent（苹果风 UI）· 一键环境准备
 rem
 rem  clone / fork 之后跑一次即可：
 rem    1) 找到 Python 3.11+
 rem    2) 建虚拟环境 .venv
-rem    3) 装 requirements.txt 依赖（含 python-pptx 等教案中心依赖）
+rem    3) 装 requirements.txt 依赖
 rem    4) 由 .env.example 生成 .env（你再填 DEEPSEEK_API_KEY）
 rem
-rem  不做的事：不下载教材源 PDF（版权文件 174MB，超过 GitHub 单文件上限；
-rem            教材知识已在 chroma_db 里，检索/答疑不受影响）
+rem  不做的事：不下载教材源 PDF（版权文件 182MB，知识已在 chroma_db 里）
 rem  编码：UTF-8 + chcp 65001；行尾由 .gitattributes 强制 CRLF
 rem ============================================================
 setlocal
@@ -59,7 +58,7 @@ if exist ".venv\Scripts\python.exe" (
 )
 echo.
 
-echo [3/4] 安装依赖（首次约 3~8 分钟，会联网下载）...
+echo [3/4] 安装依赖（首次约 2~5 分钟，会联网下载）...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 if errorlevel 1 (
@@ -94,7 +93,7 @@ echo.
 echo   3. 双击 start-qisi.bat 启动，浏览器自动打开 http://127.0.0.1:5181
 echo.
 echo   说明: 教材源 PDF 未随仓库分发，因此「翻教材原文页」按钮不可用；
-echo         教材知识已预建在 chroma_db 里，答疑/教案/课件功能完整可用。
+echo         教材知识已预建在 chroma_db 里，答疑/教案功能完整可用。
 echo ============================================================
 echo.
 pause
