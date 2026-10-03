@@ -54,6 +54,7 @@ class LibraryTest(_LibCase):
         self.assertEqual(tk.builtin_dir(), Path(self.tmp.name) / "_builtin")
         self.assertEqual(tk.available(), ["hand-drawn", "illustration", "tech-editorial"])
 
+    @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx")
     def test_list_builtin_and_imported(self):
         items = st.list_templates()
         self.assertEqual([t["kind"] for t in items], ["json", "json", "json"])
@@ -65,6 +66,7 @@ class LibraryTest(_LibCase):
         self.assertGreater(imported["pages"], 5)
         self.assertTrue(imported["ok"])
 
+    @unittest.skipUnless(SAMPLE_PPTX.is_file(), "需要仓库样例 pptx")
     def test_index_file_is_written(self):
         st.import_pptx(SAMPLE_PPTX, name="学校模板")
         self.assertTrue(st.index_path().is_file())

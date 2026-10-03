@@ -859,18 +859,36 @@ class AgentApiTest(_FillCase):
     def test_deck_without_template_uses_theme_path(self):
         import unittest.mock as mock
 
+        # 工作台实现会调 register_download(out["file"])，所以 mock 的产物必须真实存在。
+        # 用仓库内临时目录：self.out 指向 %TEMP% 子目录，既可能不存在、也受沙箱写入限制。
+        base = Path(__file__).resolve().parents[1] / ".tmp-slide-deck-test"
+        base.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(shutil.rmtree, base, True)
+        fake = base / "y.pptx"
+        fake.write_bytes(b"PK\x03\x04")
         with mock.patch.object(self.ws.slide_deck, "export_deck_pptx",
-                               return_value={"ok": True, "filename": "y.pptx", "file": "d/y.pptx",
-                                             "outDir": "d", "pages": 2}) as m:
-            r = self.ws.api_slide_deck(self.ws.SlideDeckReq(
-                lesson={"title": "t", "slides": DECK}, theme_id="tech-editorial",
-                outDir=str(self.out), confirm=True))
-        self.assertTrue(r["ok"])
+                               return_value={"ok": True, "filename": "y.pptx",
+                                             "file": str(fake), "outDir": str(self.out),
+                                             "pages": 2}) as m:
+            # 契约已对齐前端：/api/slide/deck 由工作台实现服务，收 slides/title/theme_id
+            # （旧契约 {lesson:{...}} 已移到 /api/slide/deck/legacy，见 docs/25）
+            r = self.ws.api_slide_deck(self.ws.SlideWorkbenchReq(
+                slides=DECK, title="t", theme_id="tech-editorial", confirm=True))
+        self.assertTrue(r["ok"], r.get("error"))
         self.assertTrue(m.called, "没给模板 → 走主题生成那条路")
+        self.assertTrue(r.get("download_url"), "工作台契约会回 download_url 给前端下载")
 
     def test_deck_requires_content(self):
-        r = self.ws.api_slide_deck(self.ws.SlideDeckReq(lesson={"title": "x", "slides": []}, confirm=True))
-        self.assertEqual(getattr(r, "status_code", 200), 400)
+        """新契约：空 slides → ok=False + 明确原因（旧契约是 400 JSONResponse）。
+
+        为什么换契约：合并造成 `api_slide_deck` 同名双份定义，实测前端发
+        `{slides,title,theme_id,template_id,confirm}` 时旧实现（要 `lesson.slides`）
+        返回 400「lesson.slides 为空」→ **PPTX 导出线上是坏的**。
+        现由工作台实现服务 `/api/slide/deck`，旧实现保留在 `/api/slide/deck/legacy`。
+        """
+        r = self.ws.api_slide_deck(self.ws.SlideWorkbenchReq(slides=[], title="x", confirm=True))
+        self.assertFalse(r.get("ok"), r)
+        self.assertTrue(r.get("error"), "必须给出失败原因，不能静默")
 
 
 class EndpointFillTest(_FillCase):

@@ -1718,8 +1718,8 @@ def api_slide_design_preview(body: SlideDesignPreviewReq):
             "locked": _ds.locked()}
 
 
-@app.post("/api/slide/deck")
-def api_slide_deck(body: SlideDeckReq):
+@app.post("/api/slide/deck/legacy")
+def api_slide_deck_legacy(body: SlideDeckReq):
     """一步出稿：`lesson` → pptx（有模板走填充，没模板走我们的版式；`design` 给了就按规格渲染）。"""
     from edu_agent import permissions
     from edu_agent import slide_fill
@@ -3133,8 +3133,8 @@ class SlideObjectEditReq(BaseModel):
     src: str = ""  # kind=image 时：data/uploads 下的受限相对路径
 
 
-@app.get("/api/slide/themes")
-def api_slide_themes():
+@app.get("/api/slide/workbench/themes")
+def api_slide_workbench_themes():
     """原版 PPT 工作台的主题目录；读取失败不影响教案编辑。"""
     try:
         return {"ok": True, "default": slide_deck.default_theme_id(),
@@ -3269,8 +3269,8 @@ async def api_ppt_template_upload(file: UploadFile = File(...)):
         tmp.unlink(missing_ok=True)
 
 
-@app.post("/api/slide/render")
-def api_slide_render(body: SlideWorkbenchReq):
+@app.post("/api/slide/workbench/render")
+def api_slide_workbench_render(body: SlideWorkbenchReq):
     """工作台预览：上传 PPTX 走原模板填充，普通主题走 SVG 渲染。"""
     try:
         slides = slide_deck.clean_slides(body.slides or [])
@@ -3306,8 +3306,8 @@ def api_slide_render(body: SlideWorkbenchReq):
         return JSONResponse({"ok": False, "error": f"渲染失败：{type(exc).__name__}: {exc}"}, status_code=500)
 
 
-@app.post("/api/slide/slot")
-def api_slide_slot(body: SlideSlotEditReq):
+@app.post("/api/slide/workbench/slot")
+def api_slide_workbench_slot(body: SlideSlotEditReq):
     """把原版 SVG 的文字槽写回当前 PPT 草稿，再由同一引擎重排。"""
     slides = slide_deck.clean_slides(body.slides or [])
     if not slides:
@@ -3330,8 +3330,8 @@ def api_slide_slot(body: SlideSlotEditReq):
     return {"ok": True, "slides": slide_deck.clean_slides(slides), **result}
 
 
-@app.post("/api/slide/object")
-def api_slide_object(body: SlideObjectEditReq):
+@app.post("/api/slide/workbench/object")
+def api_slide_workbench_object(body: SlideObjectEditReq):
     """为教案中心的 PPT 画布维护自由文本框 / 形状；结果只保存在当前草稿。"""
     slides = slide_deck.clean_slides(body.slides or [])
     if not slides:
@@ -3383,8 +3383,8 @@ def api_slide_object(body: SlideObjectEditReq):
             "id": focus, "index": body.index, "action": action}
 
 
-@app.post("/api/slide/image/upload")
-async def api_slide_image_upload(file: UploadFile = File(...)):
+@app.post("/api/slide/workbench/image/upload")
+async def api_slide_workbench_image_upload(file: UploadFile = File(...)):
     """接收 PPT 本地配图；只写入受限 uploads 目录，返回可安全内联的相对路径。"""
     from edu_agent import slide_image
 

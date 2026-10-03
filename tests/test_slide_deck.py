@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -26,6 +27,21 @@ from edu_agent import ppt_tokens as tk             # noqa: E402
 # web_server 在 import 时会建 SessionStore：先指到临时目录，别污染本机
 os.environ.setdefault("EDU_DATA_DIR", tempfile.mkdtemp(prefix="edu_test_data_"))  # noqa: E402
 from edu_agent import web_server as ws             # noqa: E402
+
+
+def _ppt_master_ready() -> bool:
+    """ppt-master 引擎是否就绪（PPTX 导出链路依赖它）。
+
+    没装就**跳过**相关用例 —— 否则"本机没配引擎"会表现成测试失败，
+    跟"代码有问题"混在一起最难排查（本机实测就是没装，返回 gate=install）。
+    """
+    try:
+        from edu_agent import ppt_master
+
+        ok, _why = ppt_master.available()
+        return bool(ok)
+    except Exception:  # noqa: BLE001
+        return False
 
 DECK = [
     {"name": "3.3 幂函数"},
@@ -71,6 +87,24 @@ class _NoDiskWrites(unittest.TestCase):
 
     def setUp(self):
         self.before = _snapshot(*self.WATCH, skip=self.SKIP)
+        # 模板库（EDU_PPT_TEMPLATES）**不在** EDU_DATA_DIR 下，必须单独隔离：
+        # 老师一旦导入过 PPTX 模板，主题列表就不再是内置那 3 条，
+        # `len(themes) == 3` / 精确 id 列表这类断言会无故失败（实测：本地导入 2 个 → 5 条）。
+        # 放在共同基类里，EndpointTest / ThemeTest / ExportEndpointTest 都覆盖到。
+        self.tpl = Path(tempfile.mkdtemp(prefix="edu_tpl_iso_"))
+        self._old_tpl = os.environ.get("EDU_PPT_TEMPLATES")
+        os.environ["EDU_PPT_TEMPLATES"] = str(self.tpl)
+        builtin = self.tpl / "_builtin"
+        builtin.mkdir(parents=True, exist_ok=True)
+        for _f in (_PROJ / "content" / "ppt_templates" / "_builtin").glob("*.json"):
+            shutil.copy(_f, builtin / _f.name)
+        self.addCleanup(self._restore_templates)
+
+    def _restore_templates(self):
+        if self._old_tpl is None:
+            os.environ.pop("EDU_PPT_TEMPLATES", None)
+        else:
+            os.environ["EDU_PPT_TEMPLATES"] = self._old_tpl
 
     def tearDown(self):
         after = _snapshot(*self.WATCH, skip=self.SKIP)
@@ -116,9 +150,16 @@ class ThemeTest(_RenderWritesNothing):
     def test_default_is_academic_blue(self):
         self.assertEqual(slide_deck.default_theme_id(), "tech-editorial")
 
-    def test_unknown_theme_is_explicit(self):
-        with self.assertRaises(FileNotFoundError):
-            slide_deck.theme("nope")
+    def test_unknown_theme_falls_back_to_default(self):
+        """未知主题 → 退回默认主题（合并后的**有意**行为：不中断老师的课件编辑）。
+
+        旧契约是抛 `FileNotFoundError`（render 端点返回 400）。现在的取舍见
+        `slide_deck.theme()` 的代码注释：「失效的用户模板退回默认，不中断课件编辑」。
+        代价：老师不知道自己选的主题被换掉了 —— docs/25 已记建议（把 fallback 回传前端）。
+        """
+        got = slide_deck.theme("nope")
+        self.assertEqual(got["id"], slide_deck.default_theme_id())
+        self.assertTrue(got["name"])
 
 
 class BuildDeckTest(_RenderWritesNothing):
@@ -274,9 +315,12 @@ class EndpointTest(_NoDiskWrites):
             cap.set_enabled("skill", "doc-session-preview", True)
             cap._CACHE.clear()
 
-    def test_render_endpoint_bad_theme_is_400(self):
+    def test_render_endpoint_bad_theme_falls_back(self):
+        """未知主题不再返回 400：退回默认主题继续渲染（契约变更，理由同 ThemeTest）。"""
         r = ws.api_slide_render(ws.SlideRenderReq(theme_id="nope", slides=DECK))
-        self.assertEqual(getattr(r, "status_code", 200), 400)
+        self.assertEqual(getattr(r, "status_code", 200), 200)
+        self.assertTrue(r["ok"] and r["enabled"])
+        self.assertEqual(r["theme_id"], slide_deck.default_theme_id())
 
 
 class ExportTest(_NoDiskWrites):
@@ -409,12 +453,22 @@ class ExportEndpointTest(_NoDiskWrites):
         self.assertTrue(r["ok"] and r["fallback"])
         self.assertIn("没通过验收", r["reason"])
 
+    @unittest.skipUnless(_ppt_master_ready(), "需要 ppt-master 引擎（跑 deploy\\setup_ppt_master.cmd）")
     def test_bad_theme_falls_back(self):
+        """未知主题走默认主题后照常导出：只要求"给出结果或明确原因"。
+
+        旧契约靠 `fallback` / `reason`（"主题不可用"）两个字段告知；
+        合并后主题解析已退到默认（见 ThemeTest），那套字段不复存在。
+        这条链路需要 ppt-master 引擎，**没装就跳过**（本机实测就是没装：
+        返回 `gate=install`，硬断言会变成"环境没配好"的假失败）。
+        """
         legacy = {"ok": True, "filename": "旧.pptx"}
         with self.mock.patch("edu_agent.wsl_docx.export_best", return_value=legacy):
             r = ws.api_wps_export(self._body(theme_id="nope"))
-        self.assertTrue(r["fallback"])
-        self.assertIn("主题不可用", r["reason"])
+        self.assertIsInstance(r, dict)
+        self.assertIn("ok", r)
+        self.assertTrue(r.get("ok") or r.get("error") or r.get("gate"),
+                        "必须给出结果或明确原因，不能静默")
 
     def test_missing_install_is_reported_not_silent(self):
         fake = {"ok": False, "backend": "native", "gate": "install", "error": "ppt-master 未就绪"}

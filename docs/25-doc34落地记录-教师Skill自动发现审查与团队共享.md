@@ -342,3 +342,34 @@ api_slide_object        L2273 与 L3334      POST /api/slide/object
     若以合并进来的工作台版为准 → 删旧块（L1722~L2273 区间）并更新旧测试；
     若以原有版为准 → 删新块（L3137~L3403 区间），并把工作台功能改到独立路径上。
 无论哪种，都必须让"一个路径只有一个实现"，否则这类问题还会以"测试失败但线上照旧"的形式复发。
+
+### 已按"谁匹配真实调用方"逐路径裁决并落地（27 → 7）
+
+**决策依据不是拍脑袋，是三条证据**：① git 归属（旧块 BlossomSplash 09-26/27，新块 Clayqi 09-30）；
+② 前端 `static/index.html` 实际发的载荷；③ 两套请求模型的字段集。
+
+| 路径 | 由谁服务 | 依据 |
+|---|---|---|
+| `/api/slide/deck` | **新块** | 前端发 `{slides,title,theme_id,template_id,confirm}`；旧块要 `lesson.slides` → **实测 400「lesson.slides 为空」= PPTX 导出线上是坏的** |
+| `/api/slide/render` | 旧块 | 两边都兼容；旧块另有 `annotate` / `session_id`（保存过的页优先）能力 |
+| `/api/slide/slot` / `object` | 旧块 | 旧模型是前端载荷的超集，且带 `session_id` 持久化 |
+| `/api/slide/image/upload` / `themes` | 旧块 | 现有实现，前端 FormData / 列表消费正常 |
+
+做法：新块里除 deck 外的 5 个 → 改名 `api_slide_workbench_*` + 路由 `/api/slide/workbench/*`；
+旧块的 deck → `api_slide_deck_legacy` + `/api/slide/deck/legacy`；新的 deck 保持原名原路径。
+**两边都可达、一处只有一份实现**，`verify-duplicate-routes.py` 现在报"干净"。
+
+**实测**：`/api/slide/deck` 从 400 → **200**（正确解析前端载荷；后续报 `ppt-master 未就绪` 是依赖没装）。
+
+顺带修掉的测试缺陷（都是"环境/数据一变就假失败"）：
+
+| 现象 | 根因 | 修法 |
+|---|---|---|
+| `test_themes_endpoint` 5≠3、精确 id 列表失败 | 模板库（`EDU_PPT_TEMPLATES`）**不在** `EDU_DATA_DIR` 下，测试只隔离了后者；老师导入过 2 个模板 → 5 条 | 在 `_NoDiskWrites` 基类里一并隔离模板根（复制内置 3 套） |
+| 2 条模板测试 `3 != 4` / index 没写 | 样例 pptx 不在检出里，同类测试都有 `skipUnless`，这两条漏了 | 补同样的 skip 守卫 |
+| 3 条"未知主题必须报错" | 合并后**有意**改成"未知主题退回默认，不中断课件编辑"（代码注释写明） | 测试改为断言新契约；并记建议：把 fallback 回传前端，别让老师不知道主题被换 |
+| 1 条 `test_bad_theme_falls_back` | 该链路需要 ppt-master 引擎，本机没装 → 返回 `gate=install` | 加 `_ppt_master_ready()` 守卫，没装就跳过 |
+
+**结果**：课件模块 245 用例从 **27 失败 → 7 失败**，且剩余 7 条**全部同一原因**：
+本环境无头 Edge 截不出图（直接探测：`msedge.exe --headless=new --screenshot=…` 返回码 0 但
+**不写任何文件**）→ 属环境限制，在能正常截图的环境里应通过。
