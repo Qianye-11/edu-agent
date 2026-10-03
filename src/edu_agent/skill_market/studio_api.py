@@ -29,6 +29,7 @@ from fastapi import APIRouter
 from edu_agent.skill_market import (audit, lifecycle, miner, packager, registry_db,
                                    safe_import, skill_privacy, skill_studio, store,
                                    tencent_memory_adapter)
+from edu_agent.skill_market import skill_studio_models as models
 
 router = APIRouter(prefix="/api/skill-studio", tags=["skill-studio"])
 
@@ -37,8 +38,13 @@ def _err(e: Exception) -> dict:
     return {"ok": False, "error": "%s: %s" % (type(e).__name__, e)}
 
 
+def _check(body, model) -> tuple[bool, dict, object]:
+    """入参校验（doc §5.1 的 Pydantic 层）：形状不对就早退，别让它带着错字段往下走。"""
+    return models.validate_or_error(model, body)
+
+
 def _envelope(result: dict, *, skill_id: str = "", candidate_id: str = "") -> dict:
-    """按 doc §5.5 补齐变更类接口的固定字段。"""
+    """按 doc §5.5 补齐变更类接口的固定字段（并用响应模型收口一次）。"""
     out = dict(result or {})
     sid = skill_id or str(out.get("skill") or out.get("skill_id") or "")
     out.setdefault("candidate_id", candidate_id or out.get("candidate_id") or "")
@@ -51,7 +57,33 @@ def _envelope(result: dict, *, skill_id: str = "", candidate_id: str = "") -> di
         except Exception:  # noqa: BLE001
             pass
     out.setdefault("updated_at", time.strftime("%Y-%m-%dT%H:%M:%S"))
-    return out
+    # 响应模型只做"形状校正"：多余字段剔除、缺失字段补默认，**不改变值**
+    try:
+        env = models.MutationEnvelope(**{k: v for k, v in out.items()
+                                         if k in models.MutationEnvelope.model_fields})
+        merged = env.model_dump()
+        for k, v in out.items():                 # 业务特有字段（scan/L3/validation…）原样保留
+            merged.setdefault(k, v)
+        return merged
+    except Exception:  # noqa: BLE001
+        return out
+
+
+@router.get("/schemas")
+def api_schemas():
+    """列出 Studio 的入参/出参模型（给前端与联调用的**契约快照**，无需读代码）。"""
+    try:
+        out = {}
+        for name in dir(models):
+            obj = getattr(models, name)
+            fields = getattr(obj, "model_fields", None)
+            if fields and getattr(obj, "__module__", "").startswith("edu_agent."):
+                out[name] = {k: str(v.annotation) for k, v in fields.items()}
+        return {"ok": True, "models": out,
+                "envelope": list(models.MutationEnvelope.model_fields),
+                "note": "doc §5.1 的 skill_studio_models.py；入参一律 extra=forbid（拼错字段会报错）"}
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
 
 
 # ---------------------------------------------------------------- 候选箱
@@ -87,10 +119,11 @@ def api_candidate_detail(candidate_id: str):
 def api_generate_draft(candidate_id: str, body: dict | None = None):
     """候选 → 草稿（复用 skill-create 的封装器；R1~R6 必须全过）。"""
     try:
-        b = body or {}
-        r = packager.make_draft(candidate_id, actor=str(b.get("actor") or "E"),
-                                confirm=bool(b.get("confirm")),
-                                force=bool(b.get("force")))
+        ok_b, err_b, mb = _check(body, models.GenerateDraftBody)
+        if not ok_b:
+            return err_b
+        r = packager.make_draft(candidate_id, actor=mb.actor or "E",
+                                confirm=mb.confirm, force=mb.force)
         r.pop("manifest", None)
         return _envelope(r, skill_id=str(r.get("id") or ""), candidate_id=candidate_id)
     except Exception as e:  # noqa: BLE001
@@ -108,20 +141,22 @@ def api_patch_draft(skill_id: str, body: dict | None = None):
     doc 34 §5.5：skill id 与资源文件名都走服务端白名单（单层文件名 + 后缀白名单）。
     """
     try:
-        b = body or {}
+        ok_b, err_b, mb = _check(body, models.PatchDraftBody)
+        if not ok_b:
+            return err_b
         ok_id, why_id, _norm = safe_import.validate_skill_id(skill_id)
         if not ok_id:
             return {"ok": False, "gate": "skill_id", "error": why_id}
         files: dict[str, str] = {}
-        for name, content in (b.get("files") or {}).items():
+        for name, content in (mb.files or {}).items():
             ok_n, why_n, norm = safe_import.validate_resource_name(str(name))
             if not ok_n:
                 return {"ok": False, "gate": "resource_name", "error": why_n, "name": str(name)}
             files[norm] = str(content)
-        ed = skill_studio.ensure_editable(skill_id, str(b.get("actor") or "E"))
+        ed = skill_studio.ensure_editable(skill_id, mb.actor or "E")
         if not ed.get("ok"):
             return {"ok": False, "gate": "state", "error": ed.get("error"), "state": ed.get("state")}
-        text = str(b.get("text") or "")
+        text = str(mb.text or "")
         if text:
             man, bd = _mf_from_text(text, skill_id)
         else:
@@ -129,9 +164,9 @@ def api_patch_draft(skill_id: str, body: dict | None = None):
             if cur is None:
                 return {"ok": False, "error": "找不到草稿：%s" % skill_id}
             man, bd, _d = cur
-            if b.get("body") is not None:
-                bd = str(b["body"])
-        store.write_draft(man, bd, files=files, allow_code=bool(b.get("allow_code", True)))
+            if mb.body is not None:
+                bd = str(mb.body)
+        store.write_draft(man, bd, files=files, allow_code=bool(mb.allow_code))
         v = skill_studio.validate_draft(skill_id)
         return _envelope({"ok": True, "validation": v, "editable": ed}, skill_id=skill_id)
     except Exception as e:  # noqa: BLE001
@@ -162,8 +197,10 @@ def api_validate_draft(skill_id: str):
 def api_submit_review(skill_id: str, body: dict | None = None):
     """draft → in_review。内部**强制** L1 静态扫描 + L2 manifest 校验 + L3 影子运行。"""
     try:
-        b = body or {}
-        r = skill_studio.submit_review(skill_id, str(b.get("actor") or "E"))
+        ok_b, err_b, mb = _check(body, models.ActorBody)
+        if not ok_b:
+            return err_b
+        r = skill_studio.submit_review(skill_id, mb.actor or "E")
         return _envelope(r, skill_id=skill_id)
     except Exception as e:  # noqa: BLE001
         return _err(e)
@@ -174,9 +211,10 @@ def api_submit_review(skill_id: str, body: dict | None = None):
 def api_approve(skill_id: str, body: dict | None = None):
     """in_review → approved：写批准记录（**绑定当前内容哈希**）。改内容即失效。"""
     try:
-        b = body or {}
-        r = skill_studio.approve(skill_id, str(b.get("reviewer") or "G"),
-                                 note=str(b.get("note") or ""))
+        ok_b, err_b, mb = _check(body, models.ApproveBody)
+        if not ok_b:
+            return err_b
+        r = skill_studio.approve(skill_id, mb.reviewer, note=mb.note)
         return _envelope(r, skill_id=skill_id)
     except Exception as e:  # noqa: BLE001
         return _err(e)
@@ -186,9 +224,10 @@ def api_approve(skill_id: str, body: dict | None = None):
 def api_reject(skill_id: str, body: dict | None = None):
     """in_review → rejected（回草稿 + 冷却期，理由必填）。"""
     try:
-        b = body or {}
-        r = skill_studio.reject(skill_id, str(b.get("reviewer") or "G"),
-                                reason=str(b.get("reason") or ""))
+        ok_b, err_b, mb = _check(body, models.RejectBody)
+        if not ok_b:
+            return err_b
+        r = skill_studio.reject(skill_id, mb.reviewer, reason=mb.reason)
         return _envelope(r, skill_id=skill_id)
     except Exception as e:  # noqa: BLE001
         return _err(e)
@@ -211,10 +250,12 @@ def api_review_status(skill_id: str):
 def api_install(skill_id: str, body: dict | None = None):
     """approved → installed：doc §5.4 五条闸门全过才安装（复制落盘 + status=published）。"""
     try:
-        b = body or {}
-        r = skill_studio.install(skill_id, str(b.get("actor") or "E"),
-                                 confirm=bool(b.get("confirm")),
-                                 allow_overwrite=bool(b.get("allow_overwrite")))
+        ok_b, err_b, mb = _check(body, models.InstallBody)
+        if not ok_b:
+            return err_b
+        r = skill_studio.install(skill_id, mb.actor or "E",
+                                 confirm=mb.confirm,
+                                 allow_overwrite=mb.allow_overwrite)
         return _envelope(r, skill_id=skill_id)
     except Exception as e:  # noqa: BLE001
         return _err(e)
@@ -280,7 +321,10 @@ def api_team_push(skill_id: str):
 def api_team_import(body: dict | None = None):
     """把团队资产导入为**本地草稿**（绝不直接安装，仍需本地 L1/L2/L3 + 教师批准）。"""
     try:
-        return tencent_memory_adapter.import_team_asset(body or {})
+        ok_b, err_b, mb = _check(body, models.TeamImportBody)
+        if not ok_b:
+            return err_b
+        return tencent_memory_adapter.import_team_asset(mb.model_dump())
     except Exception as e:  # noqa: BLE001
         return _err(e)
 

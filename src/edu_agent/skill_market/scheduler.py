@@ -86,6 +86,24 @@ def stop() -> dict:
     return {"ok": True, **status()}
 
 
+def reset() -> dict:
+    """**清空调度器进程级状态**（停线程 + 计数器归零）——测试隔离用。
+
+    为什么需要：`_state` 是模块级全局，而"import web_server"曾经会顺手拉起这个线程，
+    于是同一个测试进程里先跑的文件会影响后跑的调度器测试（实测：全量 920 用例时
+    `test_scheduler_*` 两条失败、单独跑全绿）。web_server 那边已改成启动时才拉起，
+    这里再补一个显式重置入口，让测试不依赖"谁先谁后"。
+    """
+    with _lock:
+        _state["stop"] = True
+        _state["thread"] = None
+        _state["runs"] = 0
+        _state["last_run"] = 0.0
+        _state["last_result"] = {}
+        _state["last_error"] = ""
+    return {"ok": True, **status()}
+
+
 def status() -> dict:
     hours = interval_hours()
     last = float(_state.get("last_run") or 0)

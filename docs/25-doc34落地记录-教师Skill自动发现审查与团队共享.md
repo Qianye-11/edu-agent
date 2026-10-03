@@ -238,3 +238,76 @@ skill-create 自检              39/39
 | `skill_studio_models.py`（Pydantic 模型） | ⏸ 未做（接口层保持 dict，避免为形式改造全部端点） |
 | §6.4 TencentDB 独立部署与真实同步验证 | ⏸ 需要独立 Docker/WSL2 环境；本地侧已就绪（队列 + 适配器 + 连接测试接口） |
 | §8.3「原有聊天、教案、课件通过回归测试」 | 需跑非技能模块的回归（本次只跑了 5 个技能测试文件） |
+
+---
+
+# 第三轮：`skill_studio_models.py`（§5.1）+ §8.3 全平台回归
+
+## A. 新增 `skill_studio_models.py`（doc §5.1 明确要求的 Pydantic 层）
+
+原来 `studio_api.py` 直接用 `dict` 收 body —— 客户端把 `reviewer` 拼成 `review` 时**不会报错**，
+而是按默认值走成"匿名批准"。现在入参一律过模型：
+
+| 模型 | 用途 | 关键约束 |
+|---|---|---|
+| `ApproveBody` | 审核通过 | `reviewer` 必填（批准要绑定哈希，必须有人负责） |
+| `RejectBody` | 驳回 | `reviewer` + `reason` 都必填（冷却期要用理由） |
+| `InstallBody` | 安装 | `allow_overwrite` 显式开关 |
+| `PatchDraftBody` | 编辑草稿 | `files` ≤32 个、单文件 ≤200KB |
+| `GenerateDraftBody` / `ActorBody` / `ImportBody` / `TeamImportBody` / `ModeBody` / `McpUserServiceBody` | 其余变更接口 | 长度、范围、字面量（`transport: http\|mcp`） |
+| `MutationEnvelope` | 响应信封 | doc §5.5 的 `{ok, candidate_id, state, content_hash, updated_at}` |
+
+* 入参基类 `extra="forbid"`：**多传/拼错的字段直接报错**，不再被静默吞掉；
+* 响应模型只做形状校正（补默认/剔多余），**不改变业务值**；
+* 新增 `GET /api/skill-studio/schemas` 输出契约快照，前端不用读代码；
+* 未引入新依赖（FastAPI 自带 Pydantic v2）。
+
+> 踩坑记录：`validate_or_error` 最初写成 `model(body)` —— Pydantic v2 的 `BaseModel.__init__`
+> **只接受关键字参数**，会抛 `takes 1 positional argument but 2 were given`；已改 `model(**payload)`。
+> 另：Pydantic 宽松模式会把 `"yes"` 正常转成 `True`（友好行为，不是漏洞），
+> 测试改为用真正非法的结构（dict/list）验证拒绝。
+
+## B. §8.3 全平台回归 —— 发现并修掉一个**import 副作用**
+
+跑 `unittest discover`（926 用例）时出现 2 条技能测试失败，而**单独跑同样的测试却是全绿**：
+
+```
+FAIL: test_scheduler_disabled_when_interval_zero   → r.get("disabled") is None
+FAIL: test_scheduler_run_once_updates_board        → status()["runs"] == 2（期望 1）
+```
+
+**根因**：`web_server.py` 在**模块级**调用了 `_sc_scheduler.start()` —— 也就是说
+"**import web_server**" 这个动作本身会 spawn 一个后台线程。而有 10+ 个测试文件 import 它
+（`test_courseware`、`test_design_*`、`test_kg`、`test_lesson_*`、`test_plan_*` …），
+于是跑全量时：调度线程活着 → `start()` 走"already running"短路分支（不返回 `disabled` 键）；
+线程的循环又调过 `run_once()` → 全局计数器 `runs` 不再是 0。
+
+**修法（两处）**：
+
+1. `web_server`：把 `_sc_scheduler.start()` 从模块级移进 `__main__`（真正起服务时才拉起）
+   —— **import 不该有副作用**。实测：`import edu_agent.web_server` 之后
+   `scheduler.status()` → `running=False, runs=0` ✅；而服务进程里仍照常启动
+   （线上实测 `interval_hours=24.0, running=True, next_run=2026-10-04T13:08`）✅
+2. `scheduler.reset()`：新增显式重置入口（停线程 + 计数器归零），
+   调度器测试在 `setUp` 里调用，**不依赖"谁先跑谁后跑"**。
+
+修完：全量 926 用例里**技能相关模块 0 失败**。
+
+## C. §8.3 现状（如实记录）
+
+```
+unittest discover -s tests -p "test_*.py"
+    Ran 926 tests in 251s
+    FAILED (failures=19, errors=8, skipped=35)
+    失败分布：test_slide_deck 8 · test_slide_media 7 · test_slide_objects 3 ·
+              test_slide_fill 2 · test_slide_template 2 · test_slide_boxes 2 ·
+              test_slide_upload 2 · test_slide_edit 1
+    技能相关（skill_market/create/catalog/mode/studio）：0 失败 ✅
+```
+
+**结论**：这 27 个失败**全部集中在 `test_slide_*`（课件/PPT 模块）**，是该分支与
+`fork/feat/ppt-view` 合并时就存在的历史失败（断言旧实现），**与 doc 34 的改动无关**
+（本轮改动前后都是这 27 条，我只把其中混进来的 2 条技能失败修掉了）。
+
+因此 §8.3 的"原有聊天、教案、**课件**功能通过回归测试"**目前不满足** ——
+课件模块需要单独一轮修复或重新基线化，这是独立于 Skill 生态的工作项。

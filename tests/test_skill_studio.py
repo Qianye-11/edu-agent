@@ -621,5 +621,75 @@ class TestTencentAdapter(StudioTestCase):
         self.assertEqual(tma.SYNC_MATRIX["team_skill"], "draft_only")
 
 
+# ════════════════════════════════════════════════════ doc34 §5.1 请求模型
+class TestStudioModels(StudioTestCase):
+    def test_misspelled_field_is_rejected(self):
+        """拼错字段名必须报错 —— 否则 `review`(少个 er) 会静默变成匿名批准。"""
+        from edu_agent.skill_market import skill_studio_models as m
+
+        ok, err, _obj = m.validate_or_error(m.ApproveBody, {"review": "G"})
+        self.assertFalse(ok)
+        self.assertIn("reviewer", err["error"])          # 提示缺哪个必填字段
+        self.assertIn("review", err["error"])            # 并指出多传了哪个
+
+        ok2, _e2, obj2 = m.validate_or_error(m.ApproveBody, {"reviewer": "G", "note": "同意"})
+        self.assertTrue(ok2)
+        self.assertEqual(obj2.reviewer, "G")
+
+    def test_required_fields_enforced(self):
+        from edu_agent.skill_market import skill_studio_models as m
+
+        self.assertFalse(m.validate_or_error(m.ApproveBody, {})[0])           # reviewer 必填
+        self.assertFalse(m.validate_or_error(m.RejectBody, {"reviewer": "G"})[0])   # reason 必填
+        self.assertFalse(m.validate_or_error(m.RejectBody, {"reviewer": "G", "reason": ""})[0])
+        # 真正非法的类型要被挡（注意：Pydantic 宽松模式会把 "yes"/"1" 正常转成 True —— 这是
+        # 有意的友好行为，不是漏洞；要防的是**拼错字段**与**结构不对**）
+        self.assertFalse(m.validate_or_error(m.ModeBody, {"single_user_mode": {"a": 1}})[0])
+        self.assertFalse(m.validate_or_error(m.ModeBody, {"single_user_mode": [1, 2]})[0])
+        ok, _e, obj = m.validate_or_error(m.ModeBody, {"single_user_mode": "yes"})
+        self.assertTrue(ok)
+        self.assertIs(obj.single_user_mode, True)
+
+    def test_limits_enforced(self):
+        from edu_agent.skill_market import skill_studio_models as m
+
+        big = {"files": {("f%d.py" % i): "x" for i in range(40)}}              # >32 个文件
+        self.assertFalse(m.validate_or_error(m.PatchDraftBody, big)[0])
+        self.assertFalse(m.validate_or_error(m.McpUserServiceBody, {"timeout": -1})[0])
+        self.assertTrue(m.validate_or_error(m.McpUserServiceBody, {"timeout": 8})[0])
+
+    def test_envelope_shape(self):
+        """doc §5.5 的固定信封字段齐全。"""
+        from edu_agent.skill_market import skill_studio_models as m
+
+        fields = set(m.MutationEnvelope.model_fields)
+        for k in ("ok", "candidate_id", "state", "content_hash", "updated_at"):
+            self.assertIn(k, fields)
+        env = m.MutationEnvelope(ok=True, state="draft", content_hash="sha256:x",
+                                 updated_at="2026-10-02T00:00:00")
+        self.assertTrue(env.ok)
+
+    def test_studio_api_uses_models(self):
+        """接口层真的接了模型（拼错字段的请求被 gate=request 挡下，且不落盘）。"""
+        from edu_agent.skill_market import studio_api
+
+        r = studio_api.api_approve("whatever", {"reviewer": "G", "review": "多传的字段"})
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["gate"], "request")
+        r2 = studio_api.api_patch_draft("textbook-mindmap", {"evil_field": 1})
+        self.assertFalse(r2["ok"])
+        self.assertEqual(r2["gate"], "request")
+
+    def test_schemas_endpoint_lists_models(self):
+        from edu_agent.skill_market import studio_api
+
+        got = studio_api.api_schemas()
+        self.assertTrue(got["ok"])
+        for name in ("ApproveBody", "RejectBody", "InstallBody", "PatchDraftBody",
+                     "ImportBody", "TeamImportBody", "ModeBody"):
+            self.assertIn(name, got["models"])
+        self.assertIn("content_hash", got["envelope"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

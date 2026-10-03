@@ -721,6 +721,15 @@ class TestShadowL3(CreateTestCase):
 class TestSchedulerAndPrompt(CreateTestCase):
     """M9 定时扫描 + M8 半自动提示。"""
 
+    def setUp(self):
+        super().setUp()
+        # 调度器的 _state 是进程级全局：跑在同一个进程里的其它测试文件（历史上 import
+        # web_server 会拉起调度线程）会留下"线程活着 / runs 计数不为 0"的残留，
+        # 导致单独跑全绿、全量跑失败。这里显式重置，让本类不依赖执行顺序。
+        from edu_agent.skill_market import scheduler
+
+        scheduler.reset()
+
     def test_scheduler_disabled_when_interval_zero(self):
         from edu_agent.skill_market import scheduler
 

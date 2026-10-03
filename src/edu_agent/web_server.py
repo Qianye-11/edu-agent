@@ -76,12 +76,18 @@ except Exception as _e:  # noqa: BLE001
 
 # skill-create 定时扫描（docs/22 M9）：守护线程，默认 24 小时一次，只做"发现"
 # （回扫会话 + 更新候选看板），**绝不自动出草稿、绝不自动发布**。
-try:
-    from edu_agent.skill_market import scheduler as _sc_scheduler
+#
+# ⚠️ 只在 **app 启动时**拉起，不在 import 时拉起 —— 早期写在模块级，导致"import web_server"
+# 这个动作本身就会 spawn 一个后台线程：10+ 个测试文件 import 它，于是全量测试跑起来时
+# 调度线程与 _state["runs"] 计数器污染了后续的调度器测试（实测：全量 920 用例时
+# test_scheduler_* 两条失败、单独跑却全绿）。import 不该有副作用。
+def _start_skill_scheduler() -> None:
+    try:
+        from edu_agent.skill_market import scheduler as _sc_scheduler
 
-    _sc_scheduler.start()
-except Exception as _e:  # noqa: BLE001
-    log.warning("skill-create 定时扫描未启动：%s: %s", type(_e).__name__, _e)
+        _sc_scheduler.start()
+    except Exception as _e:  # noqa: BLE001
+        log.warning("skill-create 定时扫描未启动：%s: %s", type(_e).__name__, _e)
 
 # ---------- host：会话存储（进程内只保留这一个持久化入口） ----------
 _settings = load_settings()
@@ -3808,6 +3814,7 @@ if __name__ == "__main__":
     s = load_settings()
     logsetup.setup(level=os.getenv("EDU_LOG_LEVEL", "INFO"),
                    log_file=str(s.log_file))
+    _start_skill_scheduler()          # 真正起服务时才拉起定时扫描（import 不产生副作用）
     _warmup()
     # 端口：默认 5174；EDU_WEB_PORT 可覆盖（演示/多实例并存，如 EDU_WEB_PORT=5181）
     uvicorn.run(app, host=os.getenv("EDU_WEB_HOST", "127.0.0.1"),

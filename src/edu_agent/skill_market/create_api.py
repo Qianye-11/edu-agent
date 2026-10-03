@@ -24,6 +24,7 @@ from fastapi import APIRouter
 
 from edu_agent.skill_market import (health, lifecycle, miner, packager, runs,
                                    safe_import, scheduler, shadow, verifier)
+from edu_agent.skill_market import skill_studio_models
 
 router = APIRouter(prefix="/api/skill-create", tags=["skill-create"])
 
@@ -90,9 +91,13 @@ def api_import(body: dict):
     并做体积上限检查。相对路径按导入根解析。
     """
     try:
-        text = str(body.get("text") or "")
-        if not text and body.get("path"):
-            got = safe_import.resolve_import_path(str(body["path"]))
+        ok_b, err_b, mb = skill_studio_models.validate_or_error(skill_studio_models.ImportBody,
+                                                               body or {})
+        if not ok_b:
+            return err_b
+        text = str(mb.text or "")
+        if not text and mb.path:
+            got = safe_import.resolve_import_path(mb.path)
             if not got.get("ok"):
                 return {"ok": False, "gate": "path_whitelist", "error": got["error"],
                         "roots": got.get("roots") or safe_import.describe()["import_roots"]}
@@ -103,9 +108,9 @@ def api_import(body: dict):
             text = Path(p).read_text(encoding="utf-8", errors="replace")
         if not text.strip():
             return {"ok": False, "error": "缺少 text 或 path"}
-        r = packager.import_draft(text, actor=str(body.get("actor") or "E"),
-                                  confirm=bool(body.get("confirm")),
-                                  description=str(body.get("description") or ""))
+        r = packager.import_draft(text, actor=mb.actor or "E",
+                                  confirm=mb.confirm,
+                                  description=mb.description)
         r.pop("manifest", None)
         return r
     except Exception as e:  # noqa: BLE001
