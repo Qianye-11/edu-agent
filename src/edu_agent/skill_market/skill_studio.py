@@ -59,22 +59,19 @@ STATE_ALIAS: dict[str, str] = {v: k for k, v in STATE_MAP.items() if v != "candi
 
 # ---------------------------------------------------------------- 配置
 def config() -> dict:
-    """读 doc 34 §7.1 的配置项（.env / 环境变量），并同步给挖掘器阈值。"""
+    """读 doc 34 §7.1 的配置项（`.env` / 环境变量）。
+
+    **纯读取，没有副作用** —— 这一点很重要：本函数会被 `shadow_run()`（L3 影子运行）调用，
+    早期版本在这里顺手 `runs.set_config(min_sessions=3)`，结果每次影子运行都会**悄悄改掉
+    全局候选阈值**，让显式设过阈值的调用方（测试/运维）莫名失效（实测踩过）。
+
+    阈值类配置现在由 `runs.config()` 自己按「显式设置 > 环境变量 > 默认」解析，见那里。
+    """
     out = {}
     for k, dv in _ENV_DEFAULTS.items():
         out[k] = str(os.getenv(k) or dv)
     out["enabled"] = out["SKILL_STUDIO_ENABLED"] not in ("0", "false", "no", "off")
     out["execute_plugin"] = out["SKILL_STUDIO_EXECUTE_PLUGIN"] not in ("0", "false", "no", "off")
-    try:
-        from edu_agent.skill_market import runs
-
-        runs.set_config(
-            window_days=int(out["SKILL_CANDIDATE_WINDOW_DAYS"]),
-            min_sessions=int(out["SKILL_CANDIDATE_MIN_SESSIONS"]),
-            reject_cooldown_days=int(out["SKILL_CANDIDATE_COOLDOWN_DAYS"]),
-        )
-    except Exception:  # noqa: BLE001  配置读取失败不能打断主链路
-        pass
     return out
 
 
@@ -243,17 +240,29 @@ def approval_status(skill_id: str) -> dict:
 
 # ---------------------------------------------------------------- 草稿校验与审查流转
 def validate_draft(skill_id: str) -> dict:
-    """结构校验（doc §5.3 的最小结构 + 包检查）：前置元数据 / 路径 / 大小 / 资源清单。"""
+    """结构校验（doc §5.3 最小结构 + §5.4 包检查）：前置元数据 / 段位 / 路径 / 大小 / 资源清单。"""
+    from edu_agent.skill_market import draft as _draft
+
     sid = str(skill_id or "").strip()
     found = store.find_skill(sid)
     if found is None:
         return {"ok": False, "error": "找不到技能：%s" % sid}
     man = found["manifest"]
+    body = found.get("body") or ""
     problems: list[str] = []
     for err in man.errors():
         problems.append("manifest：" + err)
     if len(man.description) < 10:
         problems.append("description 太短（<10 字），教师无法判断用途")
+
+    # doc 34 §5.3：**Agent 自动生成**的草稿必须用固定的七段最小结构；
+    # 手写/导入的技能不强制（它们有自己的正文组织方式，不能一刀切）。
+    generated = man.source in _draft.GENERATED_SOURCES
+    missing = _draft.missing_sections(body) if generated else []
+    if missing:
+        problems.append("缺少 doc 34 §5.3 规定的段落：%s（自动生成的草稿必须七段齐全）"
+                        % "、".join("## " + m for m in missing))
+
     files = skill_files(sid)
     total = 0
     for f in files:
@@ -270,6 +279,9 @@ def validate_draft(skill_id: str) -> dict:
     if not rep.ok:
         problems.append("权限扫描未过：" + rep.review_note())
     return {"ok": not problems, "problems": problems, "skill": sid,
+            "source": man.source,
+            "sections_required": list(_draft.REQUIRED_SECTIONS) if generated else [],
+            "sections_missing": missing,
             "files": len(files), "bytes": total,
             "content_hash": content_hash(sid), "scan": rep.to_dict()}
 
@@ -478,6 +490,32 @@ def outbox() -> dict:
             except ValueError:
                 continue
     return {"ok": True, "count": len(items), "items": items}
+
+
+def versions(skill_id: str) -> dict:
+    """版本历史（含 doc 34 §5.4 的 `superseded` 标记：历史保留但不激活）。"""
+    sid = str(skill_id or "").strip()
+    base = paths.published_dir() / sid
+    rows: list[dict] = []
+    if base.is_dir():
+        for d in sorted((p for p in base.iterdir() if p.is_dir()),
+                        key=lambda p: p.name, reverse=True):
+            marker = d / "SUPERSEDED.json"
+            rec = None
+            if marker.exists():
+                try:
+                    rec = json.loads(marker.read_text(encoding="utf-8"))
+                except ValueError:
+                    rec = {"note": "标记文件损坏"}
+            rows.append({"version": d.name, "dir": str(d),
+                         "superseded": bool(rec),
+                         "superseded_by": (rec or {}).get("superseded_by", ""),
+                         "superseded_at": (rec or {}).get("at_text", ""),
+                         "active": not rec})
+    cur = str(store.get_state(sid).get("version") or "")
+    return {"ok": True, "skill": sid, "current_version": cur,
+            "superseded_count": sum(1 for r in rows if r["superseded"]),
+            "count": len(rows), "versions": rows}
 
 
 def overview() -> dict:

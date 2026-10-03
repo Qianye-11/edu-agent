@@ -48,24 +48,48 @@ _DEFAULTS = {
     "health_window_days": 30,    # L4：只看最近多少天
 }
 
+#: 阈值可由环境变量覆盖（doc 34 §7.1 的 `.env` 配置项）；**显式 set_config 过的值优先于环境变量**
+_ENV_KEYS = {
+    "min_sessions": "SKILL_CANDIDATE_MIN_SESSIONS",
+    "window_days": "SKILL_CANDIDATE_WINDOW_DAYS",
+    "reject_cooldown_days": "SKILL_CANDIDATE_COOLDOWN_DAYS",
+}
+
 _lock = threading.RLock()
 _steps = threading.local()
 _last_turn: dict[str, dict] = {}          # session_id -> 上一轮信息（用于纠正检测）
 
 
 def config() -> dict:
-    """阈值配置（`<market>/skill_create.json`，缺失或损坏就回默认）。"""
+    """阈值配置（`<market>/skill_create.json`，缺失或损坏就回默认）。
+
+    优先级：**显式 `set_config()` 写进文件的值 > 环境变量（`.env`）> 内置默认**。
+    环境变量只在文件里没写过该键时生效 —— 这样"部署时用 .env 定阈值"和
+    "运行/测试时显式改阈值"不会互相打架。
+    """
     import json
+    import os
 
     p = paths.config_file()
     cfg = dict(_DEFAULTS)
+    stored: dict = {}
     if p.exists():
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                cfg.update({k: v for k, v in data.items() if k in _DEFAULTS})
+                stored = {k: v for k, v in data.items() if k in _DEFAULTS}
+                cfg.update(stored)
         except ValueError:
             pass
+    for key, env in _ENV_KEYS.items():
+        if key in stored:
+            continue                      # 显式设置过 → 环境变量不覆盖
+        raw = (os.getenv(env) or "").strip()
+        if raw:
+            try:
+                cfg[key] = int(raw)
+            except ValueError:
+                pass
     return cfg
 
 

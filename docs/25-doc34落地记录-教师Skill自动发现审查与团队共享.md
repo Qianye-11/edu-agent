@@ -152,3 +152,89 @@ tests/test_skill_studio.py     19 个用例 OK（doc §8.1 九条 + §8.2 端到
 | 7 拒绝后冷却期不重复提醒 | `test_reject_sets_cooldown` | ✅ |
 | 8 团队服务不可用时本地不出错 | `test_team_service_down_local_still_works` | ✅ |
 | 9 未批准 Skill 不允许进入同步队列 | `test_unapproved_cannot_enqueue_sync` | ✅ |
+
+---
+
+# 第二轮：补齐 doc 34 剩余条款（§5.3 / §5.4 / §5.5 / §6）
+
+> 第一轮做完 P0~P2 后，重新**通读全文**（首次阅读时中间一段被截断），发现 4 处未落地条款。
+
+## A. §5.5 路径与文件名白名单 —— 原实现**违规**
+
+> 文档原文："**不得接受客户端传入的本机绝对路径**；所有文件名、Skill ID 和资源路径均需服务端白名单验证。"
+
+原 `POST /api/skill-create/import` 直接 `read_text(客户端给的 path)` —— 等于把**任意文件读取**暴露出去
+（一个导入请求就能读走 `.env` / 凭据 / 私钥）。
+
+**新增 `safe_import.py`**，三条都管住，且一律 fails closed：
+
+| 维度 | 规则 |
+|---|---|
+| 导入路径 | 只允许**导入根之内**：`EDU_SKILL_IMPORT_ROOTS`（默认 `<repo>/skill-src` + `<data_dir>/skill_inbox`）；相对路径按导入根解析；`..`/symlink 先解析再判定 |
+| 资源文件名 | 单层文件名 + 后缀白名单（`.py/.md/.json/.txt/.yml/.yaml/.csv/.tsv`）+ 禁隐藏文件 + 禁 `.exe/.cmd/.ps1/.pem/.env` 等 |
+| Skill ID | `^[a-z0-9][a-z0-9_-]{1,47}$`（与 manifest 同口径） |
+
+接入点：`/api/skill-create/import`（path 形式）、`PATCH /api/skill-studio/drafts/{id}`（`files` 形式）；
+新增 `GET /api/skill-studio/safe-import` 暴露白名单快照供前端展示。
+
+## B. §5.3 草稿最小结构 —— 原模板**不符**
+
+> 文档规定 `SKILL.md` 必须用稳定的七段结构。
+
+原 `draft.build_body()` 产出的是"触发场景/输入/步骤/…"另一套段落。现改为 doc 规定的七段
+（`适用场景`/`必要输入`/`工作流程`/`输出格式`/`教师确认点`/`质量与隐私约束`/`版本来源`），
+原有信息全部归并进去不丢；front-matter 的来源标记改为 **`source: conversation_candidate`**。
+
+同时在 `skill_studio.validate_draft()` 增加段位校验 —— **只对 Agent 自动生成的草稿强制**
+（`conversation_candidate` / `skill-create` / `session`），手写与导入的技能不强制：
+不能一刀切，否则会把已有技能全拒了。
+
+## C. §5.4 `superseded` —— 原来只有映射没有实现
+
+发布新版时把旧版本标 `superseded`：在旧版本快照目录写 `SUPERSEDED.json`
+（**不删文件、不改历史**）+ 审计记 `skill.supersede`；
+`GET /api/skill-studio/versions/{id}` 展示"当前版本 / 被替代版本（历史保留但不激活）"。
+
+## D. §6.2 团队适配器 `tencent_memory_adapter.py` —— 新增
+
+| doc 职责 | 实现 |
+|---|---|
+| 读取本地 `sync_outbox` | `outbox()` |
+| 已批准 Skill → 团队资产 | `to_team_asset()`（**双重闸门**：`export_policy` + 逐文件 `scan_text`） |
+| 拉取团队 Skill 元数据 | `pull_team_metadata()` |
+| 远程资产导入为**本地 draft** | `import_team_asset()`（只写草稿区，**绝不 publish**；文件名过白名单、内容过隐私扫描） |
+| 记录本地/远程 ID、版本、时间、失败原因 | `sync_log.jsonl` |
+| 不处理未脱敏学生数据 | 出站/入站双向扫描；`SYNC_MATRIX` 把 §6.3 的同步矩阵写进代码 |
+
+**默认关闭（`TENCENT_MEMORY_ENABLED=0`）时零远程调用** —— `connection_test()` 直接返回"跳过"，
+本地对话/教案/课件/Skill 完全不受影响（doc §6.1 的硬要求）。
+
+## E. 顺手修掉一个自己埋的真 bug：配置读取的隐藏副作用
+
+`shadow_run()`（L3 影子运行）每次都会调 `skill_studio.config()`，而那个函数当时**顺手**
+`runs.set_config(min_sessions=3)` —— 于是**每次影子运行都会悄悄改掉全局候选阈值**。
+表现：`skill-create` 自检里显式设了 `min_sessions=2`，跑完 L3 后变成 3 →
+候选 R1 判据不齐 → 半自动提示不出现 → 自检报 `p1=False`。
+
+**修法**：`skill_studio.config()` 改为**纯读取**；阈值优先级在 `runs.config()` 里统一解析为
+**「显式 set_config 写进文件 > 环境变量（.env）> 内置默认」**。修完自检回到 **39/39**。
+
+> 教训：**读配置的函数不要写全局状态**。它会在你完全想不到的调用点（比如影子运行）触发。
+
+## F. 验收证据（第二轮）
+
+```
+tests/test_skill_studio.py     33 个用例 OK（原 19 + 新增 14：白名单 4 / 七段结构 3 / superseded 1 / 团队同步 6）
+全量 5 个技能测试文件           221 个用例 OK
+模块3 自检                     37/37
+skill-create 自检              39/39
+```
+
+## G. 剩余未做（明确记录）
+
+| 项 | 状态 |
+|---|---|
+| §5.6 Skill Studio 前端（4 个页面） | ⏸ 未做（此前明确"UI 交别人"） |
+| `skill_studio_models.py`（Pydantic 模型） | ⏸ 未做（接口层保持 dict，避免为形式改造全部端点） |
+| §6.4 TencentDB 独立部署与真实同步验证 | ⏸ 需要独立 Docker/WSL2 环境；本地侧已就绪（队列 + 适配器 + 连接测试接口） |
+| §8.3「原有聊天、教案、课件通过回归测试」 | 需跑非技能模块的回归（本次只跑了 5 个技能测试文件） |

@@ -359,10 +359,22 @@ class TestPackager(CreateTestCase):
     def test_front_matter_provenance(self):
         c, r = self.drafted()
         text = Path(r["dir"], "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("source: skill-create", text)
+        # doc 34 §5.3 规定的来源标记；七段最小结构同时校验
+        self.assertIn("source: conversation_candidate", text)
         self.assertIn("candidate_id: " + c["candidate_id"], text)
         self.assertIn("evidence_runs: 3", text)
         self.assertIn("evidence_sessions: 2", text)
+
+    def test_draft_has_doc34_sections(self):
+        """doc 34 §5.3：自动生成的草稿必须七段齐全（教师无需手写 Markdown）。"""
+        from edu_agent.skill_market import draft as draft_mod
+
+        _c, r = self.drafted()
+        text = Path(r["dir"], "SKILL.md").read_text(encoding="utf-8")
+        self.assertEqual(draft_mod.missing_sections(text), [], "缺段：%s" % text[:200])
+        for sec in ("适用场景", "必要输入", "工作流程", "输出格式",
+                    "教师确认点", "质量与隐私约束", "版本来源"):
+            self.assertIn("## " + sec, text)
 
     def test_allowed_capabilities_from_trace(self):
         c, r = self.drafted()

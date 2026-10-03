@@ -24,6 +24,7 @@
 """
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import replace as _replace
 from pathlib import Path
@@ -309,17 +310,51 @@ def publish(skill_id: str, actor: str = "E", *, confirm: bool = False,
         scan_verdict = "reused"
 
     # 状态 → published（state.json 与注册表一起更新；file_path 指向全局落盘目录）
+    prev_version = str(store.get_state(skill_id).get("version") or "")
     store.write_state(skill_id, status="published", version=man.version, actor=actor,
                       area="published", installed=True, dir=str(installed),
                       published_at=time.time())
+    # doc 34 §5.4：新版替代旧版 → 旧版本标 `superseded`（**历史保留但不激活**）
+    superseded = ""
+    if prev_version and prev_version != man.version:
+        superseded = mark_superseded(skill_id, prev_version, man.version, actor)
     _log("skill.publish", skill=skill_id, version=man.version, actor=actor,
          frm=cur, to="published", session_id=session_id or man.session_id,
          input_text=man.description,
-         result={"ok": True, "code": "published", "installed_to": str(installed)},
+         result={"ok": True, "code": "published", "installed_to": str(installed),
+                 "superseded": prev_version if superseded else ""},
          gates={"permission": "allow", "perm_scan": scan_verdict})
     return {"ok": True, "action": "publish", "skill": skill_id, "status": "published",
             "version": man.version, "installed_to": str(installed),
+            "superseded_version": prev_version if superseded else "",
             "message": "已发布：Agent 现在可加载它（会话下次初始化时自动带上，见 session_bootstrap）"}
+
+
+def mark_superseded(skill_id: str, old_version: str, new_version: str,
+                    actor: str = "E") -> str:
+    """把旧版本标记为被替代（doc 34 §5.4 `superseded`）。
+
+    落点：旧版本快照目录里写 `SUPERSEDED.json`（**不删文件、不改历史**），
+    并在审计里记一条 `skill.supersede`。查历史版本时据此展示"已被 vX 替代，不再激活"。
+    """
+    if not old_version:
+        return ""
+    base = paths.published_dir() / skill_id / old_version
+    if not base.is_dir():
+        return ""
+    payload = {"skill": skill_id, "version": old_version, "superseded_by": new_version,
+               "actor": str(actor), "at": time.time(),
+               "at_text": time.strftime("%Y-%m-%dT%H:%M:%S"),
+               "note": "已被新版替代：历史保留但不激活"}
+    try:
+        (base / "SUPERSEDED.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        return ""
+    _log("skill.supersede", skill=skill_id, version=old_version, actor=actor,
+         frm="published", to="superseded", input_text="新版 %s" % new_version,
+         result={"ok": True, "code": "superseded", "superseded_by": new_version})
+    return str(base)
 
 
 def disable(skill_id: str, actor: str = "E", *, reason: str = "",

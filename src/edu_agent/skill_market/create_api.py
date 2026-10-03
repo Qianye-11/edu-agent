@@ -18,10 +18,12 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter
 
 from edu_agent.skill_market import (health, lifecycle, miner, packager, runs,
-                                   scheduler, shadow, verifier)
+                                   safe_import, scheduler, shadow, verifier)
 
 router = APIRouter(prefix="/api/skill-create", tags=["skill-create"])
 
@@ -81,14 +83,24 @@ def api_verify(body: dict):
 def api_import(body: dict):
     """把手写的 SKILL.md（YAML 块状 front-matter 也认）导入市场草稿区。
 
-    body: {"text": "<SKILL.md 全文>"} 或 {"path": "<文件路径>"}
+    body: {"text": "<SKILL.md 全文>"} 或 {"path": "<导入根内的路径>"}
+
+    doc 34 §5.5：**不接受任意本机绝对路径** —— `path` 必须落在服务端配置的导入根之内
+    （`EDU_SKILL_IMPORT_ROOTS`，默认 `<repo>/skill-src` 与 `<data_dir>/skill_inbox`），
+    并做体积上限检查。相对路径按导入根解析。
     """
     try:
-        from pathlib import Path as _P
-
         text = str(body.get("text") or "")
         if not text and body.get("path"):
-            text = _P(str(body["path"])).read_text(encoding="utf-8", errors="replace")
+            got = safe_import.resolve_import_path(str(body["path"]))
+            if not got.get("ok"):
+                return {"ok": False, "gate": "path_whitelist", "error": got["error"],
+                        "roots": got.get("roots") or safe_import.describe()["import_roots"]}
+            p = got["path"]
+            ok, why = safe_import.check_size(p, safe_import.MAX_IMPORT_BYTES)
+            if not ok:
+                return {"ok": False, "gate": "size", "error": why, "path": p}
+            text = Path(p).read_text(encoding="utf-8", errors="replace")
         if not text.strip():
             return {"ok": False, "error": "缺少 text 或 path"}
         r = packager.import_draft(text, actor=str(body.get("actor") or "E"),

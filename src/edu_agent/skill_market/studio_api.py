@@ -27,7 +27,8 @@ import time
 from fastapi import APIRouter
 
 from edu_agent.skill_market import (audit, lifecycle, miner, packager, registry_db,
-                                   skill_privacy, skill_studio, store)
+                                   safe_import, skill_privacy, skill_studio, store,
+                                   tencent_memory_adapter)
 
 router = APIRouter(prefix="/api/skill-studio", tags=["skill-studio"])
 
@@ -103,9 +104,20 @@ def api_patch_draft(skill_id: str, body: dict | None = None):
 
     已批准/已发布的技能会自动先回到可编辑草稿态（approved → 撤回；published → 派生新草稿，
     **线上版本继续服务**），再写入编辑内容 —— 见 `skill_studio.ensure_editable`。
+
+    doc 34 §5.5：skill id 与资源文件名都走服务端白名单（单层文件名 + 后缀白名单）。
     """
     try:
         b = body or {}
+        ok_id, why_id, _norm = safe_import.validate_skill_id(skill_id)
+        if not ok_id:
+            return {"ok": False, "gate": "skill_id", "error": why_id}
+        files: dict[str, str] = {}
+        for name, content in (b.get("files") or {}).items():
+            ok_n, why_n, norm = safe_import.validate_resource_name(str(name))
+            if not ok_n:
+                return {"ok": False, "gate": "resource_name", "error": why_n, "name": str(name)}
+            files[norm] = str(content)
         ed = skill_studio.ensure_editable(skill_id, str(b.get("actor") or "E"))
         if not ed.get("ok"):
             return {"ok": False, "gate": "state", "error": ed.get("error"), "state": ed.get("state")}
@@ -119,7 +131,6 @@ def api_patch_draft(skill_id: str, body: dict | None = None):
             man, bd, _d = cur
             if b.get("body") is not None:
                 bd = str(b["body"])
-        files = {k: str(v) for k, v in (b.get("files") or {}).items()}
         store.write_draft(man, bd, files=files, allow_code=bool(b.get("allow_code", True)))
         v = skill_studio.validate_draft(skill_id)
         return _envelope({"ok": True, "validation": v, "editable": ed}, skill_id=skill_id)
@@ -215,6 +226,79 @@ def api_audit(skill: str = "", event: str = "", limit: int = 50):
     try:
         return {"ok": True, "records": audit.query(skill=skill, event=event,
                                                    limit=max(1, min(limit, 500)))}
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/versions/{skill_id}")
+def api_versions(skill_id: str):
+    """版本历史：当前版本 + 被替代的版本（`superseded`，历史保留但不激活）。"""
+    try:
+        return skill_studio.versions(skill_id)
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+# ---------------------------------------------------------------- 第二阶段：团队同步（doc §6）
+@router.get("/team/status")
+def api_team_status():
+    """团队记忆库适配器状态（**不做网络调用**；默认关闭即完全离线）。"""
+    try:
+        return tencent_memory_adapter.status()
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/team/connection-test")
+def api_team_connection_test():
+    """连接测试（doc §6.4 第 6 步）。未启用时直接返回"跳过"，不发起请求。"""
+    try:
+        return tencent_memory_adapter.connection_test()
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/team/metadata")
+def api_team_metadata():
+    """拉取团队 Skill 元数据（不含内容）；未启用返回空列表。"""
+    try:
+        return tencent_memory_adapter.pull_team_metadata()
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.post("/team/push/{skill_id}")
+def api_team_push(skill_id: str):
+    """把**已批准**的技能推到团队库（未批准/含敏感内容一律拒绝）。"""
+    try:
+        return tencent_memory_adapter.push_approved(skill_id)
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.post("/team/import")
+def api_team_import(body: dict | None = None):
+    """把团队资产导入为**本地草稿**（绝不直接安装，仍需本地 L1/L2/L3 + 教师批准）。"""
+    try:
+        return tencent_memory_adapter.import_team_asset(body or {})
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/team/sync-log")
+def api_team_sync_log(limit: int = 50):
+    """同步日志：本地 ID / 远程 ID / 版本 / 时间 / 失败原因。"""
+    try:
+        return tencent_memory_adapter.sync_log(limit=limit)
+    except Exception as e:  # noqa: BLE001
+        return _err(e)
+
+
+@router.get("/safe-import")
+def api_safe_import():
+    """路径/文件名白名单快照（doc 34 §5.5）：导入根、允许后缀、禁止后缀、ID 规则。"""
+    try:
+        return safe_import.describe()
     except Exception as e:  # noqa: BLE001
         return _err(e)
 

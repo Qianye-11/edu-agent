@@ -81,7 +81,9 @@ class StudioTestCase(unittest.TestCase):
         isolation._cache.clear()
         runs._last_turn.clear()
         runs.begin_turn("")
-        skill_studio.config()          # 让 .env 阈值生效（min_sessions=3 等）
+        # 阈值：`runs.config()` 自己按「显式设置 > 环境变量 > 默认」解析
+        # （SKILL_CANDIDATE_MIN_SESSIONS=3 已在上面设进环境，无需额外调用）
+        assert runs.config()["min_sessions"] == 3
 
     def tearDown(self):
         for k, v in self._env.items():
@@ -410,6 +412,213 @@ class TestEndToEndAcceptance(StudioTestCase):
         q = skill_studio.enqueue_sync(skill_id, "teacher-A")
         self.assertTrue(q["ok"], q)
         self.assertEqual(skill_studio.outbox()["count"], 1)
+
+
+# ════════════════════════════════════════════════════ doc34 §5.5 路径白名单
+class TestSafeImport(StudioTestCase):
+    def test_import_rejects_path_outside_roots(self):
+        """§5.5：不得接受客户端传入的本机绝对路径（否则等于任意文件读取）。"""
+        from edu_agent.skill_market import safe_import
+
+        got = safe_import.resolve_import_path(r"C:\Windows\System32\drivers\etc\hosts")
+        self.assertFalse(got["ok"])
+        self.assertIn("导入根之外", got["error"])
+        for bad in (r"C:\Users\auror\.dsh\.credentials.yaml",
+                    "D:\\ruanjian\\deep code\\edu-agent\\.env",
+                    "../../../../etc/passwd"):
+            self.assertFalse(safe_import.resolve_import_path(bad)["ok"], bad)
+
+    def test_import_accepts_path_inside_root(self):
+        from edu_agent.skill_market import safe_import
+
+        root = safe_import.import_roots()[0]
+        root.mkdir(parents=True, exist_ok=True)
+        f = root / "probe-skill.md"
+        f.write_text("---\nname: probe-x\ndescription: d\nowner: t\n"
+                     "allowed_capabilities: [\"textbook:read\"]\ndata_scope: [\"teaching_context\"]\n"
+                     "tests: [inline-tests(1)]\n---\n正文\n", encoding="utf-8")
+        try:
+            self.assertTrue(safe_import.resolve_import_path(str(f))["ok"])
+            self.assertTrue(safe_import.resolve_import_path("probe-skill.md")["ok"])   # 相对路径
+            self.assertFalse(safe_import.resolve_import_path("probe-skill.md/../../../x")["ok"])
+        finally:
+            f.unlink(missing_ok=True)
+
+    def test_resource_name_whitelist(self):
+        from edu_agent.skill_market import safe_import
+
+        for ok_name in ("plugin.py", "SKILL.md", "fixture.json", "notes.txt"):
+            self.assertTrue(safe_import.validate_resource_name(ok_name)[0], ok_name)
+        for bad in ("../evil.py", "a/b.py", "run.exe", "x.cmd", ".hidden.py",
+                    "shell.ps1", "key.pem", "app.js", ""):
+            ok, why, _ = safe_import.validate_resource_name(bad)
+            self.assertFalse(ok, bad)
+            self.assertTrue(why)
+
+    def test_skill_id_whitelist(self):
+        from edu_agent.skill_market import safe_import
+
+        self.assertTrue(safe_import.validate_skill_id("textbook-mindmap")[0])
+        for bad in ("TextbookMindMap", "a", "has space", "../evil", ""):
+            self.assertFalse(safe_import.validate_skill_id(bad)[0], bad)
+
+
+# ════════════════════════════════════════════════════ doc34 §5.3 最小结构
+class TestDraftStructure(StudioTestCase):
+    GEN_NO_SECTIONS = ("---\nname: gen-skill\ndescription: 自动生成的草稿但缺段\nowner: t\n"
+                       "source: conversation_candidate\nplugin: plugin.py\n"
+                       "allowed_capabilities: [\"textbook:read\"]\ndata_scope: [\"teaching_context\"]\n"
+                       "tests:\n  - input: {chapter_no: 2}\n    expect_contains: \"x\"\n"
+                       "    expect_fields: [\"ok\", \"markdown\"]\n---\n"
+                       "# gen-skill\n随便写点正文，没有任何规定段落。\n")
+
+    def test_generated_draft_without_sections_fails_validation(self):
+        from edu_agent.skill_market import draft as draft_mod
+
+        with mock.patch("edu_agent.permissions.policy", return_value="allow"):
+            r = packager.import_draft(self.GEN_NO_SECTIONS, actor="t", confirm=True)
+        self.assertTrue(r["ok"], r)
+        v = skill_studio.validate_draft("gen-skill")
+        self.assertFalse(v["ok"])
+        self.assertTrue(any("§5.3" in p for p in v["problems"]), v["problems"])
+        self.assertEqual(len(v["sections_missing"]), 7)
+        self.assertEqual(v["sections_required"], list(draft_mod.REQUIRED_SECTIONS))
+
+    def test_handwritten_skill_not_forced_into_structure(self):
+        """手写技能不强制七段（不能一刀切，否则把已有技能全拒了）。"""
+        name, _d = self.make_draft("handwritten-skill")
+        v = skill_studio.validate_draft(name)
+        self.assertTrue(v["ok"], v["problems"])
+        self.assertEqual(v["sections_required"], [])
+
+    def test_build_body_produces_all_sections(self):
+        from edu_agent.skill_market import draft as draft_mod
+
+        body = draft_mod.build_body(
+            {"title": "高一语文文本精读", "owner": "t", "trigger": "做精读课",
+             "inputs": ["textbook_id"], "outputs": ["lesson_doc"], "steps": ["读文本", "分层练习"],
+             "warnings": ["示例警告"], "session_id": "s1", "source_chars": 120,
+             "fixture": {"expected_digest": "abc"}},
+            allowed=("textbook:read",), data_scope=("teaching_context",))
+        self.assertEqual(draft_mod.missing_sections(body), [])
+        for sec in draft_mod.REQUIRED_SECTIONS:
+            self.assertIn("## " + sec, body)
+
+
+# ════════════════════════════════════════════════════ doc34 §5.4 superseded
+class TestSuperseded(StudioTestCase):
+    def test_publish_new_version_marks_old_superseded(self):
+        name, _d = self.make_draft()
+        self.submit_and_approve(name)
+        first = self.install(name)
+        self.assertTrue(first["ok"], first)
+        v1 = first["version"]
+        self.edit_body(name, "\n新版：增加课前预习单。\n")
+        self.assertTrue(skill_studio.submit_review(name, "teacher-A")["ok"])
+        self.assertTrue(skill_studio.approve(name, "reviewer-G", note="改后重批")["ok"])
+        second = self.install(name, allow_overwrite=True)
+        self.assertTrue(second["ok"], second)
+        self.assertNotEqual(second["version"], v1)
+        self.assertEqual(second["superseded_version"], v1)
+
+        got = skill_studio.versions(name)
+        self.assertEqual(got["superseded_count"], 1)
+        old = [r for r in got["versions"] if r["version"] == v1][0]
+        self.assertTrue(old["superseded"])
+        self.assertFalse(old["active"])
+        self.assertEqual(old["superseded_by"], second["version"])
+        self.assertTrue(Path(old["dir"]).is_dir())          # 历史保留，不物理删
+        self.assertIn("skill.supersede", [r["event"] for r in lifecycle.history(name)])
+
+
+# ════════════════════════════════════════════════════ doc34 §6 团队同步
+class TestTencentAdapter(StudioTestCase):
+    def test_offline_by_default(self):
+        """§6.1：默认关闭时零远程调用，本地功能不受影响。"""
+        from edu_agent.skill_market import tencent_memory_adapter as tma
+
+        st = tma.status()
+        self.assertFalse(st["enabled"])
+        self.assertIn("本地模式", st["note"])
+        ct = tma.connection_test()
+        self.assertTrue(ct["ok"] and ct["skipped"])
+        self.assertIn("不做任何远程调用", ct["reason"])
+        self.assertEqual(tma.pull_team_metadata()["count"], 0)
+
+    def test_push_requires_approval(self):
+        from edu_agent.skill_market import tencent_memory_adapter as tma
+
+        name, _d = self.make_draft()                       # 只是草稿
+        got = tma.push_approved(name)
+        self.assertFalse(got["ok"])
+        self.assertIn("未启用", got["error"])
+        os.environ["TENCENT_MEMORY_ENABLED"] = "1"
+        os.environ["TENCENT_MEMORY_API_BASE"] = "http://127.0.0.1:59999"
+        try:
+            asset = tma.to_team_asset(name)                # 即使启用，未批准也推不出
+            self.assertFalse(asset["ok"])
+            self.assertEqual(asset["gate"], "export_policy")
+        finally:
+            os.environ["TENCENT_MEMORY_ENABLED"] = "0"
+            os.environ.pop("TENCENT_MEMORY_API_BASE", None)
+
+    def test_to_team_asset_contains_only_metadata(self):
+        from edu_agent.skill_market import tencent_memory_adapter as tma
+
+        name, _d = self.make_draft()
+        self.submit_and_approve(name)
+        self.assertTrue(self.install(name)["ok"])
+        asset = tma.to_team_asset(name)
+        self.assertTrue(asset["ok"], asset.get("reasons"))
+        a = asset["asset"]
+        self.assertEqual(a["skill_id"], name)
+        self.assertTrue(a["content_hash"].startswith("sha256:"))
+        flat = json.dumps(a, ensure_ascii=False)
+        for forbidden in ("student", "成绩", "姓名"):       # 绝不含学生数据
+            self.assertNotIn(forbidden, flat)
+
+    def test_import_team_asset_creates_draft_only(self):
+        """§6.2：远程资产导入为**本地草稿**，绝不直接安装。"""
+        from edu_agent.skill_market import tencent_memory_adapter as tma
+
+        remote = {"skill_id": "team-skill-x", "version": "2.0.0", "content_hash": "sha256:abc",
+                  "files": {"SKILL.md": ("---\nname: team-skill-x\ndescription: 团队来的技能\n"
+                                         "owner: team\nallowed_capabilities: [\"textbook:read\"]\n"
+                                         "data_scope: [\"teaching_context\"]\n"
+                                         "tests: [inline-tests(1)]\n---\n# team-skill-x\n正文\n"),
+                            "plugin.py": "x = 1\n"}}
+        got = tma.import_team_asset(remote, actor="team-sync")
+        self.assertTrue(got["ok"], got)
+        self.assertEqual(store.effective_status("team-skill-x"), "draft")
+        self.assertFalse(paths.is_inside_runtime("team-skill-x"))
+        self.assertFalse(store.is_loadable("team-skill-x")[0])
+        self.assertTrue(any(e.get("remote_id") == "team-skill-x"
+                            for e in tma.sync_log()["entries"]))
+
+    def test_import_rejects_sensitive_and_bad_resources(self):
+        from edu_agent.skill_market import tencent_memory_adapter as tma
+
+        head = ("---\nname: team-skill-y\ndescription: 带隐私\n"
+                "owner: t\nallowed_capabilities: [\"textbook:read\"]\n"
+                "data_scope: [\"teaching_context\"]\ntests: [inline-tests(1)]\n---\n")
+        got = tma.import_team_asset({"skill_id": "team-skill-y",
+                                     "files": {"SKILL.md": head + "学生姓名：张三 成绩：88 分\n"}})
+        self.assertFalse(got["ok"])
+        self.assertIn("敏感信息", got["error"])
+
+        got2 = tma.import_team_asset({"skill_id": "team-skill-z",
+                                      "files": {"SKILL.md": head + "正文\n",
+                                                "../escape.py": "x=1\n"}})
+        self.assertFalse(got2["ok"])
+        self.assertIn("不允许的资源", got2["error"])
+
+    def test_sync_matrix_documents_policy(self):
+        from edu_agent.skill_market import tencent_memory_adapter as tma
+
+        self.assertEqual(tma.SYNC_MATRIX["teacher_conversation"], "never")
+        self.assertEqual(tma.SYNC_MATRIX["student_artifact"], "never")
+        self.assertEqual(tma.SYNC_MATRIX["approved_skill"], "manual")
+        self.assertEqual(tma.SYNC_MATRIX["team_skill"], "draft_only")
 
 
 if __name__ == "__main__":

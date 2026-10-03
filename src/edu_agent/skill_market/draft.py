@@ -230,70 +230,106 @@ def extract_from_session(session: dict, *, name_hint: str = "",
 
 
 def build_body(ex: dict, *, allowed: tuple[str, ...], data_scope: tuple[str, ...]) -> str:
-    """把抽取结果拼成 SKILL.md 正文（含"待人工编辑"清单）。"""
+    """把抽取结果拼成 SKILL.md 正文。
+
+    **结构固定为 doc 34 §5.3 规定的最小结构**（七段，顺序不变）：
+
+        ## 适用场景  ## 必要输入  ## 工作流程  ## 输出格式
+        ## 教师确认点  ## 质量与隐私约束  ## 版本来源
+
+    为什么固定：教师不需要手写 Markdown（doc §8.3 完成定义第一条），
+    审查页也才能按固定段位做 diff；`skill_studio.validate_draft()` 会校验这七段是否齐。
+    """
     steps = ex.get("steps") or []
     step_md = "\n".join("%d. %s" % (i + 1, s) for i, s in enumerate(steps)) or \
         "1. （未抽取到步骤，请人工补写：从触发到产出的完整流程）"
     warn = ("\n".join("- " + w for w in ex.get("warnings") or [])) or "- （无）"
+    inputs = "\n".join("- `%s`" % t for t in (ex.get("inputs") or [])) or "- （待人工确认）"
+    outputs = "\n".join("- `%s`" % t for t in (ex.get("outputs") or [])) or "- （待人工确认）"
+    caps_md = "\n".join("- `%s` — %s" % (t, caps.resolve_capability(t)[1])
+                        for t in allowed) or "- （待人工确认）"
     return f"""# {ex['title']}
 
-> **这是模块 3（SKILL-02）自动生成的草稿，尚未审核，Agent 不会加载它。**
+> **模块 3（SKILL-02）自动生成的草稿，尚未审核，Agent 不会加载它。**
 > 状态 `draft` · 负责人 `{ex.get('owner') or 'E'}` · 生成于 {time.strftime('%Y-%m-%d %H:%M')}
-> 来源会话：`{ex.get('session_id') or '（未记录）'}`
 
-## 触发场景
+## 适用场景
 
 用户说：{ex.get('trigger') or '（未记录）'}
 
-## 输入
+一次性任务不要写进这里 —— 只沉淀**反复出现且已证明有效**的流程。
 
-{chr(10).join('- `%s`' % t for t in (ex.get('inputs') or []))}
+## 必要输入
+
+{inputs}
 
 只接受**标识**，不接受学生作答明文：`{', '.join(data_scope) or 'knowledge_id, teaching_context'}`。
 
-## 步骤（自成功会话抽取，需人工校对）
+## 工作流程
 
 {step_md}
 
-## 输出
+## 输出格式
 
-{chr(10).join('- `%s`' % t for t in (ex.get('outputs') or []))}
+{outputs}
 
 **只产草稿**：不写题库、不改学情，入库与审核由模块 2 负责。
 
-## 依赖能力
+## 教师确认点
 
-{chr(10).join('- `%s` — %s' % (t, caps.resolve_capability(t)[1]) for t in allowed) or '- （待人工确认）'}
+提交审核前必须逐条完成：
 
-高风险动作（导出/写文件/联网/执行外部程序）一律经 `permissions.py` 闸门，未声明即审核不通过。
+- [ ] 校对上文步骤与输入，删掉会话里偶发的、不可复用的部分
+- [ ] 确认 `allowed_capabilities`：多了要去掉（最小权限），少了审核会拒
+- [ ] 依据 `skill_market/templates/plugin_template.py` 人工编写插件
+      （Semantic Kernel `@kernel_function`），并在 front-matter 里填 `plugin: <文件名>.py`
+- [ ] 补用例（`tests:` 字段要指向真实存在的文件或写 inline tests 块）
+- [ ] 用匿名 fixture 跑一遍：`POST /api/skill-market/fixture/run`
+- [ ] 跑静态权限扫描：`POST /api/skill-market/scan`，确认 `verdict=pass`
+- [ ] 然后才提交审核：`POST /api/skill-market/submit`（内部强制执行 L1+L2+L3）
 
-## 边界与不做的事
+## 质量与隐私约束
 
-- 不接触学情/题库内部库表，只调用对外 API（传 `knowledge_id` / `teaching_context` / `mastery_snapshot_id`）。
-- 不保存学生隐私明文；审计日志全程脱敏。
-- 本草稿区**不允许放 .py**：插件代码由人工编写。
-
-## 抽取质量提示
+抽取质量提示：
 
 {warn}
 
-## 待人工编辑（提交审核前必须逐条完成）
+依赖能力（高风险动作经 `permissions.py` 闸门，未声明即审核不通过）：
 
-- [ ] 校对上面的步骤与输入，删掉会话里偶发的、不可复用的部分
-- [ ] 确认 `allowed_capabilities`：多了要去掉（最小权限），少了审核会拒
-- [ ] 依据 `skill_market/templates/plugin_template.py` 人工编写 `plugin.py`
-      （Semantic Kernel `@kernel_function`），并在 front-matter 里填 `plugin: plugin.py`
-- [ ] 补 `tests/` 下的用例文件（`tests:` 字段要指向真实存在的文件）
-- [ ] 用匿名 fixture 跑一遍：`POST /api/skill-market/fixture/run`
-- [ ] 跑静态权限扫描：`POST /api/skill-market/scan`，确认 `verdict=pass`
-- [ ] 然后才提交审核：`POST /api/skill-market/submit`
+{caps_md}
 
-## 溯源
+边界：
 
+- 不接触学情/题库内部库表，只调用对外 API（传 `knowledge_id` / `teaching_context` / `mastery_snapshot_id`）。
+- 不保存学生隐私明文；审计日志全程脱敏。
+- 不把未经核验的教材原文、课程标准、真题或推断写为事实。
+- 草稿区**不允许放可执行文件**：插件代码由人工编写并显式声明。
+
+## 版本来源
+
+- 来源：`conversation_candidate`（Agent 从对话候选提炼）
 - session_id：`{ex.get('session_id') or '（未记录）'}`
 - 原始产出摘要（已脱敏）：`{ex.get('fixture', {}).get('expected_digest', '')}`
 - 原文字数：{ex.get('source_chars', 0)}
 """
+
+
+#: doc 34 §5.3 规定的最小结构（七段，顺序固定）
+REQUIRED_SECTIONS: tuple[str, ...] = (
+    "适用场景", "必要输入", "工作流程", "输出格式",
+    "教师确认点", "质量与隐私约束", "版本来源",
+)
+
+#: 视为「Agent 自动生成」的 source 取值（结构校验只对这类草稿强制）
+GENERATED_SOURCES: frozenset[str] = frozenset({
+    "conversation_candidate", "skill-create", "session",
+})
+
+
+def missing_sections(body: str) -> list[str]:
+    """检查正文缺哪些必需段（返回缺失的段名，空列表 = 结构合规）。"""
+    text = str(body or "")
+    return [s for s in REQUIRED_SECTIONS if ("## " + s) not in text]
 
 
 def create_draft_from_session(session_id: str, *, name_hint: str = "", owner: str = "E",
