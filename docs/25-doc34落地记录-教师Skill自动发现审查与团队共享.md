@@ -311,3 +311,34 @@ unittest discover -s tests -p "test_*.py"
 
 因此 §8.3 的"原有聊天、教案、**课件**功能通过回归测试"**目前不满足** ——
 课件模块需要单独一轮修复或重新基线化，这是独立于 Skill 生态的工作项。
+
+### 根因已定位：`web_server.py` 有 6 对**同名函数双份定义**（合并遗留）
+
+深挖失败样本后确认：这**不是"测试过时"**，而是合并时把一整块 slide 工作台代码插进来、
+却**没有删掉同名旧函数**：
+
+```
+api_slide_deck          L1722 与 L3403      POST /api/slide/deck
+api_slide_themes        L1912 与 L3137      GET  /api/slide/themes
+api_slide_render        L2029 与 L3273      POST /api/slide/render
+api_slide_slot          L2072 与 L3310      POST /api/slide/slot
+api_slide_image_upload  L2221 与 L3387      POST /api/slide/image/upload
+api_slide_object        L2273 与 L3334      POST /api/slide/object
+```
+
+两个后果都很隐蔽：
+
+1. **Python 语义**：后定义覆盖前定义 → 模块属性 `ws.api_slide_render` 指向**新**函数
+   （签名是 `SlideWorkbenchReq`），而测试正是直调模块属性的 → 传 `SlideRenderReq` 就报
+   `JSONResponse object has no attribute 'get'` / `KeyError: 'note'`；
+2. **FastAPI 语义**：同一路径注册两次，HTTP 匹配**先注册的那个（旧的）** →
+   合并进来的 PPT 工作台实现在 HTTP 上**根本不可达（死代码）**，却"看起来已经上线"。
+
+**新增常驻检查** `.tools/verify-duplicate-routes.py`（合并卫生）：同时报告同名双份定义与
+重复路由注册，当前输出 **12 处**（6 函数 + 6 路由）。
+
+**处理建议（需要产品决策，未擅自删改）**：
+先确定这 6 个路径**以哪一份实现为准**，然后删除另一份并同步测试——
+    若以合并进来的工作台版为准 → 删旧块（L1722~L2273 区间）并更新旧测试；
+    若以原有版为准 → 删新块（L3137~L3403 区间），并把工作台功能改到独立路径上。
+无论哪种，都必须让"一个路径只有一个实现"，否则这类问题还会以"测试失败但线上照旧"的形式复发。
