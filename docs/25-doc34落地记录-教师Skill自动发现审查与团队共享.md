@@ -373,3 +373,16 @@ api_slide_object        L2273 与 L3334      POST /api/slide/object
 **结果**：课件模块 245 用例从 **27 失败 → 7 失败**，且剩余 7 条**全部同一原因**：
 本环境无头 Edge 截不出图（直接探测：`msedge.exe --headless=new --screenshot=…` 返回码 0 但
 **不写任何文件**）→ 属环境限制，在能正常截图的环境里应通过。
+
+### §8.3 最终基线（全平台）
+
+```
+unittest discover -s tests -p "test_*.py"
+    Ran 926 tests in 211s
+    FAILED (failures=7, skipped=38)
+    失败分布：test_slide_media 7（唯一原因：本环境无头 Edge 截不出图）
+    技能相关模块：0 失败 ✅
+    聊天 / 教案 / 绘图 / 知识图谱 / WPS / ppt-master 等：0 失败 ✅
+```
+
+即：§8.3「原有聊天、教案、课件功能通过回归测试」**除无头截图这一类环境依赖外已全部满足**。
