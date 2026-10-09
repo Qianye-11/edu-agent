@@ -79,6 +79,15 @@ def render_png(svg_pages: list[str], out_dir: Path, *, prefix: str = "slide",
                 return {"ok": False, "files": files, "edge": exe,
                         "error": f"第 {i + 1} 页截图失败：{type(exc).__name__}"}
             if not png.is_file() or png.stat().st_size <= 0:
+                # 重试一次：机器繁忙时（整套回归并行跑、Edge 暂时起不来）
+                # 会出现"进程退出码 0 但没写文件"，重试一次即可恢复。
+                # 只重试一次，失败仍如实报错 —— 不掩盖真的截不出图。
+                try:
+                    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                                          errors="replace", timeout=SHOT_TIMEOUT)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            if not png.is_file() or png.stat().st_size <= 0:
                 tail = (proc.stderr or proc.stdout or "").strip()[-160:]
                 return {"ok": False, "files": files, "edge": exe,
                         "error": f"第 {i + 1} 页没截出来（{tail or 'Edge 没写文件'}）"}
