@@ -320,9 +320,14 @@ REQUIRED_SECTIONS: tuple[str, ...] = (
     "教师确认点", "质量与隐私约束", "版本来源",
 )
 
-#: 视为「Agent 自动生成」的 source 取值（结构校验只对这类草稿强制）
+#: 视为「Agent 自动生成」的 source 取值（结构校验只对这类草稿强制）。
+#:
+#: ⚠️ **不能把 `session` 算进来**：那是 manifest 里 `source` 的**默认值** ——
+#: 手写技能没显式声明来源时也是 `session`。早先把它当成"Agent 生成"的标记，
+#: 结果手写技能（如教材思维导图）也被强制要求七段结构 → 结构校验恒失败（实测踩过）。
+#: 只认**显式**标记：`packager.make_draft()` 写的那两个值。
 GENERATED_SOURCES: frozenset[str] = frozenset({
-    "conversation_candidate", "skill-create", "session",
+    "conversation_candidate", "skill-create",
 })
 
 

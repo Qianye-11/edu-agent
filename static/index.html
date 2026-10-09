@@ -416,6 +416,12 @@ svg{display:block}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l1 2 2-1 2 1 2-1 2 1 2-1 2 1 2-1 1 2"/><path d="M5 7v12h14V7"/></svg>
           Skill 市场
         </button>
+        <!-- Skill Studio（doc 34 §5.6）：候选箱 / 审查 / 编辑 / 已安装库。
+             独立页面，不带 data-view —— 本页的 .snav[data-view] 绑定不会拦它。 -->
+        <button class="snav" onclick="location.href='/static/skill-studio.html'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.2 5.3L20 10l-4.4 3.4L17 19l-5-2.8L7 19l1.4-5.6L4 10l5.8-1.7z"/></svg>
+          Skill Studio
+        </button>
         <button class="snav" data-view="services">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
           MCP 服务
