@@ -758,10 +758,15 @@ document.addEventListener("input", function(e){
   if (e.target.closest && e.target.closest("#editForm")) { renderPreview(); renderDiff(); }
 });
 refreshAll().then(function(){
-  // 支持 /static/skill-studio.html#<技能名>：从"Skill 市场"的卡片直接跳进来
+  // 支持锚点：/static/skill-studio.html#<技能名>  → 直接打开该技能的审查页
+  //           #candidates / #library / #audit / #edit → 直接切到对应页签
   var want = "";
   try { want = decodeURIComponent(String(location.hash || "").replace(/^#/, "")); } catch (e) { want = ""; }
-  if (want) {
+  var TABS = {candidates:"candidates", review:"review", edit:"edit",
+              library:"library", audit:"audit"};
+  if (TABS[want]) {
+    switchTab(TABS[want]);
+  } else if (want) {
     STATE.current = want;
     if ($("reviewPick")) $("reviewPick").value = want;
     if ($("editPick")) $("editPick").value = want;

@@ -836,71 +836,24 @@ svg{display:block}
   }
 
   /* ==== Skill market data ==== */
-  var marketData = [
-    {cat:'教学辅助', desc:'编写、理解、审阅与维护教学方案与教案。', skills:[
-      {icon:'教', title:'教案设计规范', desc:'减少默认假设、过度工程化，降低修改过的教案，确保贴近教材与学情。'},
-      {icon:'K', title:'教案精简器', desc:'简化并精炼教案：提升清晰度、一致性与可维护性，严格控制篇幅。'},
-      {icon:'D', title:'错题诊断', desc:'面向疑难错题与知识盲区，定位错误原因，给出针对性讲评。'},
-      {icon:'P', title:'教案审查', desc:'仅在你明确选择时审查教案与差异，并给出可删减建议。'},
-      {icon:'P', title:'教案复核', desc:'用 LSP 语法、引用、诊断与符号辅助，检查教案结构一致性。'},
-      {icon:'S', title:'试题解析', desc:'给出结构化解析，覆盖知识点、难度与错因分析。'},
-      {icon:'U', title:'Understand Anything', desc:'用本地图谱理解任意教案、题目或教学文档结构。'},
-    ]},
-    {cat:'UI 美化', desc:'动效、交互和界面质量提升。', skills:[
-      {icon:'E', title:'板书动效', desc:'高保真课堂板书动效还原，支持逐帧演示与页面切换。'},
-      {icon:'C', title:'课堂画板', desc:'制作可交互的几何画板，支持拖拽、翻转与组合演示。'},
-      {icon:'L', title:'Liquid Glass 反应', desc:'制作高质量润色课件，支持教学演示与交互设计。'},
-    ]}
-  ];
-
-  var checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4"><path d="M20 6L9 17l-5-5"/></svg>';
-
+  /* ==== Skill 市场（真实数据） ====
+     原来这里是**写死的演示目录**（marketData 假技能 + openSkill 里那四个"内部配套"模块），
+     老师自己审核发布的技能在这里永远看不到。现在整段删掉，改为读真实后端：
+       GET /api/skill-market/index       已安装 / 在审 / 草稿（含版本、可加载性）
+       GET /api/skill-studio/candidates  从对话里发现的候选（带 R1~R6 判据）
+       GET /api/skill-studio/overview    候选数、团队同步队列
+     渲染全部在页面末尾的「技能市场（真实数据）」区块里做（复用原有 .mk-cat/.skill-card 样式），
+     本函数只保留签名 —— 搜索框与两层既有包装器都还在调它。 */
   function buildMarket(filter){
-    var html = '';
-    marketData.forEach(function(cat){
-      var skills = cat.skills.filter(function(s){ return !filter || s.title.indexOf(filter)>-1; });
-      if(!skills.length) return;
-      html += '<div class="mk-cat"><div class="mk-cat-name">'+cat.cat+'</div><div class="mk-cat-desc">'+cat.desc+'</div>';
-      html += '<div class="mk-grid">';
-      skills.forEach(function(s){
-        html += '<button class="skill-card" data-skill="'+s.title+'">'+
-
-          '<div class="sc-top"><div class="skill-icon">'+s.icon+'</div><div class="sc-title">'+s.title+'</div></div>'+
-          '<div class="sc-desc">'+s.desc+'</div></button>';
-      });
-      html += '</div></div>';
-    });
-    document.getElementById('marketBody').innerHTML = html || '<div class="mk-cat"><div class="mk-cat-desc">没有匹配的 Skill。</div></div>';
-    document.querySelectorAll('.skill-card').forEach(function(c){
-      c.addEventListener('click', function(){ openSkill(c.dataset.skill); });
-    });
+    if(typeof renderRealMarket === 'function') renderRealMarket(filter || '');
   }
 
-  /* ==== Skill detail ==== */
-  function openSkill(title){
-    var s=null, cat='';
-    marketData.forEach(function(c){ c.skills.forEach(function(x){ if(x.title===title){s=x;cat=c.cat;} }); });
-    if(!s) return;
-    var modules = [
-      {icon:'H', name: s.title+' CLI', desc:'内部配套：脚手架、检查、预览、渲染、转录与指令集', code:'teaching-cli'},
-      {icon:'G', name:'GSAP 支持', desc:'内部配套：可寻址动效、时间线、缓动与性能规则', code:'gsap'},
-      {icon:'R', name:s.title+' Registry', desc:'内部配套：发现、安装并接入教学资源区块', code:'teaching-registry'},
-      {icon:'W', name:'教案转课件', desc:'内部配套：将教案抓取、脚本、分镜、配音与构建成完整教学流程', code:'lesson-to-slides'},
-    ];
-    var html = '<button class="sd-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>返回 Skill 市场</button>';
-    html += '<div class="sd-hero"><div class="sd-hero-icon"><svg viewBox="0 0 52 52" fill="none"><rect x="6" y="6" width="40" height="40" rx="14" fill="#3b82f6"/><path d="M18 20h16M18 28h16M18 36h10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></div>'+
-      '<div><div class="sd-tags"><span class="tag">'+cat+'</span><span class="tag installed">已安装</span></div>'+
-      '<div class="sd-title">'+s.title+'</div>'+
-      '<div class="sd-desc">'+s.desc+'。用于创建、检查、预览并渲染教学方案，支持字幕、配音、音频响应与教案转课件。</div>'+
-      '<div class="sd-author">启思 · CHESS</div></div></div>';
-    html += '<div class="sd-sec"><div class="sd-sec-title">包含的 Skill</div><div class="sd-sec-desc">以下模块会随该能力一起提供。</div><div class="sd-list">';
-    modules.forEach(function(m){
-      html += '<div class="sd-row"><div class="r-icon">'+m.icon+'</div><div class="r-main"><div class="r-name">'+m.name+'</div><div class="r-desc">'+m.desc+'</div><div class="s" style="font-size:11.5px;color:var(--ink-400);margin-top:2px">'+m.code+'</div></div><span class="r-tag">已安装</span></div>';
-    });
-    html += '</div></div>';
-    document.getElementById('skillDetail').innerHTML = html;
-    document.querySelector('.sd-back').addEventListener('click', function(){ switchView('market'); });
-    switchView('skill');
+  /* ==== Skill 详情 ==== */
+  /* 详情不再是前端拼的假模块清单，而是真实技能：直接进 Skill Studio 的审查页
+     （那里有状态、批准记录、资源清单、哈希与差异）。 */
+  function openSkill(name){
+    if(!name) return;
+    location.href = '/static/skill-studio.html#' + encodeURIComponent(name);
   }
 
   /* ==== Side panel toggle ==== */
@@ -2555,22 +2508,30 @@ svg{display:block}
 
 <script>
 /* ============================================================================
-   「我的技能」—— 把真实的技能市场数据接到 Skill 市场页上
+   技能市场（真实数据）—— 取代原来写死的演示目录
    ----------------------------------------------------------------------------
-   背景：这一页原来的卡片列表是**写死的演示数据**（marketData 数组，不读任何接口），
-   所以老师自己审核、发布、安装过的技能在这里永远看不到。
-   （上面那块"本工作区技能"渲染的是 /api/capabilities 的**平台能力**，不是技能市场，
-     两回事 —— 带"提问试试 / 工作台"试用面板的那些才是它。）
+   背景：这一页原先的卡片是**写死的 marketData 数组，不读任何接口**，老师自己审核、
+   发布、安装过的技能在这里永远看不到。（页面中那块「本工作区技能」渲染的是
+   /api/capabilities 的**平台能力**，带提问/工作台试用面板，跟技能市场是两回事。）
 
-   本段只做追加：在列表最前面插入一块真实数据区，数据来自
-     GET /api/skill-market/index       —— 草稿 / 待审 / 已发布都在里面
-     GET /api/skill-studio/sync/outbox —— 团队同步队列条数
-   不改动原有 DOM 结构与交互；搜索时跟着过滤；回到本页会自动刷新状态。
+   本区块读三个真实接口，失败就如实说明，**不塞假数据**：
+     GET /api/skill-market/index       技能：已安装 / 在审 / 草稿 / 停用 + 版本 + 可加载
+     GET /api/skill-studio/candidates  候选箱：从对话里发现的复用流程 + R1~R6 判据
+     GET /api/skill-studio/overview    候选数 / 团队同步队列
+
+   三个分区：
+     ① 已安装 —— 审核通过并安装完毕，可直接被 Agent 调用（= 可加载）
+     ② 未安装 —— 草稿 / 待审 / 已停用 / 已回滚，点卡片进 Studio 继续走流程
+     ③ 候选箱 —— 系统从对话里发现的候选，判据（R1~R6）齐了才能生成草稿
+   交互：卡片点击进 Skill Studio 对应位置；搜索框照旧过滤（buildMarket 会转到这里）。
+   只做追加，不改动原有 DOM 与其它区块。
    ========================================================================== */
 (function(){
-  var _origBuildMarket2 = (typeof buildMarket === 'function') ? buildMarket : null;
-  var STATUS_LABEL = {published:'已安装', submitted:'待审', draft:'草稿', approved:'已批准',
-                      disabled:'已停用', rolled_back:'已回滚', rejected:'已拒绝'};
+  var CACHE = {skills: [], candidates: [], outbox: 0, counts: {}};
+  var BOX_ID = 'realMarketBox';
+  var STATUS_LABEL = {published:'已安装', submitted:'待审', draft:'草稿', approved:'已批准待安装',
+                      disabled:'已停用', rolled_back:'已回滚', rejected:'已拒绝',
+                      candidate:'候选', detected:'候选'};
 
   function safe(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
@@ -2578,87 +2539,135 @@ svg{display:block}
     });
   }
 
-  function mySkillsHtml(filter, skills, outboxCount){
+  function skillCard(s){
+    var ok = !!s.loadable;
+    var color = ok ? '#0f9d58'
+              : (s.status === 'submitted' || s.status === 'approved') ? '#b45309' : '#9ca3af';
+    return '<button class="skill-card" data-real-skill="' + safe(s.name) + '" title="' + safe(s.name) + '">'
+      + '<div class="sc-top"><div class="skill-icon">' + (ok ? '✓' : 'S') + '</div>'
+      + '<div class="sc-title">' + safe(s.title || s.name) + '</div></div>'
+      + '<div class="sc-desc">' + safe(s.description || s.name) + '</div>'
+      + '<div style="margin-top:8px;font-size:11.5px;color:' + color + '">'
+      + (STATUS_LABEL[s.status] || s.status || '')
+      + (s.version ? ' · v' + safe(s.version) : '')
+      + (ok ? ' · 可加载' : '') + '</div></button>';
+  }
+
+  function candCard(c){
+    var crit = c.criteria || {};
+    var keys = Object.keys(crit).sort();
+    var passed = keys.filter(function(k){ return crit[k]; }).length;
+    var blocked = (c.blocking || [])[0] || '';
+    return '<button class="skill-card" data-real-cand="' + safe(c.candidate_id) + '" title="' + safe(c.signature) + '">'
+      + '<div class="sc-top"><div class="skill-icon">C</div>'
+      + '<div class="sc-title">' + safe(c.title || '(无标题候选)') + '</div></div>'
+      + '<div class="sc-desc">出现 ' + (c.sessions || 0) + ' 个会话 / ' + (c.runs || 0) + ' 次'
+      + (c.score == null ? '' : '　评分 ' + Number(c.score).toFixed(2)) + '</div>'
+      + '<div style="margin-top:8px;font-size:11.5px;color:' + (blocked ? '#b45309' : '#0f9d58') + '">'
+      + '判据 ' + passed + '/' + keys.length + (blocked ? '　' + safe(String(blocked).slice(0, 40)) : '　可以生成草稿')
+      + '</div></button>';
+  }
+
+  function section(title, desc, cardsHtml, emptyText){
+    var h = '<div class="mk-cat"><div class="mk-cat-name">' + title + '</div>'
+          + '<div class="mk-cat-desc">' + desc + '</div>';
+    h += cardsHtml ? '<div class="mk-grid">' + cardsHtml + '</div>'
+                   : '<div style="padding:12px 0;font-size:13px;color:var(--ink-400)">' + emptyText + '</div>';
+    return h + '</div>';
+  }
+
+  function html(filter){
     var f = (filter || '').toLowerCase();
-    /* 市场只展示**已审核通过并安装**的技能（= 可加载）；草稿/待审/停用不算商品，
-       只给一行计数提示，免得市场页变成草稿堆、老师分不清哪个能用。 */
-    var installed = [], rest = [];
-    (skills || []).forEach(function(s){
-      var hit = !f || ((s.name || '') + ' ' + (s.title || '')).toLowerCase().indexOf(f) > -1;
-      if(!hit) return;
-      (s.loadable ? installed : rest).push(s);
+    var hit = function(s){ return !f || ((s.name || '') + ' ' + (s.title || '')).toLowerCase().indexOf(f) > -1; };
+    var skills = (CACHE.skills || []).filter(hit);
+    var installed = skills.filter(function(s){ return !!s.loadable; });
+    var pending = skills.filter(function(s){ return !s.loadable; });
+    var cands = (CACHE.candidates || []).filter(function(c){
+      return !f || ((c.title || '') + ' ' + (c.signature || '')).toLowerCase().indexOf(f) > -1;
     });
-    if(!installed.length && !rest.length) return '';
-    var h = '<div class="mk-cat" data-my-skill-block="1">'
-      + '<div class="mk-cat-name">我的技能</div>'
-      + '<div class="mk-cat-desc">这里只列<b>审核通过并已安装</b>的技能（可直接被 Agent 调用）。'
-      + '草稿 / 待审 / 停用的在 Skill Studio 里管理。'
-      + (outboxCount ? '　<span style="color:var(--blue)">团队同步队列 ' + outboxCount + ' 条</span>'
-                       + '（推送未开启）' : '')
-      + '</div>';
-    if(installed.length){
-      h += '<div class="mk-grid">';
-      installed.forEach(function(s){
-        h += '<button class="skill-card" data-my-skill="' + safe(s.name) + '" title="' + safe(s.name) + '">'
-          + '<div class="sc-top"><div class="skill-icon">✓</div>'
-          + '<div class="sc-title">' + safe(s.title || s.name) + '</div></div>'
-          + '<div class="sc-desc">' + safe(s.description || s.name) + '</div>'
-          + '<div style="margin-top:8px;font-size:11.5px;color:#0f9d58">已安装'
-          + (s.version ? ' · v' + safe(s.version) : '')
-          + ' · 可加载</div></button>';
-      });
-      h += '</div>';
-    } else {
-      h += '<div style="padding:14px 0;font-size:13px;color:var(--ink-400)">'
-        + '还没有审核通过并安装的技能。到 Skill Studio 走完「提交审查 → 批准 → 安装」就会出现在这里。</div>';
+    if(!installed.length && !pending.length && !cands.length){
+      return '<div class="mk-cat"><div class="mk-cat-name">技能市场</div>'
+        + '<div class="mk-cat-desc">还没有任何技能' + (f ? '匹配「' + safe(filter) + '」' : '') + '。'
+        + '到 <a href="/static/skill-studio.html" style="color:var(--blue)">Skill Studio</a> '
+        + '从候选箱生成草稿，走完「提交审查 → 批准 → 安装」就会出现在这里。</div></div>';
     }
-    if(rest.length){
-      var by = {};
-      rest.forEach(function(s){ by[s.status || '其它'] = (by[s.status || '其它'] || 0) + 1; });
-      var LABEL = {draft:'草稿', submitted:'待审', approved:'已批准待安装',
-                   disabled:'已停用', rolled_back:'已回滚', rejected:'已拒绝'};
-      var parts = Object.keys(by).map(function(k){ return (LABEL[k] || k) + ' ' + by[k] + ' 个'; });
-      h += '<div style="margin-top:10px;font-size:12px;color:var(--ink-400)">'
-        + '另有未安装的：' + safe(parts.join('、'))
-        + '　<a href="/static/skill-studio.html" style="color:var(--blue)">去 Skill Studio 审核 →</a></div>';
-    }
-    h += '</div>';
+    var h = '';
+    h += section('已安装',
+      '审核通过并安装完毕，<b>可直接被 Agent 调用</b>。'
+      + (CACHE.outbox ? '　<span style="color:var(--blue)">团队同步队列 ' + CACHE.outbox + ' 条</span>' : ''),
+      installed.map(skillCard).join(''),
+      '还没有审核通过并安装的技能 —— 走完「提交审查 → 批准 → 安装」就会出现在这里。');
+
+    var by = {};
+    pending.forEach(function(s){ by[s.status || '其它'] = (by[s.status || '其它'] || 0) + 1; });
+    var parts = Object.keys(by).map(function(k){ return (STATUS_LABEL[k] || k) + ' ' + by[k] + ' 个'; });
+    h += section('未安装',
+      '草稿 / 待审 / 停用 —— 还没过审或已被停用，Agent 不会加载。'
+      + (parts.length ? '　当前：' + safe(parts.join('、')) : '')
+      + '　<a href="/static/skill-studio.html" style="color:var(--blue)">去审核 →</a>',
+      pending.map(skillCard).join(''),
+      '没有未安装的技能。');
+
+    var nBlocked = cands.filter(function(c){ return (c.blocking || []).length; }).length;
+    h += section('候选箱',
+      '系统从对话里发现的复用流程。判据（R1~R6）齐全才能生成草稿；'
+      + '候选只带会话编号与轮次，不含对话原文。'
+      + (cands.length ? '　共 ' + cands.length + ' 个，其中 ' + nBlocked + ' 个判据未齐' : '')
+      + '　<a href="/static/skill-studio.html#candidates" style="color:var(--blue)">去候选箱 →</a>',
+      cands.map(candCard).join(''),
+      '还没有候选（正常：需要跨会话反复跑通的流程才会被识别）。');
+
     return h;
   }
 
-  function renderMySkills(filter){
+  function paint(filter){
     var box = document.getElementById('marketBody');
     if(!box) return;
-    fetch('/api/skill-market/index').then(function(r){ return r.json(); }).then(function(d){
-      if(!d || !d.ok) return;
-      var old = box.querySelector('[data-my-skill-block]');
-      if(old && old.parentNode) old.parentNode.removeChild(old);
-      fetch('/api/skill-studio/sync/outbox').then(function(r){ return r.json(); })
-        .catch(function(){ return {}; })
-        .then(function(ob){
-          var html = mySkillsHtml(filter, d.skills, (ob && ob.count) || 0);
-          if(html) box.insertAdjacentHTML('afterbegin', html);
-          box.querySelectorAll('[data-my-skill]').forEach(function(c){
-            c.addEventListener('click', function(){
-              location.href = '/static/skill-studio.html#' + encodeURIComponent(c.dataset.mySkill);
-            });
-          });
-        });
-    }).catch(function(){});
+    var old = document.getElementById(BOX_ID);
+    if(old && old.parentNode) old.parentNode.removeChild(old);
+    var wrap = document.createElement('div');
+    wrap.id = BOX_ID;
+    wrap.innerHTML = html(filter);
+    box.insertAdjacentHTML('afterbegin', wrap.outerHTML);
+    box.querySelectorAll('[data-real-skill]').forEach(function(c){
+      c.addEventListener('click', function(){
+        location.href = '/static/skill-studio.html#' + encodeURIComponent(c.dataset.realSkill);
+      });
+    });
+    box.querySelectorAll('[data-real-cand]').forEach(function(c){
+      c.addEventListener('click', function(){ location.href = '/static/skill-studio.html#candidates'; });
+    });
   }
 
+  function load(filter){
+    var jobs = [
+      fetch('/api/skill-market/index').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+      fetch('/api/skill-studio/candidates?limit=100').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+      fetch('/api/skill-studio/overview').then(function(r){ return r.json(); }).catch(function(){ return null; })
+    ];
+    return Promise.all(jobs).then(function(res){
+      if(res[0] && res[0].ok) CACHE.skills = res[0].skills || [];
+      if(res[1] && res[1].ok) CACHE.candidates = res[1].candidates || [];
+      if(res[2] && res[2].ok) CACHE.outbox = res[2].outbox || 0;
+      paint(filter);
+    });
+  }
+
+  /* 给页面里的 buildMarket 调用（搜索框、以及既有包装器）用 */
+  window.renderRealMarket = function(filter){ paint(filter || ''); load(filter || ''); };
+
   try{
-    if(_origBuildMarket2){
-      buildMarket = function(f){ _origBuildMarket2(f); renderMySkills(f || ''); };
-    }
-    if(document.getElementById('marketBody')) renderMySkills('');
-    /* 审核 / 安装完再回到这一页，状态应当是最新的 */
+    if(document.getElementById('marketBody')) load('');
     window.addEventListener('focus', function(){
       var v = document.getElementById('view-market');
-      if(v && v.classList.contains('active')) renderMySkills('');
+      if(v && v.classList.contains('active')) load('');
+    });
+    /* 从 Studio 点"返回市场"时也刷新一次（状态可能刚变过） */
+    document.addEventListener('visibilitychange', function(){
+      if(!document.hidden && document.getElementById('marketBody')) load('');
     });
   }catch(e){
-    try{ console.log('[我的技能] 初始化失败:', e); }catch(e2){}
+    try{ console.log('[技能市场] 初始化失败:', e); }catch(e2){}
   }
 })();
 </script>
