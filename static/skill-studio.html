@@ -758,7 +758,17 @@ document.addEventListener("input", function(e){
   if (e.target.closest && e.target.closest("#editForm")) { renderPreview(); renderDiff(); }
 });
 refreshAll().then(function(){
-  if (STATE.skills.some(function(s){ return s.status === "submitted"; })) switchTab("review");
+  // 支持 /static/skill-studio.html#<技能名>：从"Skill 市场"的卡片直接跳进来
+  var want = "";
+  try { want = decodeURIComponent(String(location.hash || "").replace(/^#/, "")); } catch (e) { want = ""; }
+  if (want) {
+    STATE.current = want;
+    if ($("reviewPick")) $("reviewPick").value = want;
+    if ($("editPick")) $("editPick").value = want;
+    switchTab("review");
+  } else if (STATE.skills.some(function(s){ return s.status === "submitted"; })) {
+    switchTab("review");
+  }
 });
 </script>
 </body>

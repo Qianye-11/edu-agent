@@ -2554,6 +2554,101 @@ svg{display:block}
 
 
 <script>
+/* ============================================================================
+   「我的技能」—— 把真实的技能市场数据接到 Skill 市场页上
+   ----------------------------------------------------------------------------
+   背景：这一页原来的卡片列表是**写死的演示数据**（marketData 数组，不读任何接口），
+   所以老师自己审核、发布、安装过的技能在这里永远看不到。
+   （上面那块"本工作区技能"渲染的是 /api/capabilities 的**平台能力**，不是技能市场，
+     两回事 —— 带"提问试试 / 工作台"试用面板的那些才是它。）
+
+   本段只做追加：在列表最前面插入一块真实数据区，数据来自
+     GET /api/skill-market/index       —— 草稿 / 待审 / 已发布都在里面
+     GET /api/skill-studio/sync/outbox —— 团队同步队列条数
+   不改动原有 DOM 结构与交互；搜索时跟着过滤；回到本页会自动刷新状态。
+   ========================================================================== */
+(function(){
+  var _origBuildMarket2 = (typeof buildMarket === 'function') ? buildMarket : null;
+  var STATUS_LABEL = {published:'已安装', submitted:'待审', draft:'草稿', approved:'已批准',
+                      disabled:'已停用', rolled_back:'已回滚', rejected:'已拒绝'};
+
+  function safe(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+
+  function mySkillsHtml(filter, skills, outboxCount){
+    var f = (filter || '').toLowerCase();
+    var rows = (skills || []).filter(function(s){
+      return !f || ((s.name || '') + ' ' + (s.title || '')).toLowerCase().indexOf(f) > -1;
+    });
+    if(!rows.length) return '';
+    var h = '<div class="mk-cat" data-my-skill-block="1">'
+      + '<div class="mk-cat-name">我的技能</div>'
+      + '<div class="mk-cat-desc">本地技能市场的真实状态：草稿 → 提交审查 → 批准 → 安装。'
+      + '点卡片进 Skill Studio 审核或改内容。'
+      + (outboxCount ? '　<span style="color:var(--blue)">团队同步队列 ' + outboxCount + ' 条</span>'
+                       + '（推送未开启，见 Studio → 已安装库）' : '')
+      + '</div><div class="mk-grid">';
+    rows.forEach(function(s){
+      var st = s.status || '';
+      var color = st === 'published' ? '#0f9d58'
+                : (st === 'submitted' || st === 'approved') ? '#b45309'
+                : st === 'disabled' ? '#9ca3af' : '#6b7280';
+      h += '<button class="skill-card" data-my-skill="' + safe(s.name) + '" title="' + safe(s.name) + '">'
+        + '<div class="sc-top"><div class="skill-icon">' + (s.loadable ? '✓' : 'S') + '</div>'
+        + '<div class="sc-title">' + safe(s.title || s.name) + '</div></div>'
+        + '<div class="sc-desc">' + safe(s.description || s.name) + '</div>'
+        + '<div style="margin-top:8px;font-size:11.5px;color:' + color + '">'
+        + (STATUS_LABEL[st] || st)
+        + (s.version ? ' · v' + safe(s.version) : '')
+        + (s.loadable ? ' · 可加载' : '')
+        + '</div></button>';
+    });
+    h += '</div></div>';
+    return h;
+  }
+
+  function renderMySkills(filter){
+    var box = document.getElementById('marketBody');
+    if(!box) return;
+    fetch('/api/skill-market/index').then(function(r){ return r.json(); }).then(function(d){
+      if(!d || !d.ok) return;
+      var old = box.querySelector('[data-my-skill-block]');
+      if(old && old.parentNode) old.parentNode.removeChild(old);
+      fetch('/api/skill-studio/sync/outbox').then(function(r){ return r.json(); })
+        .catch(function(){ return {}; })
+        .then(function(ob){
+          var html = mySkillsHtml(filter, d.skills, (ob && ob.count) || 0);
+          if(html) box.insertAdjacentHTML('afterbegin', html);
+          box.querySelectorAll('[data-my-skill]').forEach(function(c){
+            c.addEventListener('click', function(){
+              location.href = '/static/skill-studio.html#' + encodeURIComponent(c.dataset.mySkill);
+            });
+          });
+        });
+    }).catch(function(){});
+  }
+
+  try{
+    if(_origBuildMarket2){
+      buildMarket = function(f){ _origBuildMarket2(f); renderMySkills(f || ''); };
+    }
+    if(document.getElementById('marketBody')) renderMySkills('');
+    /* 审核 / 安装完再回到这一页，状态应当是最新的 */
+    window.addEventListener('focus', function(){
+      var v = document.getElementById('view-market');
+      if(v && v.classList.contains('active')) renderMySkills('');
+    });
+  }catch(e){
+    try{ console.log('[我的技能] 初始化失败:', e); }catch(e2){}
+  }
+})();
+</script>
+
+
+<script>
 function toggleTheme(){
   const isDark = document.documentElement.classList.toggle('dark');
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
