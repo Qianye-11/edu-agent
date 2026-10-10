@@ -2580,33 +2580,49 @@ svg{display:block}
 
   function mySkillsHtml(filter, skills, outboxCount){
     var f = (filter || '').toLowerCase();
-    var rows = (skills || []).filter(function(s){
-      return !f || ((s.name || '') + ' ' + (s.title || '')).toLowerCase().indexOf(f) > -1;
+    /* 市场只展示**已审核通过并安装**的技能（= 可加载）；草稿/待审/停用不算商品，
+       只给一行计数提示，免得市场页变成草稿堆、老师分不清哪个能用。 */
+    var installed = [], rest = [];
+    (skills || []).forEach(function(s){
+      var hit = !f || ((s.name || '') + ' ' + (s.title || '')).toLowerCase().indexOf(f) > -1;
+      if(!hit) return;
+      (s.loadable ? installed : rest).push(s);
     });
-    if(!rows.length) return '';
+    if(!installed.length && !rest.length) return '';
     var h = '<div class="mk-cat" data-my-skill-block="1">'
       + '<div class="mk-cat-name">我的技能</div>'
-      + '<div class="mk-cat-desc">本地技能市场的真实状态：草稿 → 提交审查 → 批准 → 安装。'
-      + '点卡片进 Skill Studio 审核或改内容。'
+      + '<div class="mk-cat-desc">这里只列<b>审核通过并已安装</b>的技能（可直接被 Agent 调用）。'
+      + '草稿 / 待审 / 停用的在 Skill Studio 里管理。'
       + (outboxCount ? '　<span style="color:var(--blue)">团队同步队列 ' + outboxCount + ' 条</span>'
-                       + '（推送未开启，见 Studio → 已安装库）' : '')
-      + '</div><div class="mk-grid">';
-    rows.forEach(function(s){
-      var st = s.status || '';
-      var color = st === 'published' ? '#0f9d58'
-                : (st === 'submitted' || st === 'approved') ? '#b45309'
-                : st === 'disabled' ? '#9ca3af' : '#6b7280';
-      h += '<button class="skill-card" data-my-skill="' + safe(s.name) + '" title="' + safe(s.name) + '">'
-        + '<div class="sc-top"><div class="skill-icon">' + (s.loadable ? '✓' : 'S') + '</div>'
-        + '<div class="sc-title">' + safe(s.title || s.name) + '</div></div>'
-        + '<div class="sc-desc">' + safe(s.description || s.name) + '</div>'
-        + '<div style="margin-top:8px;font-size:11.5px;color:' + color + '">'
-        + (STATUS_LABEL[st] || st)
-        + (s.version ? ' · v' + safe(s.version) : '')
-        + (s.loadable ? ' · 可加载' : '')
-        + '</div></button>';
-    });
-    h += '</div></div>';
+                       + '（推送未开启）' : '')
+      + '</div>';
+    if(installed.length){
+      h += '<div class="mk-grid">';
+      installed.forEach(function(s){
+        h += '<button class="skill-card" data-my-skill="' + safe(s.name) + '" title="' + safe(s.name) + '">'
+          + '<div class="sc-top"><div class="skill-icon">✓</div>'
+          + '<div class="sc-title">' + safe(s.title || s.name) + '</div></div>'
+          + '<div class="sc-desc">' + safe(s.description || s.name) + '</div>'
+          + '<div style="margin-top:8px;font-size:11.5px;color:#0f9d58">已安装'
+          + (s.version ? ' · v' + safe(s.version) : '')
+          + ' · 可加载</div></button>';
+      });
+      h += '</div>';
+    } else {
+      h += '<div style="padding:14px 0;font-size:13px;color:var(--ink-400)">'
+        + '还没有审核通过并安装的技能。到 Skill Studio 走完「提交审查 → 批准 → 安装」就会出现在这里。</div>';
+    }
+    if(rest.length){
+      var by = {};
+      rest.forEach(function(s){ by[s.status || '其它'] = (by[s.status || '其它'] || 0) + 1; });
+      var LABEL = {draft:'草稿', submitted:'待审', approved:'已批准待安装',
+                   disabled:'已停用', rolled_back:'已回滚', rejected:'已拒绝'};
+      var parts = Object.keys(by).map(function(k){ return (LABEL[k] || k) + ' ' + by[k] + ' 个'; });
+      h += '<div style="margin-top:10px;font-size:12px;color:var(--ink-400)">'
+        + '另有未安装的：' + safe(parts.join('、'))
+        + '　<a href="/static/skill-studio.html" style="color:var(--blue)">去 Skill Studio 审核 →</a></div>';
+    }
+    h += '</div>';
     return h;
   }
 
