@@ -109,19 +109,32 @@ def ensure_dirs() -> None:
 
 # ---------------------------------------------------------------- 内容哈希（批准绑定用）
 def skill_files(skill_id: str) -> list[str]:
-    """技能包里的全部文件（优先取已安装目录，其次草稿目录）。
+    """技能包里的全部文件：**以市场区为准（草稿优先）**，运行时目录只作最后兜底。
+
+    为什么不能"优先取已安装目录"（早先就是这么写的，是个真 bug）：
+
+        老师审的是**草稿**，而运行时目录里还是**上一版已发布**的内容。若哈希优先取运行时，
+        `approve()` 绑定的就是**旧内容的哈希**；等安装把运行时刷成新内容后，
+        `hash_matches()` 立刻变成 False —— 表现为"刚批准装完就提示批准失效"（实测：
+        批准记录里记的是旧版 CRLF 字节 1499/7683，而草稿是 1495/7517）。
+
+    正确的取法就是 `store.find_skill()` 的优先级：draft → submitted → published → archive
+    （详情页与哈希都该看"这个技能当前的候选内容"）。安装完成后草稿区已空，
+    自然落到 published 版本目录，仍是同一份内容 ✅。
+    运行时目录只在市场区一个副本都没有时才兜底。
 
     **跳过构建产物**：`__pycache__/` 与 `*.pyc` 是运行 L3 时 Python 顺手写下的，
-    不是技能内容 —— 若算进内容哈希，"批准 → 提交（会跑 L3）→ 哈希变了" 就会连环失效（实测踩过）。
+    不是技能内容 —— 若算进内容哈希，"提交（会跑 L3）→ 哈希变了" 就会连环失效（实测踩过）。
     """
-    for d in (paths.runtime_plugin_path(skill_id), paths.drafts_dir() / skill_id):
-        if Path(d).is_dir():
-            return [str(p) for p in sorted(Path(d).rglob("*"))
-                    if p.is_file() and _is_content_file(p)]
+    candidates: list[Path] = []
     found = store.find_skill(skill_id)
     if found:
-        return [str(p) for p in sorted(Path(found["dir"]).rglob("*"))
-                if p.is_file() and _is_content_file(p)]
+        candidates.append(Path(found["dir"]))
+    candidates.append(paths.runtime_plugin_path(skill_id))      # 兜底
+    for d in candidates:
+        if d.is_dir():
+            return [str(p) for p in sorted(d.rglob("*"))
+                    if p.is_file() and _is_content_file(p)]
     return []
 
 

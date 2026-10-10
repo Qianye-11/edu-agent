@@ -69,11 +69,19 @@ def _now() -> str:
 
 def _write_status(d: Path, man: mf.SkillManifest, body: str, status: str,
                   review: str | None = None) -> mf.SkillManifest:
-    """把状态镜像写回 SKILL.md 的 front-matter（权威状态在 state.json）。"""
+    """把状态镜像写回 SKILL.md 的 front-matter（权威状态在 state.json）。
+
+    ⚠️ `newline="\\n"` 不能省：Windows 上 `write_text` 默认把 `\\n` 全部转成 `\\r\\n`，
+    而内容哈希算的是**正文字节** —— 于是"每次状态流转都把正文改一遍"，
+    哈希跟着变，批准立刻失效。表现：
+        draft(LF) 哈希 X → submit 后变 CRLF 哈希 Y → 批准绑定 Y
+        → 安装写回 LF 的 X → hash_matches=False，"刚批准装完就失效"。
+    这一条是"批准后哈希不一致"的真正根因（store.py 的行尾修复只覆盖了草稿/发布写入）。
+    """
     new = _replace(man, status=status,
                    review=man.review if review is None else review,
                    updated=_now())
-    (Path(d) / "SKILL.md").write_text(new.to_document(body), encoding="utf-8")
+    (Path(d) / "SKILL.md").write_text(new.to_document(body), encoding="utf-8", newline="\n")
     return new
 
 

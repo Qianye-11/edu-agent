@@ -136,7 +136,10 @@ class StudioTestCase(unittest.TestCase):
         man, body = mf.from_document((d / "SKILL.md").read_text(encoding="utf-8"))
         if manifest_changes:
             man = dataclasses.replace(man, **manifest_changes)
-        (d / "SKILL.md").write_text(man.to_document(body + extra), encoding="utf-8")
+        (d / "SKILL.md").write_text(man.to_document(body + extra), encoding="utf-8",
+                                    newline="\n")   # 与真实 API 路径一致，见下
+        # ↑ newline="\n" 不能省：默认写会把 \n 变 \r\n（Windows），而内容哈希算的是正文字节
+        #   → 辅助函数自己就把哈希改了，测试会得出"哈希无故变化"的错误结论。
         return d
 
     def install(self, name, **kw):
@@ -235,6 +238,47 @@ class TestApprovalAndInstall(StudioTestCase):
         self.assertFalse(got["ok"])
         self.assertEqual(got["gate"], "approval")
         self.assertIn("没有教师批准记录", got["error"])
+
+    def test_approval_binds_the_reviewed_draft_not_the_installed_copy(self):
+        """**回归**：批准绑定的必须是"正在审的那份内容"，不是已安装的旧副本。
+
+        踩过的坑：`skill_files()` 早先**优先取运行时（已安装）目录**，而老师审的是草稿
+        —— 于是 `approve()` 绑定了**旧内容的哈希**；等安装把运行时刷成新内容，
+        `hash_matches()` 立刻变 False，表现为"刚批准装完就说批准失效"
+        （实测：批准记录里是旧版 1499/7683 字节，草稿是 1457/7517）。
+
+        这里刻意让"草稿内容 ≠ 已安装内容"：先发一版装上去，再派生草稿改正文，
+        然后提交 → 批准 → 安装，最后必须仍然 hash_matches=True。
+        """
+        name, _d = self.make_draft()
+        # ① 第一版：走完流水线并安装 → 运行时目录有内容
+        self.assertTrue(skill_studio.submit_review(name, "teacher-A")["ok"])
+        self.assertTrue(skill_studio.approve(name, "reviewer-G", note="v1")["ok"])
+        self.assertTrue(self.install(name)["ok"])
+        v1 = skill_studio.content_hash(name)
+
+        # ② 派生新草稿并改正文（此时"草稿内容"与"已安装内容"必然不同）
+        self.assertTrue(lifecycle.new_draft(name, "teacher-A", note="改一版")["ok"])
+        self.edit_body(name, "\n教师补充：这一版加了板书时间轴。\n")
+        draft_hash = skill_studio.content_hash(name)
+        self.assertNotEqual(draft_hash, v1, "派生草稿改了正文，哈希就该变")
+
+        # ③ 再次提交 → 批准：绑定的应当是上面那份草稿哈希
+        self.assertTrue(skill_studio.submit_review(name, "teacher-A")["ok"])
+        ap = skill_studio.approve(name, "reviewer-G", note="v2")
+        self.assertTrue(ap["ok"], ap)
+        bound = skill_studio.approval_status(name)["content_hash"]
+        self.assertEqual(bound, draft_hash,
+                         "批准绑定了错误的哈希（应当是被审草稿的，不是已安装副本的）")
+        self.assertTrue(skill_studio.approval_status(name)["hash_matches"])
+
+        # ④ 安装后仍然一致（这一步就是当初暴露 bug 的地方）
+        got = self.install(name, allow_overwrite=True)
+        self.assertTrue(got["ok"], got)
+        st = skill_studio.approval_status(name)
+        self.assertTrue(st["hash_matches"],
+                        "安装后批准就失效了：说明批准绑的不是被审内容。current=%s approved=%s"
+                        % (st.get("current_hash"), st.get("content_hash")))
 
     def test_approval_requires_review_state_and_separation(self):
         name, _d = self.make_draft()

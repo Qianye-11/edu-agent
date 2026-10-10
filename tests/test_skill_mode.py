@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from edu_agent.skill_market import (isolation, lifecycle, manifest as mf,
                                    mcp_user_service, mode, packager, paths,
-                                   registry_db, session_bootstrap, store)
+                                   registry_db, session_bootstrap, skill_studio, store)
 
 
 def _draft_text(name: str, *, desc: str = "测试技能", owner: str = "teacher-A") -> str:
@@ -299,6 +299,50 @@ class TestSingleUserBootstrap(ModeTestCase):
         ids, dropped = session_bootstrap.published_skill_ids()
         self.assertNotIn("ghost", ids)
         self.assertTrue(any(d["skill"] == "ghost" for d in dropped))
+
+    def test_draft_derived_from_published_keeps_serving(self):
+        """**回归**：从已发布技能派生新草稿继续编辑时，线上版本必须照常服务。
+
+        踩过的坑：会话加载原先看"注册表 status == published"，而派生草稿会把状态变回 draft
+        → "老师只是想改一版草稿"就把这个技能从所有会话里摘掉了
+        （表现：`store.is_loadable()` 说 True、会话却加载到空列表，两处判据打架）。
+        现在会话加载用 `is_agent_loadable()`（装没装 ∧ 文件在不在 ∧ 能力开关），
+        与 `store.is_loadable()` 一致；停用会把 installed 置 False，因此仍被排除。
+        """
+        name = "still-serving"
+        self.make_published(name)
+        before = session_bootstrap.ensure_session("keep-1", force=True)
+        self.assertIn(name, before["loaded"])
+
+        life = lifecycle.new_draft(name, "teacher-A", note="改一版")   # 前端「编辑」保存时的动作
+        self.assertTrue(life["ok"], life)
+        self.assertEqual(store.effective_status(name), "draft")
+        self.assertTrue(store.is_loadable(name)[0], "线上版本必须照常服务")
+        self.assertTrue(session_bootstrap.is_agent_loadable(name)[0])
+        after = session_bootstrap.ensure_session("keep-2", force=True)
+        self.assertIn(name, after["loaded"], after)
+
+        # 草稿态不能直接停用（状态机只允许 published → disabled），先把新版发出去
+        with mock.patch("edu_agent.permissions.policy", return_value="allow"):
+            blocked = lifecycle.disable(name, "teacher-A", reason="试试草稿态停用")
+        self.assertFalse(blocked["ok"])
+        self.assertIn("不能停用", blocked["error"])
+
+        # 重新发布（提交 → 批准 → 发布），再停用 → 立刻不再加载
+        # 注：这里走 lifecycle.submit/publish（与 make_published 同一路径）。
+        # Studio 的 submit_review / install 会额外跑包检查（描述≥10 字、七段结构等
+        # 教师视角的校验），本用例的草稿描述只有 4 个字，走 Studio 路径会被那道更严的
+        # 校验拦下 —— 那是设计如此（教师界面比 API 严），不是 bug。
+        with mock.patch("edu_agent.permissions.policy", return_value="allow"):
+            self.assertTrue(lifecycle.submit(name, "teacher-A")["ok"])
+            self.assertTrue(skill_studio.approve(name, "reviewer-G", note="ok")["ok"])
+            self.assertTrue(lifecycle.publish(name, "teacher-A", confirm=True)["ok"])
+        self.assertEqual(store.effective_status(name), "published")
+        with mock.patch("edu_agent.permissions.policy", return_value="allow"):
+            lifecycle.disable(name, "teacher-A", reason="临时下线", confirm=True)
+        self.assertFalse(session_bootstrap.is_agent_loadable(name)[0])
+        gone = session_bootstrap.ensure_session("keep-3", force=True)
+        self.assertNotIn(name, gone["loaded"])
 
 
 # ════════════════════════════════════════════════════ 约束 4②：多用户分支

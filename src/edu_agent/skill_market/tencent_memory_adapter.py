@@ -26,7 +26,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from edu_agent.skill_market import paths, skill_privacy, skill_studio
+from edu_agent.skill_market import paths, skill_privacy, skill_studio, store
 
 # 同步矩阵（doc §6.3）：写进代码，避免"实现时顺手多同步了点东西"
 SYNC_MATRIX: dict[str, str] = {
@@ -147,9 +147,22 @@ def to_team_asset(skill_id: str) -> dict:
     if not pol.get("allowed"):
         return {"ok": False, "gate": "export_policy", "skill": sid,
                 "error": "不允许同步到团队库", "reasons": pol.get("reasons")}
+    # fixture 是**内部测试资产**：安装时不复制进运行时（见 install_to_runtime）、
+    # 也不参与内容哈希，团队资产同样不该带出去 —— 而且 fixture 里的断言说明常含
+    # 「不得包含学生姓名/学号」这类**策略措辞**，出站敏感词扫描会把它误判成真实学生数据
+    # 而整包拒绝（实测：fixture 里那句"不得包含学生姓名/学号/作答明文"触发了误判）。
+    fixture_name = ""
+    try:
+        found = store.find_skill(sid)
+        if found:
+            fixture_name = str(found["manifest"].fixture or "")
+    except Exception:  # noqa: BLE001
+        fixture_name = ""
     blobs: dict[str, str] = {}
     for f in skill_studio.skill_files(sid):
         p = Path(f)
+        if fixture_name and p.name == fixture_name:
+            continue
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
         except OSError:

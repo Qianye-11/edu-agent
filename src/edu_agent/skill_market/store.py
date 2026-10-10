@@ -71,7 +71,10 @@ def write_draft(man: mf.SkillManifest, body: str,
     d = area_dir("draft", man.name)
     paths.assert_not_runtime_dir(d)
     d.mkdir(parents=True, exist_ok=True)
-    (d / "SKILL.md").write_text(man.to_document(body), encoding="utf-8")
+    # newline="\n"：**不**做 LF→CRLF 转换。Windows 上 write_text 默认会把 \n 写成 \r\n，
+    # 结果是"派生一版草稿"就把资源文件的行尾全改了 → 字节变了 → 内容哈希变了 →
+    # 老师明明只改了描述，批准却失效（实测踩过）。
+    (d / "SKILL.md").write_text(man.to_document(body), encoding="utf-8", newline="\n")
     for rel, text in (files or {}).items():
         suffix = Path(rel).suffix.lower()
         if suffix in DRAFT_BANNED_SUFFIX and not allow_code:
@@ -82,7 +85,7 @@ def write_draft(man: mf.SkillManifest, body: str,
             raise ValueError("草稿区只允许 %s，收到 %s" % (DRAFT_ALLOWED_SUFFIX, rel))
         p = _safe_join(d, rel)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(str(text), encoding="utf-8")
+        p.write_text(str(text), encoding="utf-8", newline="\n")
     return d
 
 
@@ -191,7 +194,7 @@ def write_version(man: mf.SkillManifest, body: str, src_dir: Path) -> Path:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         dest = dest.with_name("%s-%s" % (man.version, stamp))
     dest.mkdir(parents=True, exist_ok=True)
-    (dest / "SKILL.md").write_text(man.to_document(body), encoding="utf-8")
+    (dest / "SKILL.md").write_text(man.to_document(body), encoding="utf-8", newline="\n")
     for p in Path(src_dir).rglob("*"):
         if not p.is_file() or p.name == "SKILL.md":
             continue
@@ -238,7 +241,7 @@ def install_to_runtime(man: mf.SkillManifest, body: str, src_dir: Path) -> Path:
     """
     dest = paths.runtime_plugin_path(man.name)
     dest.mkdir(parents=True, exist_ok=True)
-    (dest / "SKILL.md").write_text(man.to_document(body), encoding="utf-8")
+    (dest / "SKILL.md").write_text(man.to_document(body), encoding="utf-8", newline="\n")
     skip_names = {"SKILL.md", Path(man.fixture).name if man.fixture else ""}
     for p in sorted(Path(src_dir).rglob("*")):
         if not p.is_file():

@@ -35,15 +35,49 @@ def is_published(skill_id: str) -> tuple[bool, str]:
     return True, "ok"
 
 
+def is_agent_loadable(skill_id: str) -> tuple[bool, str]:
+    """**会话加载**用的判据：Agent 现在到底能不能加载它。
+
+    判据 = 已安装 ∧ 运行时文件存在 ∧ 能力开关没关（见 `store.is_loadable()`），
+    **不看市场状态位**。为什么必须这样：
+
+        从已发布技能派生新草稿继续编辑时，状态位会变回 `draft` —— 会话加载若也看状态位，
+        那么"老师只是想改一版草稿"就会把这个技能从所有会话里摘掉，
+        等于**改个草稿把线上打挂**。
+        （实测：派生草稿后 `store.is_loadable()` 说 True、会话却加载到空列表，两处判据打架。）
+
+    停用（`disable`）会把 `installed` 置为 False，所以停用照旧被排除 ✅。
+    市场语义的"已发布"仍由 `is_published()` 提供（出团队库策略用它）。
+    """
+    ok, why = store.is_loadable(skill_id)
+    if not ok:
+        return False, why
+    if not paths.is_inside_runtime(skill_id):
+        return False, "文件不在运行时目录（data/skills）里"
+    return True, "ok"
+
+
 def published_skill_ids() -> tuple[list[str], list[dict]]:
-    """全部 published（注册表）→ 逐条核对磁盘 → (可用, 被剔除)。"""
+    """**当前可被 Agent 加载**的技能 id 列表（注册表 installed 行 → 逐条核对）。
+
+    名字保留 `published_skill_ids` 以免破坏既有调用方；语义见 `is_agent_loadable`：
+    判据是"装没装 + 文件在不在 + 能力开关"，不是"市场状态恰好是 published"。
+    """
     ok_ids: list[str] = []
     dropped: list[dict] = []
-    for row in registry_db.published():
+    for row in registry_db.list_skills():
         sid = str(row.get("skill_id") or "")
-        good, why = is_published(sid)
-        (ok_ids if good else dropped).append(
-            sid if good else {"skill": sid, "reason": why})
+        installed = bool(row.get("installed"))
+        says_published = str(row.get("status")) == "published"
+        if not installed and not says_published:
+            continue                       # 从没发布过（或已被停用）→ 根本不是候选，不必报
+        good, why = is_agent_loadable(sid)
+        if good:
+            ok_ids.append(sid)
+        else:
+            # 装过 / 或注册表还写着 published，但现在加载不了 → **如实报出来**
+            # （典型：状态 published 但运行时文件被手工删了；这种不该静默消失）
+            dropped.append({"skill": sid, "reason": why})
     return ok_ids, dropped
 
 
@@ -62,6 +96,8 @@ def ensure_session(session_id: str, teacher_id: str = "", *,
     mcp_info: dict = {"called": False}
 
     if single:
+        # 单用户调试：加载**当前可被 Agent 加载**的全部技能
+        # （= 已安装 ∧ 文件在 ∧ 能力开关没关；不看市场状态位，见 is_agent_loadable）
         ids, dropped = published_skill_ids()
         source = "single_user:all_published"
         tid = mode.teacher_id(teacher_id)          # 仅用于填字段，业务不依赖
@@ -81,7 +117,7 @@ def ensure_session(session_id: str, teacher_id: str = "", *,
         installed = set(mcp_info.get("skills") or [])
         ids, dropped = [], []
         for s in sorted(installed):
-            good, why = is_published(s)
+            good, why = is_agent_loadable(s)       # 本人已安装 ∧ 真的能加载
             if good:
                 ids.append(s)
             else:
