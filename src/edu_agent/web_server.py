@@ -1143,6 +1143,57 @@ def _chat_gen(req: ChatReq, holder: dict | None = None):
         yield {"t": "done", "mode": "A", "text": comfort, "citations": []}
         return
 
+    # 技能快路（2026-10-10）：生成类请求（"做个第二章的思维导图"）**直接调已安装技能的真实代码**。
+    # 为什么不交给模型：
+    #   ① 本机聊天模型是 qwen2.5:3b，function-calling 不稳；
+    #   ② `_stream_coach` 注入的是 SKILL.md **文本**（skill_catalog.prompt_block），
+    #      模型可能照着编出"像思维导图"的东西，而不是真的跑插件 —— 章节名/页码就不可信了。
+    # 命中口径见 `skill_market.agent_tools.match_intent`（技能声明的 intents，或"章节引用 +
+    # 生成动词"且参数齐全；抽不到章节号就不猜，交给模型问用户）。
+    # 调用仍走同一条闸门：isolation.assert_loadable → kernel_loader.build_kernel → invoke。
+    try:
+        from edu_agent.skill_market import agent_tools as _skill_tools
+
+        _hit = _skill_tools.match_intent(text, session_id=sid)
+    except Exception:  # noqa: BLE001  快路任何异常都不影响主链路
+        _hit = None
+    if _hit:
+        _t0 = time.time()
+        _body = str(_hit.get("text") or "").strip()
+        _title = str(_hit.get("title") or _hit.get("skill") or "技能")
+        if _hit.get("blocked"):
+            # 参数越界（如"第十二章"但这册只有 3 章）：**没有调用技能**，只回一句说明。
+            # 不记 record_skill_call —— 没发生的事不该进运行痕迹。
+            yield {"t": "status", "text": "检查章节号…"}
+            yield {"t": "d", "text": _body}
+            _store.append(sid, "assistant", _body,
+                          meta={"mode": "A", "citations": [], "skill": _hit["skill"],
+                                "skill_blocked": _hit.get("blocked")})
+            yield {"t": "done", "mode": "A", "text": _body, "citations": [],
+                   "skill": _hit["skill"], "blocked": _hit.get("blocked")}
+            return
+        try:
+            from edu_agent.skill_market import runs as _runs2
+
+            _runs2.record_skill_call(_hit["skill"], ok=bool(_body),
+                                     ms=int((time.time() - _t0) * 1000),
+                                     args=_hit.get("args") or {})
+        except Exception:  # noqa: BLE001  埋点失败不影响回答
+            pass
+        yield {"t": "status", "text": "调用技能：" + _title + " …"}
+        if not _body:
+            _body = "技能「%s」没有返回内容（已调用，但结果为空）。" % _title
+        full = "**【技能 · %s】**\n\n%s" % (_title, _body)
+        yield {"t": "d", "text": full}
+        _store.append(sid, "assistant", full,
+                      meta={"mode": "A", "citations": [], "skill": _hit["skill"],
+                            "skill_function": _hit.get("function"),
+                            "skill_args": _hit.get("args") or {},
+                            "skill_fastpath": True})
+        yield {"t": "done", "mode": "A", "text": full, "citations": [],
+               "skill": _hit["skill"], "skill_function": _hit.get("function")}
+        return
+
     if code == "auto":
         code = routing.decide(text)
 
