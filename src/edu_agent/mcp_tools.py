@@ -80,7 +80,17 @@ _FILESYSTEM_ALLOWED = frozenset({
 })
 
 # 每个服务的工具白名单（缺省 = 不限制；新服务务必显式登记，别留空）
+# 教材库只读服务：只放读取类工具（与 /api/textbook* 同一份实现）
+_TEXTBOOK_ALLOWED = frozenset({
+    "textbook_info",        # 教材文件信息
+    "textbook_chapters",    # 全部章/节结构
+    "textbook_chapter",     # 某一章（含小节清单）
+    "textbook_mindmap",     # 某一章的 Markdown 思维导图
+    "textbook_stats",       # 章数/页数/片段数
+})
+
 _WHITELIST: dict[str, frozenset[str]] = {
+    "textbook": _TEXTBOOK_ALLOWED,
     "math": _MATH_ALLOWED,
     "wps-office": _WPS_ALLOWED,
     "filesystem": _FILESYSTEM_ALLOWED,

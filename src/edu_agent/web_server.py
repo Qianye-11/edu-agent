@@ -46,6 +46,20 @@ log = logsetup.get_logger("web_server")
 
 app = FastAPI(title="课本教练 x 教案 Agent")
 
+# ---------- Skill 生态（模块3）：市场 / 候选箱 / 审查 / 团队共享 ----------
+# 四个路由各自带前缀：/api/skill-market、/api/skill-create、/api/skill、/api/skill-studio。
+# 说明：这一段是**纯新增**（不改动下面任何既有路由）；技能生态的代码在
+# edu_agent/skill_market/ 下，与平台其余部分通过 capabilities/permissions 解耦。
+from edu_agent.skill_market.api import router as _skill_market_router  # noqa: E402
+from edu_agent.skill_market.create_api import router as _skill_create_router  # noqa: E402
+from edu_agent.skill_market.mode_api import router as _skill_mode_router  # noqa: E402
+from edu_agent.skill_market.studio_api import router as _skill_studio_router  # noqa: E402
+
+app.include_router(_skill_market_router)
+app.include_router(_skill_create_router)
+app.include_router(_skill_mode_router)
+app.include_router(_skill_studio_router)
+
 # ---------- host：会话存储（进程内只保留这一个持久化入口） ----------
 _settings = load_settings()
 _store = SessionStore(path=_settings.sessions_db,
@@ -430,10 +444,64 @@ def _chat_gen(req: ChatReq):
 
     code = _code(req.preset)
     sid = _pick_session(req)
+    # 技能会话初始化（模块3）：按 SINGLE_USER_MODE 决定这个会话加载哪些技能。
+    # isolation.bind 只发生在 session_bootstrap 里（publish 不碰会话绑定）。
+    # 失败静默 —— 技能生态不可用也绝不能影响正常答疑。
+    try:
+        from edu_agent.skill_market import session_bootstrap as _boot
+
+        _boot.ensure_session(sid, str(getattr(req, "teacher_id", "") or ""))
+    except Exception:  # noqa: BLE001
+        pass
     _store.append(sid, "user", text)
     _store.set_title_if_new(sid, text.splitlines()[0][:18])
     yield {"t": "session", "id": sid,
            "title": (_store.get(sid) or {}).get("title", "新会话")}
+
+    # 技能快路（模块3）：生成类请求（"做个第二章的思维导图"）**直接调已安装技能的真实代码**。
+    # 为什么不交给模型：① 本机聊天模型小，function-calling 不稳；
+    # ② 兜底用文本注入时模型可能"照着编"，章节名/页码就不可信了。
+    # 命中口径见 skill_market.agent_tools.match_intent；调用走同一条闸门
+    # （isolation.assert_loadable → kernel_loader.build_kernel → invoke）。
+    try:
+        from edu_agent.skill_market import agent_tools as _skill_tools
+
+        _hit = _skill_tools.match_intent(text, session_id=sid)
+    except Exception:  # noqa: BLE001  快路任何异常都不影响主链路
+        _hit = None
+    if _hit:
+        _body = str(_hit.get("text") or "").strip()
+        _title = str(_hit.get("title") or _hit.get("skill") or "技能")
+        if _hit.get("blocked"):
+            # 参数越界（如"第十二章"但这册只有 5 章）：**没有调用技能**，只回一句说明
+            yield {"t": "status", "text": "检查章节号…"}
+            yield {"t": "d", "text": _body}
+            _store.append(sid, "assistant", _body,
+                          meta={"mode": "A", "citations": [], "skill": _hit["skill"],
+                                "skill_blocked": _hit.get("blocked")})
+            yield {"t": "done", "mode": "A", "text": _body, "citations": [],
+                   "skill": _hit["skill"], "blocked": _hit.get("blocked")}
+            return
+        try:
+            from edu_agent.skill_market import runs as _runs2
+
+            _runs2.record_skill_call(_hit["skill"], ok=bool(_body), ms=0,
+                                     args=_hit.get("args") or {})
+        except Exception:  # noqa: BLE001  埋点失败不影响回答
+            pass
+        yield {"t": "status", "text": "调用技能：" + _title + " …"}
+        if not _body:
+            _body = "技能「%s」没有返回内容（已调用，但结果为空）。" % _title
+        full = "**【技能 · %s】**\n\n%s" % (_title, _body)
+        yield {"t": "d", "text": full}
+        _store.append(sid, "assistant", full,
+                      meta={"mode": "A", "citations": [], "skill": _hit["skill"],
+                            "skill_function": _hit.get("function"),
+                            "skill_args": _hit.get("args") or {},
+                            "skill_fastpath": True})
+        yield {"t": "done", "mode": "A", "text": full, "citations": [],
+               "skill": _hit["skill"], "skill_function": _hit.get("function")}
+        return
 
     if code == "auto":
         code = routing.decide(text)

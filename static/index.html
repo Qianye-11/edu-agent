@@ -426,6 +426,12 @@ svg{display:block}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l1 2 2-1 2 1 2-1 2 1 2-1 2 1 2-1 1 2"/><path d="M5 7v12h14V7"/></svg>
           Skill 市场
         </button>
+        <!-- Skill Studio（doc 34 §5.6）：候选箱 / 审查 / 编辑 / 已安装库 / 审计。
+             独立页面，不带 data-view —— 本页的 .snav[data-view] 绑定不会拦它。 -->
+        <button class="snav" onclick="location.href='/static/skill-studio.html'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.2 5.3L20 10l-4.4 3.4L17 19l-5-2.8L7 19l1.4-5.6L4 10l5.8-1.7z"/></svg>
+          Skill Studio
+        </button>
         <button class="snav" data-view="services">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
           MCP 服务
@@ -852,92 +858,24 @@ svg{display:block}
   }
 
   /* ==== Skill market data ==== */
-  var marketData = [
-    {cat:'教学辅助', desc:'编写、理解、审阅与维护教学方案与教案。', skills:[
-      {icon:'教', title:'教案设计规范', desc:'减少默认假设、过度工程化，降低修改过的教案，确保贴近教材与学情。'},
-      {icon:'K', title:'教案精简器', desc:'简化并精炼教案：提升清晰度、一致性与可维护性，严格控制篇幅。'},
-      {icon:'D', title:'错题诊断', desc:'面向疑难错题与知识盲区，定位错误原因，给出针对性讲评。'},
-      {icon:'P', title:'教案审查', desc:'仅在你明确选择时审查教案与差异，并给出可删减建议。'},
-      {icon:'P', title:'教案复核', desc:'用 LSP 语法、引用、诊断与符号辅助，检查教案结构一致性。'},
-      {icon:'S', title:'试题解析', desc:'给出结构化解析，覆盖知识点、难度与错因分析。'},
-      {icon:'U', title:'Understand Anything', desc:'用本地图谱理解任意教案、题目或教学文档结构。'},
-    ]},
-    {cat:'UI 美化', desc:'动效、交互和界面质量提升。', skills:[
-      {icon:'E', title:'板书动效', desc:'高保真课堂板书动效还原，支持逐帧演示与页面切换。'},
-      {icon:'C', title:'课堂画板', desc:'制作可交互的几何画板，支持拖拽、翻转与组合演示。'},
-      {icon:'L', title:'Liquid Glass 反应', desc:'制作高质量润色课件，支持教学演示与交互设计。'},
-    ]},
-    {cat:'AI 效率工具', desc:'来自 skills.sh 社区下载量最高的 10 个效率插件，扩展 AI 的专业能力。', skills:[
-      {icon:'F', title:'find-skills', desc:'先帮你找到这件事该装什么 Skill。#技能搜索 #新手必备'},
-      {icon:'G', title:'grill-me', desc:'把复杂任务拆成清晰步骤，按流程推进。#任务拆解 #学习辅导'},
-      {icon:'D', title:'grill-with-docs', desc:'把文档里的信息整理成 AI 可直接使用的知识。#文档问答 #知识整理'},
-      {icon:'A', title:'improve-codebase-architecture', desc:'帮 AI 分析大型项目结构，优化代码组织。#代码架构 #工程优化'},
-      {icon:'T', title:'tdd', desc:'用测试保证 AI 写代码更稳定。#测试驱动 #高质量代码'},
-      {icon:'B', title:'agent-browser', desc:'打开网页、填写、提取数据，像人一样操作浏览器。#网页自动化 #数据提取'},
-      {icon:'W', title:'frontend-design', desc:'帮 AI 设计网页界面和用户体验。#网页设计 #UI/UX'},
-      {icon:'M', title:'setup-matt-pocock-skills', desc:'安装 Matt Pocock 精选的高质量 Skill 合集。#开发工具 #效率提升'},
-      {icon:'H', title:'handoff', desc:'让多个 AI Agent 分工协作完成任务。#任务交接 #多Agent协作'},
-      {icon:'Q', title:'triage', desc:'帮 AI 判断问题原因和处理顺序。#问题分类 #故障排查'},
-    ]}
-  ];
-
-  var checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4"><path d="M20 6L9 17l-5-5"/></svg>';
-
+  /* ==== Skill 市场（真实数据） ====
+     这里原先是一份**写死的演示目录**（marketData 假技能 + openSkill 里那四个"内部配套"模块），
+     老师自己审核发布的技能在这一页永远看不到。现在改为读真实后端：
+       GET /api/skill-market/index       已安装 / 在审 / 草稿（含版本、可加载性）
+       GET /api/skill-studio/candidates  从对话里发现的候选（带 R1~R6 判据）
+       GET /api/skill-studio/overview    候选数、团队同步队列
+     渲染在页面末尾的「技能市场（真实数据）」区块里做（复用原有 .mk-cat/.skill-card 样式），
+     本函数只保留签名 —— 搜索框与既有包装器都还在调它。 */
   function buildMarket(filter){
-    var html = '';
-    marketData.forEach(function(cat){
-      var skills = cat.skills.filter(function(s){ return !filter || s.title.indexOf(filter)>-1; });
-      if(!skills.length) return;
-      html += '<div class="mk-cat"><div class="mk-cat-name">'+cat.cat+'</div><div class="mk-cat-desc">'+cat.desc+'</div>';
-      html += '<div class="mk-grid">';
-      skills.forEach(function(s){
-        html += '<button class="skill-card" data-skill="'+s.title+'">'+
-
-          '<div class="sc-top"><div class="skill-icon">'+s.icon+'</div><div class="sc-title">'+s.title+'</div></div>'+
-          '<div class="sc-desc">'+s.desc+'</div></button>';
-      });
-      html += '</div></div>';
-    });
-    document.getElementById('marketBody').innerHTML = html || '<div class="mk-cat"><div class="mk-cat-desc">没有匹配的 Skill。</div></div>';
-    document.querySelectorAll('.skill-card').forEach(function(c){
-      c.addEventListener('click', function(){ openSkill(c.dataset.skill); });
-    });
+    if(typeof renderRealMarket === 'function') renderRealMarket(filter || '');
   }
 
-  /* ==== Skill detail ==== */
-  function openSkill(title){
-    var s=null, cat='';
-    marketData.forEach(function(c){ c.skills.forEach(function(x){ if(x.title===title){s=x;cat=c.cat;} }); });
-    if(!s) return;
-    var modules;
-    if(cat==='AI 效率工具'){
-      modules = [
-        {icon:'I', name:s.title+' 使用指南', desc:'安装即用，可在对话中直接调用该能力；来自 skills.sh 社区', code:'install-and-use'},
-        {icon:'S', name:'能力接入', desc:'作为独立 Skill 挂载到教育 Agent，随对话触发', code:'skill-mounted'},
-        {icon:'R', name:'效率增强', desc:'扩展 AI 专业能力，覆盖开发、文档、网页自动化等场景', code:'efficiency'},
-      ];
-    } else {
-      modules = [
-        {icon:'H', name: s.title+' CLI', desc:'内部配套：脚手架、检查、预览、渲染、转录与指令集', code:'teaching-cli'},
-        {icon:'G', name:'GSAP 支持', desc:'内部配套：可寻址动效、时间线、缓动与性能规则', code:'gsap'},
-        {icon:'R', name:s.title+' Registry', desc:'内部配套：发现、安装并接入教学资源区块', code:'teaching-registry'},
-        {icon:'W', name:'教案转课件', desc:'内部配套：将教案抓取、脚本、分镜、配音与构建成完整教学流程', code:'lesson-to-slides'},
-      ];
-    }
-    var html = '<button class="sd-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>返回 Skill 市场</button>';
-    html += '<div class="sd-hero"><div class="sd-hero-icon"><svg viewBox="0 0 52 52" fill="none"><rect x="6" y="6" width="40" height="40" rx="14" fill="#3b82f6"/><path d="M18 20h16M18 28h16M18 36h10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></div>'+
-      '<div><div class="sd-tags"><span class="tag">'+cat+'</span><span class="tag installed">已安装</span></div>'+
-      '<div class="sd-title">'+s.title+'</div>'+
-      '<div class="sd-desc">'+s.desc+'</div>'+
-      '<div class="sd-author">Yan Agent · 教育版</div></div></div>';
-    html += '<div class="sd-sec"><div class="sd-sec-title">包含的 Skill</div><div class="sd-sec-desc">以下模块会随该能力一起提供。</div><div class="sd-list">';
-    modules.forEach(function(m){
-      html += '<div class="sd-row"><div class="r-icon">'+m.icon+'</div><div class="r-main"><div class="r-name">'+m.name+'</div><div class="r-desc">'+m.desc+'</div><div class="s" style="font-size:11.5px;color:var(--ink-400);margin-top:2px">'+m.code+'</div></div><span class="r-tag">已安装</span></div>';
-    });
-    html += '</div></div>';
-    document.getElementById('skillDetail').innerHTML = html;
-    document.querySelector('.sd-back').addEventListener('click', function(){ switchView('market'); });
-    switchView('skill');
+  /* ==== Skill 详情 ==== */
+  /* 详情不再是前端拼的假模块清单，而是真实技能：直接进 Skill Studio 的审查页
+     （那里有状态、批准记录、资源清单、哈希与差异）。 */
+  function openSkill(name){
+    if(!name) return;
+    location.href = '/static/skill-studio.html#' + encodeURIComponent(name);
   }
 
   /* ==== Side panel toggle ==== */
@@ -4392,6 +4330,336 @@ html.dark[data-tint="cyan"]   { --blue-soft:#08232A; --blue-ink:#B9EAF2; --blue-
         .observe(g, { childList: true, characterData: true, subtree: true });
     }
   } catch (err) {}
+})();
+</script>
+<script>
+/* ============================================================================
+   技能市场（真实数据）+ 试用面板
+   ----------------------------------------------------------------------------
+   背景：这一页原先的卡片是**写死的 marketData 假技能**；而市场里真实安装的技能
+   在界面上**没有任何调用入口**（/api/capabilities 只扫 <repo>/skills 的平台自带能力，
+   不扫市场安装目录 data/skills；聊天 agent 也只挂了 ask_textbook 一个工具）。
+   本区块把真实市场渲染出来，并给「已安装」的技能加一个试用面板。
+
+   数据来源（全部真实接口，失败就如实说明，不塞假数据）：
+     GET  /api/skill-market/index        技能：已安装 / 在审 / 草稿 / 停用 + 版本 + 可加载
+     GET  /api/skill-studio/candidates   候选箱：候选 + R1~R6 判据 + 未过原因
+     GET  /api/skill-studio/overview     团队同步队列条数
+     GET  /api/skill-market/detail?id=   插件函数（含参数名）+ inputs_spec（含类型/说明）
+     GET  /api/skill/session/<sid>/init  试用前先确保会话已加载技能
+     POST /api/skill-market/kernel/invoke 真正调用（{session_id, skill, function, args}）
+
+   分三区：① 已安装（点卡片展开试用面板）② 未安装（草稿/待审/停用，点卡片进 Studio）
+           ③ 候选箱（判据 x/y，点卡片进 Studio 候选箱）
+   只做追加，不改动原有 DOM 与其它区块。
+   ========================================================================== */
+(function(){
+  var CACHE = {skills: [], candidates: [], outbox: 0};
+  var BOX_ID = 'realMarketBox';
+  var TRIAL_ID = 'realMarketTrial';
+  var TRIAL_SESSION = 'market-trial';
+  var STATUS_LABEL = {published:'已安装', submitted:'待审', draft:'草稿', approved:'已批准待安装',
+                      disabled:'已停用', rolled_back:'已回滚', rejected:'已拒绝'};
+
+  function safe(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function jget(url){
+    return fetch(url).then(function(r){ return r.json(); }).catch(function(){ return null; });
+  }
+  function jpost(url, body){
+    return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                       body: JSON.stringify(body || {})})
+      .then(function(r){ return r.json(); })
+      .catch(function(e){ return {ok:false, error:String(e)}; });
+  }
+
+  function skillCard(s){
+    var ok = !!s.loadable;
+    var color = ok ? '#0f9d58'
+              : (s.status === 'submitted' || s.status === 'approved') ? '#b45309' : '#9ca3af';
+    return '<button class="skill-card" data-real-skill="' + safe(s.name) + '" data-loadable="' + (ok ? '1' : '0')
+      + '" title="' + safe(s.name) + '">'
+      + '<div class="sc-top"><div class="skill-icon">' + (ok ? '✓' : 'S') + '</div>'
+      + '<div class="sc-title">' + safe(s.title || s.name) + '</div></div>'
+      + '<div class="sc-desc">' + safe(s.description || s.name) + '</div>'
+      + '<div style="margin-top:8px;font-size:11.5px;color:' + color + '">'
+      + (STATUS_LABEL[s.status] || s.status || '')
+      + (s.version ? ' · v' + safe(s.version) : '')
+      + (ok ? ' · 可加载 · 点击试用' : '') + '</div></button>';
+  }
+
+  function candCard(c){
+    var crit = c.criteria || {};
+    var keys = Object.keys(crit).sort();
+    var passed = keys.filter(function(k){ return crit[k]; }).length;
+    var blocked = (c.blocking || [])[0] || '';
+    return '<button class="skill-card" data-real-cand="' + safe(c.candidate_id) + '" title="' + safe(c.signature) + '">'
+      + '<div class="sc-top"><div class="skill-icon">C</div>'
+      + '<div class="sc-title">' + safe(c.title || '(无标题候选)') + '</div></div>'
+      + '<div class="sc-desc">出现 ' + (c.sessions || 0) + ' 个会话 / ' + (c.runs || 0) + ' 次'
+      + (c.score == null ? '' : '　评分 ' + Number(c.score).toFixed(2)) + '</div>'
+      + '<div style="margin-top:8px;font-size:11.5px;color:' + (blocked ? '#b45309' : '#0f9d58') + '">'
+      + '判据 ' + passed + '/' + keys.length + (blocked ? '　' + safe(String(blocked).slice(0, 40)) : '　可以生成草稿')
+      + '</div></button>';
+  }
+
+  function section(title, desc, cardsHtml, emptyText){
+    var h = '<div class="mk-cat"><div class="mk-cat-name">' + title + '</div>'
+          + '<div class="mk-cat-desc">' + desc + '</div>';
+    h += cardsHtml ? '<div class="mk-grid">' + cardsHtml + '</div>'
+                   : '<div style="padding:12px 0;font-size:13px;color:var(--ink-400)">' + emptyText + '</div>';
+    return h + '</div>';
+  }
+
+  function html(filter){
+    var f = (filter || '').toLowerCase();
+    var hit = function(s){ return !f || ((s.name || '') + ' ' + (s.title || '')).toLowerCase().indexOf(f) > -1; };
+    var skills = (CACHE.skills || []).filter(hit);
+    var installed = skills.filter(function(s){ return !!s.loadable; });
+    var pending = skills.filter(function(s){ return !s.loadable; });
+    var cands = (CACHE.candidates || []).filter(function(c){
+      return !f || ((c.title || '') + ' ' + (c.signature || '')).toLowerCase().indexOf(f) > -1;
+    });
+    if(!installed.length && !pending.length && !cands.length){
+      return '<div class="mk-cat"><div class="mk-cat-name">技能市场</div>'
+        + '<div class="mk-cat-desc">还没有任何技能' + (f ? '匹配「' + safe(filter) + '」' : '') + '。'
+        + '到 <a href="/static/skill-studio.html" style="color:var(--blue)">Skill Studio</a> '
+        + '从候选箱生成草稿，走完「提交审查 → 批准 → 安装」就会出现在这里。</div></div>';
+    }
+    var h = '';
+    h += section('已安装',
+      '审核通过并安装完毕，<b>可直接被 Agent 调用</b>（点卡片填参数试用）。'
+      + (CACHE.outbox ? '　<span style="color:var(--blue)">团队同步队列 ' + CACHE.outbox + ' 条</span>' : ''),
+      installed.map(skillCard).join(''),
+      '还没有审核通过并安装的技能 —— 走完「提交审查 → 批准 → 安装」就会出现在这里。');
+
+    var by = {};
+    pending.forEach(function(s){ by[s.status || '其它'] = (by[s.status || '其它'] || 0) + 1; });
+    var parts = Object.keys(by).map(function(k){ return (STATUS_LABEL[k] || k) + ' ' + by[k] + ' 个'; });
+    h += section('未安装',
+      '草稿 / 待审 / 停用 —— 还没过审或已被停用，Agent 不会加载。'
+      + (parts.length ? '　当前：' + safe(parts.join('、')) : '')
+      + '　<a href="/static/skill-studio.html" style="color:var(--blue)">去审核 →</a>',
+      pending.map(skillCard).join(''),
+      '没有未安装的技能。');
+
+    var nBlocked = cands.filter(function(c){ return (c.blocking || []).length; }).length;
+    h += section('候选箱',
+      '系统从对话里发现的复用流程。判据（R1~R6）齐全才能生成草稿；'
+      + '候选只带会话编号与轮次，不含对话原文。'
+      + (cands.length ? '　共 ' + cands.length + ' 个，其中 ' + nBlocked + ' 个判据未齐' : '')
+      + '　<a href="/static/skill-studio.html#candidates" style="color:var(--blue)">去候选箱 →</a>',
+      cands.map(candCard).join(''),
+      '还没有候选（正常：需要跨会话反复跑通的流程才会被识别）。');
+
+    return h;
+  }
+
+  /* ── 试用面板：参数表单按 manifest.inputs_spec 自动生成 ───────────────── */
+  function closeTrial(){
+    var t = document.getElementById(TRIAL_ID);
+    if(t && t.parentNode) t.parentNode.removeChild(t);
+  }
+
+  function argInputs(fn, spec){
+    var params = (fn && fn.params) || [];
+    var byName = {};
+    (spec || []).forEach(function(s){ byName[s.name] = s; });
+    return params.map(function(name){
+      var s = byName[name] || {};
+      var type = String(s.type || 'string').toLowerCase();
+      var inputType = (type === 'integer' || type === 'number') ? 'number' : 'text';
+      var ph = s.description ? safe(s.description) : '';
+      return '<label style="display:block;margin:10px 0 4px;font-size:12px;color:var(--ink-400)">'
+        + safe(name) + (s.type ? '（' + safe(s.type) + '）' : '') + '</label>'
+        + '<input data-arg="' + safe(name) + '" data-type="' + safe(type) + '" type="' + inputType + '"'
+        + ' placeholder="' + ph + '" style="width:100%;max-width:420px;box-sizing:border-box;'
+        + 'padding:9px 12px;border:.5px solid var(--line);border-radius:10px;font:inherit">';
+    }).join('');
+  }
+
+  function renderResult(host, r){
+    var box = host.querySelector('#trialOut');
+    if(!box) return;
+    var v = r && r.value;
+    if(v && typeof v === 'object' && v.value !== undefined) v = v.value;   // SK 包装
+    if(r && r.ok === false){
+      box.innerHTML = '<div style="color:#dc2626;font-size:13px">运行失败：'
+        + safe(r.error || r.gate || '未知错误') + '</div>';
+      return;
+    }
+    if(v && typeof v === 'object' && typeof v.markdown === 'string'){
+      var md = v.markdown;
+      if(window.marked && typeof window.marked.parse === 'function'){
+        try{ box.innerHTML = '<div class="trial-md">' + window.marked.parse(md) + '</div>'; return; }
+        catch(e){ /* 落回纯文本 */ }
+      }
+      box.innerHTML = '<pre style="white-space:pre-wrap;font-size:13px;line-height:1.7;margin:0">'
+        + safe(md) + '</pre>';
+      return;
+    }
+    box.innerHTML = '<pre style="white-space:pre-wrap;font-size:12.5px;margin:0">'
+      + safe(JSON.stringify(v == null ? r : v, null, 2)) + '</pre>';
+  }
+
+  function runTrial(name, fnName, host){
+    var args = {};
+    host.querySelectorAll('[data-arg]').forEach(function(el){
+      var raw = (el.value || '').trim();
+      if(raw === '') return;
+      var t = el.dataset.type;
+      args[el.dataset.arg] = (t === 'integer' || t === 'number') ? Number(raw) : raw;
+    });
+    var out = host.querySelector('#trialOut');
+    if(out) out.innerHTML = '<div style="font-size:13px;color:var(--ink-400)">运行中…（首次调用可能要几秒）</div>';
+    jpost('/api/skill-market/kernel/invoke',
+          {session_id: TRIAL_SESSION, skill: name, function: fnName, args: args})
+      .then(function(r){ renderResult(host, r); });
+  }
+
+  function openTrial(name){
+    var box = document.getElementById(BOX_ID);
+    if(!box) return;
+    closeTrial();
+    var host = document.createElement('div');
+    host.id = TRIAL_ID;
+    host.className = 'mk-cat';
+    host.innerHTML = '<div class="mk-cat-name">试用：' + safe(name) + '</div>'
+      + '<div class="mk-cat-desc">正在读取技能接口…</div>';
+    box.insertBefore(host, box.firstChild);
+    Promise.all([
+      jget('/api/skill-market/detail?id=' + encodeURIComponent(name)),
+      jget('/api/skill/session/' + TRIAL_SESSION + '/init')
+    ]).then(function(res){
+      var d = res[0];
+      if(!d || !d.ok){
+        host.innerHTML = '<div class="mk-cat-name">试用：' + safe(name) + '</div>'
+          + '<div class="mk-cat-desc" style="color:#dc2626">读不到技能接口：'
+          + safe((d && d.error) || '未知错误') + '</div>';
+        return;
+      }
+      var fns = d.plugin_functions || [];
+      var spec = (d.manifest && d.manifest.inputs_spec) || [];
+      var m = d.manifest || {};
+      if(!fns.length){
+        host.innerHTML = '<div class="mk-cat-name">试用：' + safe(name) + '</div>'
+          + '<div class="mk-cat-desc">这个技能没有可调用的插件函数（纯提示词技能）：'
+          + '它在会话里作为能力说明生效，没有可直接运行的接口。</div>';
+        return;
+      }
+      var h = '<div class="mk-cat-name">试用：' + safe(m.title || name) + '</div>'
+        + '<div class="mk-cat-desc">' + safe(m.description || '')
+        + (m.version ? '　<span style="color:var(--ink-400)">v' + safe(m.version) + '</span>' : '')
+        + '　<a href="/static/skill-studio.html#' + encodeURIComponent(name)
+        + '" style="color:var(--blue)">在 Skill Studio 打开 →</a>'
+        + '　<a href="javascript:void(0)" id="trialClose" style="color:var(--ink-400)">收起</a></div>';
+      if(fns.length > 1){
+        h += '<label style="display:block;margin:10px 0 4px;font-size:12px;color:var(--ink-400)">函数</label>'
+          + '<select id="trialFn" style="max-width:420px;padding:9px 12px;border:.5px solid var(--line);'
+          + 'border-radius:10px;font:inherit">'
+          + fns.map(function(f, i){
+              return '<option value="' + safe(f.function) + '"' + (i ? '' : ' selected') + '>'
+                + safe(f.function) + (f.description ? '　—　' + safe(String(f.description).slice(0, 40)) : '')
+                + '</option>';
+            }).join('') + '</select>';
+      }
+      h += '<div id="trialParams" style="max-width:460px">' + argInputs(fns[0], spec) + '</div>'
+        + '<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+        + '<button class="pill-btn" id="trialRun">运行</button>'
+        + '<span style="font-size:12px;color:var(--ink-400)">参数留空则用技能默认值</span></div>'
+        + '<div id="trialOut" class="row-card" style="margin-top:14px;padding:14px;display:block"></div>';
+      host.innerHTML = h;
+      var fnSel = host.querySelector('#trialFn');
+      function currentFn(){
+        if(!fnSel) return fns[0].function;
+        var want = fnSel.value;
+        var hit = fns.filter(function(f){ return f.function === want; })[0];
+        return (hit || fns[0]).function;
+      }
+      function currentObj(){
+        var want = currentFn();
+        return fns.filter(function(f){ return f.function === want; })[0] || fns[0];
+      }
+      if(fnSel){
+        fnSel.addEventListener('change', function(){
+          host.querySelector('#trialParams').innerHTML = argInputs(currentObj(), spec);
+        });
+      }
+      host.querySelector('#trialRun').addEventListener('click', function(){
+        runTrial(name, currentFn(), host);
+      });
+      host.querySelector('#trialClose').addEventListener('click', closeTrial);
+    });
+  }
+
+  function paint(filter){
+    var box = document.getElementById('marketBody');
+    if(!box) return;
+    var old = document.getElementById(BOX_ID);
+    if(old && old.parentNode) old.parentNode.removeChild(old);
+    closeTrial();
+    var wrap = document.createElement('div');
+    wrap.id = BOX_ID;
+    wrap.innerHTML = html(filter);
+    box.insertAdjacentHTML('afterbegin', wrap.outerHTML);
+    box.querySelectorAll('[data-real-skill]').forEach(function(c){
+      c.addEventListener('click', function(){
+        if(c.dataset.loadable === '1'){ openTrial(c.dataset.realSkill); return; }
+        location.href = '/static/skill-studio.html#' + encodeURIComponent(c.dataset.realSkill);
+      });
+    });
+    box.querySelectorAll('[data-real-cand]').forEach(function(c){
+      c.addEventListener('click', function(){ location.href = '/static/skill-studio.html#candidates'; });
+    });
+  }
+
+  function load(filter){
+    return Promise.all([
+      jget('/api/skill-market/index'),
+      jget('/api/skill-studio/candidates?limit=100'),
+      jget('/api/skill-studio/overview')
+    ]).then(function(res){
+      if(res[0] && res[0].ok) CACHE.skills = res[0].skills || [];
+      if(res[1] && res[1].ok) CACHE.candidates = res[1].candidates || [];
+      if(res[2] && res[2].ok) CACHE.outbox = res[2].outbox || 0;
+      paint(filter);
+    });
+  }
+
+  /* 页面里的 buildMarket（搜索框、既有包装器）会调它 */
+  window.renderRealMarket = function(filter){ paint(filter || ''); load(filter || ''); };
+
+  /* 深链：/ #trial:<技能名> → 直接展开该技能的试用面板 */
+  function hashTrial(){
+    var h = String(location.hash || '');
+    var m = h.match(/^#trial:([^&]+)/);
+    if(!m) return '';
+    try{ return decodeURIComponent(m[1]); }catch(e){ return m[1]; }
+  }
+
+  try{
+    if(document.getElementById('marketBody')) load('').then(function(){
+      var want = hashTrial();
+      if(want) openTrial(want);
+    });
+    window.addEventListener('hashchange', function(){
+      var want = hashTrial();
+      if(want) openTrial(want); else closeTrial();
+    });
+    window.addEventListener('focus', function(){
+      var v = document.getElementById('view-market');
+      if(v && v.classList.contains('active') && !document.getElementById(TRIAL_ID)) load('');
+    });
+    document.addEventListener('visibilitychange', function(){
+      if(!document.hidden && document.getElementById('marketBody')
+         && !document.getElementById(TRIAL_ID)) load('');
+    });
+  }catch(e){
+    try{ console.log('[技能市场] 初始化失败:', e); }catch(e2){}
+  }
 })();
 </script>
 </body>

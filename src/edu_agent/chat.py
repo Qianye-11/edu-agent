@@ -51,25 +51,65 @@ def ask_textbook(question: str) -> str:
 
 _checkpointer = InMemorySaver()
 _agent = None
+_agent_sig = None
+
+
+def _skill_snapshot():
+    """当前可用的技能集合（用于判断 agent 缓存是否要重建）。"""
+    from edu_agent.skill_market import agent_tools
+
+    try:
+        skills = agent_tools.loadable_skills()
+    except Exception:                                        # noqa: BLE001
+        skills = []
+    sig = tuple((s["skill"], tuple(f["name"] for f in s["functions"])) for s in skills)
+    return skills, sig
 
 
 def _get_agent():
-    global _agent
-    if _agent is None:
-        _agent = create_react_agent(model=get_chat_llm(), tools=[ask_textbook], prompt=SYSTEM)
+    """构建/复用 Agent；**技能集合变了就重建**（装了新技能不用重启服务）。"""
+    global _agent, _agent_sig
+    skills, sig = _skill_snapshot()
+    if _agent is None or sig != _agent_sig:
+        from edu_agent.skill_market import agent_tools
+
+        tools = [ask_textbook] + agent_tools.build_tools()
+        prompt = SYSTEM + agent_tools.prompt_block(skills)
+        _agent = create_react_agent(model=get_chat_llm(), tools=tools, prompt=prompt)
+        _agent_sig = sig
     return _agent
 
 
 def ask_chat(user_text: str, thread_id: str = "default") -> dict:
-    """多轮入口：同一 thread_id 延续会话（checkpointer 记忆）。"""
+    """多轮入口：同一 thread_id 延续会话（checkpointer 记忆）。
+
+    先走**确定性快路**（技能在 SKILL.md 里声明了 `intents:` 且话里参数齐全 → 直接调技能），
+    没命中才交给 ReAct agent（它同样挂了已安装技能的工具，但本机小模型的
+    function-calling 不稳，所以"说一句就出图"这类请求走快路更可靠）。
+    """
     from edu_agent.generate import plainify_math
+    from edu_agent.skill_market import agent_tools
+
+    fast = None
+    try:
+        fast = agent_tools.match_intent(str(user_text or ""))
+    except Exception:                                        # noqa: BLE001  快路失败不影响主链路
+        fast = None
+    if fast:
+        body = str(fast.get("text") or "")
+        head = "（由技能 **%s** 生成）" % fast["title"]
+        out = {"thread_id": thread_id, "answer": body, "skill": fast["skill"],
+               "function": fast["function"], "args": fast["args"], "source": "skill_fastpath"}
+        if body.strip():
+            out["answer"] = head + "\n\n" + body
+        return out
 
     config = {"configurable": {"thread_id": thread_id}}
     result = _get_agent().invoke({"messages": [HumanMessage(content=user_text)]}, config=config)
     msgs = result.get("messages", [])
     last = next((m for m in reversed(msgs) if isinstance(m, AIMessage) and m.content), None)
     answer = plainify_math(last.content) if last else ""
-    return {"thread_id": thread_id, "answer": answer}
+    return {"thread_id": thread_id, "answer": answer, "source": "agent"}
 
 
 if __name__ == "__main__":

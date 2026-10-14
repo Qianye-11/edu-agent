@@ -225,6 +225,18 @@ MCP_SPECS: tuple[McpSpec, ...] = (
         extra_args=("--headless", "--browser", "chromium"),
         note="第三方 @playwright/mcp；浏览器控制风险高，白名单只放读取/导航类",
     ),
+
+    # 教材库 MCP 服务（移植自 fork 线，2026-10-02）：把平台**已经连通**的教材读取
+    # （textbook_lib，与 /api/textbook* 同一份实现）包成 MCP 工具，技能（如章节思维导图）
+    # 只调工具、不自己读文件/解析格式。**只读**：不写文件、不改向量库。
+    McpSpec(
+        id="textbook",
+        name="edu-textbook 教材服务",
+        desc="读本地教材库：章节目录、某一章的小节清单、章节思维导图 Markdown（只读）",
+        kind="python",
+        resolve=lambda: ROOT / "mcp_servers" / "textbook_server.py",
+        probe="stdio",
+    ),
 )
 
 SKILL_SPECS: tuple[SkillSpec, ...] = (
@@ -529,3 +541,78 @@ def wps_available() -> tuple[bool, str]:
     if not st.get("running"):
         return False, str(st.get("detail") or "WPS 桥接不可用")
     return True, "就绪"
+
+
+# ---------- 技能动态发现（Skill 生态 / skill_market 需要；纯新增，不改动上面任何逻辑） ----------
+# 用途：`skill_market/capability_registry.py` 用 `all_skill_specs()` 校验 `skill:<id>`
+# 能力 id 是否真实存在；`_parse_front_matter` 是 `discover_skills()` 的内部依赖。
+# 移植说明：本仓库的 `SkillSpec` 没有 vendor / trial / entry 字段（那三个是"本工作区技能"
+# 试用面板用的），所以这里只填本仓库确实存在的字段 —— 技能生态只需要
+# id / name / desc / category / icon 这几个来判断能力是否存在。
+def local_skills_dir() -> Path:
+    """本仓库自带的 Skills 目录（`<repo>/skills`，随仓库版本管理）。"""
+    return ROOT / "skills"
+
+
+def _parse_front_matter(path: Path) -> dict:
+    """读 SKILL.md 的 front-matter（只支持单行 `key: value`，零依赖、够用）。
+
+    注意：**不要**写 YAML 折叠块（`description: >`）—— 按行读会拿到字面量 `>`。
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return {}
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+    meta: dict[str, str] = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if not line.strip() or line.lstrip().startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip().lower()
+        value = value.strip().strip('"').strip("'")
+        if key and value:
+            meta[key] = value
+    return meta
+
+
+def discover_skills() -> tuple[SkillSpec, ...]:
+    """扫描本项目 `skills/*/SKILL.md`，**动态注册**技能。
+
+    也就是说：往 `<repo>/skills/<id>/` 放一个带 front-matter 的 SKILL.md，
+    Skill 市场里就会出现它 —— 不用改平台代码。识别字段：
+    name(技能 id) / title(显示名) / description / category / icon。
+    """
+    root = local_skills_dir()
+    if not root.is_dir():
+        return ()
+    found: list[SkillSpec] = []
+    for child in sorted(root.iterdir()):
+        skill_md = child / "SKILL.md"
+        if not child.is_dir() or not skill_md.exists():
+            continue
+        meta = _parse_front_matter(skill_md)
+        sid = (meta.get("name") or child.name).strip()
+        if not sid:
+            continue
+        found.append(SkillSpec(
+            id=sid,
+            name=(meta.get("title") or meta.get("name") or sid).strip(),
+            desc=(meta.get("description") or "").strip(),
+            category=(meta.get("category") or "通用能力").strip(),
+            icon=(meta.get("icon") or "S").strip()[:2],
+            mcp="",
+        ))
+    return tuple(found)
+
+
+def all_skill_specs() -> dict[str, SkillSpec]:
+    """静态注册的技能 + 动态发现的技能（**同名以静态为准**，便于单独覆盖）。"""
+    merged: dict[str, SkillSpec] = {s.id: s for s in SKILL_SPECS}
+    for spec in discover_skills():
+        merged.setdefault(spec.id, spec)
+    return merged

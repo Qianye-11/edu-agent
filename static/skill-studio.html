@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Studio · 课本教练</title>
+<!-- 复用主界面的视觉层（只追加，不改动任何交互元素） -->
+<link rel="stylesheet" href="/static/_qisi-apple-ui.css">
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --line:#e3e6ea; --line-card:#d7dbe0;
+    --text:#1b1d21; --sub:#6b7280; --blue:#2563eb; --blue-soft:#eaf0ff;
+    --ok:#0f9d58; --warn:#b45309; --warn-soft:#fff7ed; --err:#dc2626; --err-soft:#fef2f2;
+    --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+  a{color:var(--blue)}
+  header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.92);
+         backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line);
+         padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em}
+  header .grow{flex:1}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;
+         font-size:12px;background:var(--blue-soft);color:var(--blue);font-weight:600}
+  .badge.gray{background:#f1f3f5;color:var(--sub)}
+  .badge.ok{background:#e9f7ef;color:var(--ok)}
+  .badge.warn{background:var(--warn-soft);color:var(--warn)}
+  .badge.err{background:var(--err-soft);color:var(--err)}
+  nav.tabs{display:flex;gap:6px;padding:10px 20px 0;flex-wrap:wrap}
+  nav.tabs button{border:1px solid transparent;background:transparent;color:var(--sub);
+      padding:8px 14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:550}
+  nav.tabs button:hover{background:#eef1f5;color:var(--text)}
+  nav.tabs button.active{background:var(--card);color:var(--text);
+      border-color:var(--line);box-shadow:var(--shadow)}
+  main{padding:14px 20px 60px;max-width:1400px}
+  .panel{display:none}
+  .panel.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+        box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+  .card h2{font-size:14px;margin:0 0 10px;font-weight:650}
+  .card h2 .hint{font-weight:400;color:var(--sub);font-size:12px;margin-left:8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .grow{flex:1}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-weight:600;font-size:12px;white-space:nowrap}
+  tr:hover td{background:#fafbfc}
+  button.btn{border:1px solid var(--line-card);background:#fff;color:var(--text);
+      padding:7px 12px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:550}
+  button.btn:hover{border-color:#b9c0c9;background:#fbfcfd}
+  button.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  button.btn.primary:hover{background:#1d4ed8}
+  button.btn.danger{color:var(--err);border-color:#f0c6c6}
+  button.btn.danger:hover{background:var(--err-soft)}
+  button.btn:disabled{opacity:.5;cursor:not-allowed}
+  input[type=text],textarea,select{border:1px solid var(--line-card);border-radius:10px;
+      padding:8px 10px;font:inherit;background:#fff;width:100%}
+  textarea{min-height:120px;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  label.f{display:block;margin:8px 0 4px;color:var(--sub);font-size:12px;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:960px){.grid2{grid-template-columns:1fr}}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .muted{color:var(--sub)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.draft{background:#f1f3f5;color:var(--sub)}
+  .pill.submitted{background:var(--warn-soft);color:var(--warn)}
+  .pill.approved{background:#eef4ff;color:var(--blue)}
+  .pill.published{background:#e9f7ef;color:var(--ok)}
+  .pill.disabled,.pill.rolled_back{background:#f4f4f5;color:#8b8f96}
+  .pill.rejected{background:var(--err-soft);color:var(--err)}
+  .pass{color:var(--ok);font-weight:600}
+  .fail{color:var(--err);font-weight:600}
+  pre.diff{margin:0;max-height:340px;overflow:auto;background:#fbfcfd;border:1px solid var(--line);
+      border-radius:10px;padding:10px;font-size:12.5px}
+  pre.diff .add{background:#e9f7ef;display:block}
+  pre.diff .del{background:var(--err-soft);display:block}
+  pre.diff .same{display:block;color:var(--sub)}
+  .log{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:10px;font-size:12px;
+       max-height:260px;overflow:auto;white-space:pre-wrap;margin:0}
+  .toast{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;flex-direction:column;gap:8px}
+  .toast div{background:#111827;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;
+      box-shadow:var(--shadow);max-width:420px}
+  .toast div.err{background:#b91c1c}
+  .toast div.ok{background:#047857}
+  .empty{color:var(--sub);text-align:center;padding:26px}
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:4px 10px;font-size:13px}
+  .kv div:nth-child(odd){color:var(--sub)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Skill Studio</h1>
+  <span class="badge" id="modeBadge">加载中…</span>
+  <span class="badge gray" id="countBadge">—</span>
+  <span class="grow"></span>
+  <a href="/" class="btn" style="text-decoration:none">← 返回主界面</a>
+  <button class="btn" onclick="refreshAll()">刷新</button>
+</header>
+
+<nav class="tabs">
+  <button data-tab="candidates" class="active">候选箱</button>
+  <button data-tab="review">审查</button>
+  <button data-tab="edit">编辑</button>
+  <button data-tab="library">已安装库</button>
+  <button data-tab="audit">审计</button>
+</nav>
+
+<main>
+  <!-- ════════════ 候选箱 ════════════ -->
+  <section class="panel active" id="panel-candidates">
+    <div class="card">
+      <h2>候选箱 <span class="hint">系统从对话里发现的可复用流程；只展示脱敏证据摘要，不显示原始对话</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="candFilter" placeholder="按标题/签名过滤…" style="max-width:280px">
+        <label class="muted" style="font-size:13px">
+          <input type="checkbox" id="candOnlyReady"> 只看判据齐全的
+        </label>
+      </div>
+      <div id="candTable"></div>
+    </div>
+    <div class="card" id="candDetailCard" style="display:none">
+      <h2>候选详情 <span class="hint">证据只给会话编号与轮次，不含对话原文</span></h2>
+      <div id="candDetail"></div>
+    </div>
+  </section>
+
+  <!-- ════════════ 审查 ════════════ -->
+  <section class="panel" id="panel-review">
+    <div class="card">
+      <h2>选择待审技能 <span class="hint">submitted / approved / published 都可以在这里审</span></h2>
+      <div class="row">
+        <select id="reviewPick" style="max-width:340px"></select>
+        <button class="btn" onclick="loadReview()">载入</button>
+        <span class="muted" id="reviewHint"></span>
+      </div>
+    </div>
+    <div id="reviewBody"></div>
+  </section>
+
+  <!-- ════════════ 编辑 ════════════ -->
+  <section class="panel" id="panel-edit">
+    <div class="card">
+      <h2>编辑草稿 <span class="hint">表单与 Markdown 双向同步；改动后必须重新批准才可安装</span></h2>
+      <div class="row">
+        <select id="editPick" style="max-width:340px"></select>
+        <button class="btn" onclick="loadEdit()">载入</button>
+        <span class="grow"></span>
+        <button class="btn" id="editValidateBtn" onclick="doValidate()">实时校验</button>
+        <button class="btn primary" id="editSaveBtn" onclick="doSave()">仅保存草稿</button>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>表单</h2>
+        <div id="editForm"></div>
+      </div>
+      <div class="card">
+        <h2>Markdown 正文 <span class="hint">不含 front-matter</span></h2>
+        <textarea id="editBody" spellcheck="false" style="min-height:420px"></textarea>
+        <div class="muted" style="margin-top:6px;font-size:12px" id="editStat">—</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>完整预览 <span class="hint" id="editHint2">表单改动只会替换对应行，其余字段原样保留</span></h2>
+      <pre class="diff" id="editPreview">—</pre>
+    </div>
+    <div class="card">
+      <h2>差异 <span class="hint">与"载入时（= 已批准版本）"逐行比较</span></h2>
+      <pre class="diff" id="editDiff">—</pre>
+    </div>
+    <div class="card">
+      <h2>校验结果</h2>
+      <div id="editResult" class="muted">还没校验。</div>
+    </div>
+  </section>
+
+  <!-- ════════════ 已安装库 ════════════ -->
+  <section class="panel" id="panel-library">
+    <div class="card">
+      <h2>已安装库 <span class="hint">当前版本 / 历史版本（被替代的保留但不激活）/ 导出与团队同步状态</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="libFilter" placeholder="按技能名过滤…" style="max-width:260px">
+        <span class="grow"></span>
+        <span class="muted" id="libScope"></span>
+      </div>
+      <div id="libTable"></div>
+    </div>
+    <div class="card" id="libDetailCard" style="display:none">
+      <h2>技能详情</h2>
+      <div id="libDetail"></div>
+    </div>
+    <div class="card">
+      <h2>团队同步队列 <span class="hint">只有"已批准且已安装"的技能能入队；未批准一律拒绝</span></h2>
+      <div id="outboxBox" class="muted">—</div>
+    </div>
+  </section>
+
+  <!-- ════════════ 审计 ════════════ -->
+  <section class="panel" id="panel-audit">
+    <div class="card">
+      <h2>审计 <span class="hint">只追加 + 哈希链；这里只读展示</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="auditSkill" placeholder="按 skill 过滤…" style="max-width:240px">
+        <input type="text" id="auditEvent" placeholder="按 event 过滤（如 skill.publish）" style="max-width:280px">
+        <button class="btn" onclick="loadAudit()">查询</button>
+        <span class="grow"></span>
+        <button class="btn" onclick="verifyChain()">校验哈希链</button>
+      </div>
+      <div id="auditTable"></div>
+    </div>
+    <div class="card">
+      <h2>路径白名单（doc 34 §5.5）</h2>
+      <div id="safeImportBox" class="muted">—</div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   Skill Studio · 前端（doc 34 §5.6）
+   纯静态单文件，不依赖框架；所有数据来自 /api/skill-studio/* 与 /api/skill-market/*
+   ========================================================================== */
+var API = "";                       // 同源
+var STATE = { overview:null, candidates:[], skills:[], current:null, baseline:null };
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
+
+function toast(msg, kind){
+  var d = document.createElement("div");
+  d.className = kind || ""; d.textContent = msg;
+  $("toast").appendChild(d);
+  setTimeout(function(){ d.remove(); }, kind === "err" ? 8000 : 4000);
+}
+function q(obj){
+  var p = [];
+  for (var k in obj) if (obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
+    p.push(encodeURIComponent(k) + "=" + encodeURIComponent(obj[k]));
+  return p.length ? "?" + p.join("&") : "";
+}
+async function api(path, opts){
+  var r = await fetch(API + path, Object.assign({headers:{"Content-Type":"application/json"}}, opts||{}));
+  var t = await r.text();
+  try { return JSON.parse(t); } catch(e){ return {ok:false, error:"HTTP "+r.status+" "+t.slice(0,200)}; }
+}
+var get  = function(p){ return api(p); };
+var post = function(p, body){ return api(p, {method:"POST", body:JSON.stringify(body||{})}); };
+function patch(p, body){ return api(p, {method:"PATCH", body:JSON.stringify(body||{})}); }
+
+/* ─────────────────────────── 顶部状态 ─────────────────────────── */
+async function loadOverview(){
+  var d = await get("/api/skill-studio/overview");
+  STATE.overview = d;
+  if (!d.ok) { $("modeBadge").textContent = "接口不可用"; $("modeBadge").className="badge err"; return; }
+  var mode = (d.config && d.config.SKILL_STUDIO_ENABLED === "0") ? "已停用" : "已启用";
+  var exec = (d.config && d.config.SKILL_STUDIO_EXECUTE_PLUGIN === "0")
+             ? "L3 静态核对" : "L3 真跑插件";
+  $("modeBadge").textContent = "Studio " + mode + " · " + exec;
+  $("modeBadge").className = "badge" + (mode === "已启用" ? " ok" : " warn");
+  $("countBadge").textContent = "候选 " + d.candidates + " · 同步队列 " + d.outbox;
+}
+
+/* ─────────────────────────── 候选箱 ─────────────────────────── */
+function criteriaDots(c){
+  var map = c.criteria || {};
+  var keys = Object.keys(map).sort();
+  return keys.map(function(k){
+    return '<span class="pill ' + (map[k] ? "published" : "draft") + '" title="'+esc(k)+'">'
+         + esc(k) + (map[k] ? " ✓" : " ✗") + '</span>';
+  }).join(" ");
+}
+async function loadCandidates(){
+  var d = await get("/api/skill-studio/candidates" + q({limit:100}));
+  STATE.candidates = d.candidates || [];
+  renderCandidates();
+}
+function renderCandidates(){
+  var f = ($("candFilter").value||"").trim().toLowerCase();
+  var onlyReady = $("candOnlyReady").checked;
+  var rows = STATE.candidates.filter(function(c){
+    if (onlyReady && (c.blocking||[]).length) return false;
+    if (!f) return true;
+    return ((c.title||"") + " " + (c.signature||"")).toLowerCase().indexOf(f) > -1;
+  });
+  if (!rows.length) { $("candTable").innerHTML = '<div class="empty">没有候选（正常：需要跨会话反复跑通的流程才会进入这里）</div>'; return; }
+  var h = '<table><thead><tr><th>标题</th><th>出现</th><th>评分</th><th>判据</th><th>状态</th><th>风险</th><th></th></tr></thead><tbody>';
+  rows.forEach(function(c){
+    var blocked = (c.blocking||[]).length;
+    h += '<tr>'
+      + '<td><b>' + esc(c.title||"(无标题)") + '</b><div class="mono muted">' + esc((c.signature||"").slice(0,58)) + '</div></td>'
+      + '<td>' + (c.sessions||0) + ' 会话 / ' + (c.runs||0) + ' 次</td>'
+      + '<td>' + (c.score==null?"—":Number(c.score).toFixed(3)) + '</td>'
+      + '<td>' + criteriaDots(c) + (blocked ? '<div class="muted" style="font-size:12px">' + esc((c.blocking||[])[0]) + '</div>' : '') + '</td>'
+      + '<td><span class="pill ' + esc(c.state||"") + '">' + esc(c.studio_state||c.state||"") + '</span>'
+        + (c.cooldown_until ? '<div class="muted" style="font-size:12px">冷却至 ' + new Date(c.cooldown_until*1000).toLocaleString() + '</div>' : '') + '</td>'
+      + '<td>' + (c.sensitive_title ? '<span class="badge warn">标题含敏感信息（已脱敏）</span>' : '<span class="muted">—</span>') + '</td>'
+      + '<td style="white-space:nowrap">'
+      +   '<button class="btn" onclick="showCandidate(\'' + esc(c.candidate_id) + '\')">证据</button> '
+      +   '<button class="btn primary" ' + (blocked ? "disabled title='判据未齐，不能生成草稿'" : "") 
+      +     ' onclick="genDraft(\'' + esc(c.candidate_id) + '\')">生成草稿</button>'
+      + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  $("candTable").innerHTML = h;
+}
+async function showCandidate(cid){
+  var d = await get("/api/skill-studio/candidates/" + encodeURIComponent(cid));
+  if (!d.ok) { toast(d.error||"读取失败", "err"); return; }
+  var c = d.candidate || {};
+  var h = '<div class="kv">'
+    + '<div>候选 ID</div><div class="mono">' + esc(c.candidate_id) + '</div>'
+    + '<div>签名</div><div class="mono">' + esc(c.signature) + '</div>'
+    + '<div>状态</div><div>' + esc(c.state) + '</div>'
+    + '<div>评分</div><div>' + (c.score==null?"—":Number(c.score).toFixed(4)) + '</div>'
+    + '</div>';
+  h += '<h2 style="margin-top:14px">证据摘要 <span class="hint">只有会话编号与轮次，没有对话原文</span></h2>';
+  var ev = c.evidence || [];
+  h += ev.length
+    ? '<table><thead><tr><th>会话</th><th>轮次</th><th>结果</th></tr></thead><tbody>'
+      + ev.map(function(e){ return '<tr><td class="mono">' + esc(e.session_id) + '</td><td>' + esc(e.turn) + '</td><td>' + esc(e.outcome) + '</td></tr>'; }).join("")
+      + '</tbody></table>'
+    : '<div class="empty">没有证据条目</div>';
+  if (d.privacy) h += '<div class="row" style="margin-top:10px"><span class="badge ' + (d.privacy.sensitive?"warn":"gray") + '">隐私扫描：'
+      + (d.privacy.sensitive ? "命中 " + (d.privacy.hits||[]).map(function(x){return x.label;}).join("、") : "未命中") + '</span></div>';
+  $("candDetail").innerHTML = h;
+  $("candDetailCard").style.display = "";
+}
+async function genDraft(cid){
+  if (!confirm("把这个候选生成草稿？\n\n生成后进入草稿区，需教师校对 → 提交审查（L1/L2/L3）→ 批准 → 安装。")) return;
+  var d = await post("/api/skill-studio/candidates/" + encodeURIComponent(cid) + "/generate-draft",
+                     {actor:"teacher", confirm:true});
+  if (!d.ok) { toast("生成失败：" + (d.error||JSON.stringify(d).slice(0,160)), "err"); return; }
+  toast("已生成草稿：" + (d.skill||d.id||""), "ok");
+  await refreshAll();
+  await loadReviewPick(d.skill||d.id);
+}
+
+/* ─────────────────────────── 审查 ─────────────────────────── */
+async function loadSkills(){
+  var d = await get("/api/skill-market/index");
+  STATE.skills = (d && d.skills) || [];
+  STATE.libScope = (d && d.scope) || (d && d.visibility) || "";
+}
+function fillPicker(sel, allowAll){
+  var opts = [];
+  if (allowAll) opts.push('<option value="">（全部）</option>');
+  STATE.skills.forEach(function(s){
+    opts.push('<option value="' + esc(s.name) + '">' + esc(s.name) + ' · ' + esc(s.status)
+              + (s.version ? " v" + esc(s.version) : "") + '</option>');
+  });
+  sel.innerHTML = opts.join("") || '<option value="">（市场里还没有技能）</option>';
+}
+async function loadReviewPick(prefer){
+  fillPicker($("reviewPick"), false);
+  fillPicker($("editPick"), false);
+  if (prefer) { $("reviewPick").value = prefer; $("editPick").value = prefer; }
+  var firstSubmitted = STATE.skills.filter(function(s){ return s.status === "submitted"; })[0];
+  if (!prefer && firstSubmitted) { $("reviewPick").value = firstSubmitted.name; $("editPick").value = firstSubmitted.name; }
+}
+async function loadReview(){
+  var id = $("reviewPick").value;
+  if (!id) { toast("先选一个技能", "err"); return; }
+  var st = await get("/api/skill-studio/status/" + encodeURIComponent(id));
+  var rv = await get("/api/skill-studio/reviews/" + encodeURIComponent(id));
+  var val = await post("/api/skill-studio/drafts/" + encodeURIComponent(id) + "/validate", {});
+  STATE.current = id;
+  renderReview(id, st, rv, val);
+}
+function renderReview(id, st, rv, val){
+  var appr = (rv && rv.approval) || {};
+  var h = '<div class="card"><h2>状态与批准</h2><div class="kv">'
+    + '<div>技能</div><div><b>' + esc(id) + '</b></div>'
+    + '<div>状态</div><div><span class="pill ' + esc(st.state||"") + '">' + esc(st.studio_state||st.state||"") + '</span></div>'
+    + '<div>可加载</div><div>' + ((st.status&&st.status.loadable) ? '<span class="pass">是</span>' : '<span class="fail">否</span>') + '</div>'
+    + '<div>当前版本</div><div>' + esc((st.status&&st.status.version)||"—") + '</div>'
+    + '<div>批准记录</div><div>' + (appr.approved ? '有（' + esc(appr.reviewer||"") + '）' : '<span class="fail">没有</span>') + '</div>'
+    + '<div>哈希一致</div><div>' + (appr.hash_matches ? '<span class="pass">一致（批准仍有效）</span>' : '<span class="fail">不一致（' + esc(appr.reason||"改过内容") + '）</span>') + '</div>'
+    + '<div>当前哈希</div><div class="mono">' + esc(appr.current_hash||rv.content_hash||"") + '</div>'
+    + '<div>批准哈希</div><div class="mono">' + esc(appr.content_hash||"") + '</div>'
+    + '</div></div>';
+
+  /* 资源清单 + 隐私警告 */
+  var res = (rv.resources || []);
+  h += '<div class="card"><h2>资源清单 <span class="hint">' + res.length + ' 个文件</span></h2>';
+  h += res.length
+    ? '<table><thead><tr><th>文件</th><th>字节</th><th>sha256(前16)</th></tr></thead><tbody>'
+      + res.map(function(r){ return '<tr><td class="mono">' + esc(r.name) + '</td><td>' + esc(r.bytes) + '</td><td class="mono">' + esc(r.sha256) + '</td></tr>'; }).join("")
+      + '</tbody></table>'
+    : '<div class="empty">还没有资源文件</div>';
+  h += '<div class="row" style="margin-top:10px" id="policyRow"><button class="btn" onclick="loadPolicy(\'' + esc(id) + '\')">检查隐私与导出策略</button></div>';
+  h += '<div id="policyBox" style="margin-top:10px"></div></div>';
+
+  /* 三重校验（doc §5.3 结构 + L1/L2/L3） */
+  h += '<div class="card"><h2>结构校验 <span class="hint">Agent 生成的草稿必须七段齐全；手写技能不强制</span></h2>';
+  if (val && val.problems && val.problems.length) {
+    h += '<div class="badge err">' + val.problems.length + ' 个问题</div><ul>'
+       + val.problems.map(function(p){ return '<li class="fail">' + esc(p) + '</li>'; }).join("") + '</ul>';
+  } else if (val && val.ok) {
+    h += '<div class="badge ok">通过</div>';
+    h += '<div class="muted" style="margin-top:6px">source=' + esc(val.source||"—")
+       + '；内容哈希 ' + esc(val.content_hash||"") + '</div>';
+  } else {
+    h += '<div class="muted">无可展示结果：' + esc((val&&val.error)||"该技能可能还在候选阶段") + '</div>';
+  }
+  h += '</div>';
+
+  /* 教师动作（doc §5.6 的五种选择） */
+  h += '<div class="card"><h2>教师操作</h2>'
+    + '<div class="row">'
+    + '<button class="btn" onclick="doSubmitReview(\'' + esc(id) + '\')">提交审查（跑 L1/L2/L3）</button>'
+    + '<button class="btn primary" onclick="doApprove(\'' + esc(id) + '\')">批准（绑定内容哈希）</button>'
+    + '<button class="btn" onclick="doInstall(\'' + esc(id) + '\')">批准并安装到本地</button>'
+    + '<button class="btn danger" onclick="doReject(\'' + esc(id) + '\')">拒绝并设置冷却期</button>'
+    + '<button class="btn" onclick="switchTab(\'edit\')">修改后重新审查 →</button>'
+    + '</div>'
+    + '<div class="muted" style="margin-top:8px;font-size:12px">'
+    + '顺序：提交审查（L1 静态扫描 → L2 manifest 校验 → L3 影子运行）→ 批准（绑定哈希）→ 安装（复制落盘）。'
+    + '安装前后任何内容改动都会让批准失效，必须重新批准。</div></div>';
+  $("reviewHint").textContent = "当前：" + id;
+  $("reviewBody").innerHTML = h;
+}
+async function loadPolicy(id){
+  var d = await get("/api/skill-studio/export-policy/" + encodeURIComponent(id));
+  var h = '<div class="kv"><div>可否进团队库</div><div>'
+    + (d.allowed ? '<span class="pass">允许</span>' : '<span class="fail">不允许</span>') + '</div>'
+    + '<div>风险等级</div><div>' + esc(d.risk||"—") + (d.risk_reasons&&d.risk_reasons.length ? '（' + esc(d.risk_reasons.join("；")) + '）' : "") + '</div>'
+    + '</div>';
+  if (d.reasons && d.reasons.length)
+    h += '<ul style="margin-top:8px">' + d.reasons.map(function(r){ return '<li class="fail">' + esc(r) + '</li>'; }).join("") + '</ul>';
+  $("policyBox").innerHTML = h;
+}
+async function doSubmitReview(id){
+  var d = await post("/api/skill-studio/drafts/" + encodeURIComponent(id) + "/submit-review", {actor:"teacher"});
+  toast(d.ok ? ("已提交待审（" + JSON.stringify(d.gates||{}) + "）") : ("提交失败：" + (d.error||"")), d.ok?"ok":"err");
+  if (d.ok) { await refreshAll(); await loadReview(); }
+}
+async function doApprove(id){
+  var who = prompt("审核人（不能是创建者本人）：", "reviewer-G");
+  if (!who) return;
+  var note = prompt("审核意见（可空）：", "L1/L2/L3 已过，同意") || "";
+  var d = await post("/api/skill-studio/reviews/" + encodeURIComponent(id) + "/approve", {reviewer:who, note:note});
+  toast(d.ok ? "已批准（哈希已绑定）" : ("批准失败：" + (d.error||"")), d.ok?"ok":"err");
+  if (d.ok) { await refreshAll(); await loadReview(); }
+}
+async function doInstall(id){
+  var overwrite = confirm("如果同名技能已安装：\n\n【确定】允许覆盖（会先备份旧版）\n【取消】不覆盖（已安装则拒绝）");
+  var d = await post("/api/skill-studio/drafts/" + encodeURIComponent(id) + "/install",
+                     {actor:"teacher", confirm:true, allow_overwrite:overwrite});
+  if (!d.ok) { toast("安装失败：" + (d.error||"") + (d.gate ? "（gate=" + d.gate + "）" : ""), "err"); return; }
+  toast("已安装：" + (d.installed_to||""), "ok");
+  await refreshAll(); await loadReview();
+}
+async function doReject(id){
+  var who = prompt("审核人：", "reviewer-G");
+  if (!who) return;
+  var reason = prompt("拒绝理由（必填，会进入冷却期）：", "场景描述太泛，不可复用");
+  if (!reason) return;
+  var d = await post("/api/skill-studio/reviews/" + encodeURIComponent(id) + "/reject", {reviewer:who, reason:reason});
+  toast(d.ok ? "已拒绝（进入冷却期）" : ("拒绝失败：" + (d.error||"")), d.ok?"ok":"err");
+  if (d.ok) { await refreshAll(); await loadReview(); }
+}
+
+/* ─────────────────────────── 编辑 ─────────────────────────── */
+/* 关键设计：**不重建 front-matter**，只在原文上替换"本表单管的那些键"。
+   为什么：早先按表单字段重建整份 front-matter，会把 status / tests（inline 测试块）/
+   fixture / session_id / source 等**直接丢掉**，保存后结构校验立刻失败（实测踩过）。 */
+var MANAGED = ["name","title","description","version","owner","category","plugin",
+               "allowed_capabilities","data_scope"];
+
+async function fetchDraftText(id){
+  for (var i = 0; i < 3; i++){
+    var area = ["draft","submitted","published"][i];
+    var d = await get("/api/skill-market/draft" + q({id:id, area:area}));
+    if (d.ok && d.text) return {text:d.text, area:area};
+  }
+  return null;
+}
+function splitDoc(text){
+  var t = String(text||"");
+  if (t.indexOf("---") !== 0) return {fm:"", body:t};
+  var end = t.indexOf("\n---", 3);
+  if (end < 0) return {fm:"", body:t};
+  return {fm: t.slice(0, end + 4), body: t.slice(end + 4).replace(/^\n+/, "")};
+}
+/* 在 front-matter 文本里替换若干键：只动对应行（含 `key: >` 的缩进续行），其余原样保留 */
+function patchFrontMatter(fm, edits){
+  var lines = String(fm||"").split("\n");
+  var keys = Object.keys(edits);
+  keys.forEach(function(k){
+    var val = edits[k];
+    var out = [];
+    var done = false;
+    for (var i = 0; i < lines.length; i++){
+      var ln = lines[i];
+      var m = ln.match(/^([A-Za-z_][\w-]*)\s*:\s*(.*)$/);
+      if (m && m[1] === k){
+        out.push(k + ": " + val);
+        done = true;
+        // 吸收该键的缩进续行（`description: >` 折叠块）
+        var j = i + 1;
+        while (j < lines.length && /^\s+\S/.test(lines[j])) j++;
+        i = j - 1;
+        continue;
+      }
+      out.push(ln);
+    }
+    lines = out;
+    if (!done){                                   // 原来没有这个键 → 追加到 front-matter 末尾（--- 之前）
+      var close = lines.length - 1;
+      while (close > 0 && lines[close].trim() === "") close--;
+      lines.splice(close, 0, k + ": " + val);
+    }
+  });
+  return lines.join("\n");
+}
+async function loadEdit(){
+  var id = $("editPick").value;
+  if (!id) { toast("先选一个技能", "err"); return; }
+  var got = await fetchDraftText(id);
+  if (!got) { toast("读不到草稿原文（可能不在草稿区）：" + id, "err"); return; }
+  var parts = splitDoc(got.text);
+  STATE.current = id;
+  STATE.fmText = parts.fm;
+  STATE.baseline = parts.body;
+  STATE.loadedArea = got.area;
+
+  var meta = {};
+  parts.fm.split("\n").forEach(function(ln){
+    var m = ln.match(/^([A-Za-z_][\w-]*)\s*:\s*(.*)$/);
+    if (m) meta[m[1]] = m[2];
+  });
+  var F = [["name","技能 id（kebab-case，不建议改）",true],
+           ["title","中文标题",false],
+           ["description","描述（市场与检索都用它）",false],
+           ["version","版本",false],
+           ["owner","负责人",false],
+           ["category","分类",false],
+           ["plugin","插件文件名（如 plugin.py）",false],
+           ["allowed_capabilities","允许的能力（逗号分隔）",false],
+           ["data_scope","数据作用域（逗号分隔）",false]];
+  $("editForm").innerHTML = F.map(function(f){
+    var v = meta[f[0]] == null ? "" : meta[f[0]];
+    if ((f[0] === "allowed_capabilities" || f[0] === "data_scope") && v){
+      v = v.replace(/^\[|\]$/g, "").split(",").map(function(x){
+        return x.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean).join(", ");
+    }
+    return '<label class="f">' + esc(f[1]) + '</label>'
+         + '<input type="text" data-f="' + f[0] + '" value="' + esc(v) + '"' + (f[2] ? ' disabled' : '') + '>';
+  }).join("");
+  $("editBody").value = STATE.baseline;
+  $("editHint2").textContent = "原文取自 " + got.area + " 区；未在表单里的 front-matter 字段（status/tests/fixture…）会原样保留。";
+  renderPreview(); renderDiff(); updateStat();
+  $("editResult").textContent = "还没校验。";
+}
+function formEdits(){
+  var edits = {};
+  document.querySelectorAll("#editForm [data-f]").forEach(function(el){
+    var k = el.dataset.f, v = el.value.trim();
+    if (k === "allowed_capabilities" || k === "data_scope"){
+      var arr = v.split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+      edits[k] = "[" + arr.map(function(x){ return '"' + x + '"'; }).join(", ") + "]";
+    } else if (v) {
+      edits[k] = v;
+    }
+  });
+  return edits;
+}
+function currentDoc(){
+  return patchFrontMatter(STATE.fmText || "---\n---", formEdits())
+       + "\n\n" + ($("editBody").value || "");
+}
+function renderPreview(){
+  $("editPreview").textContent = currentDoc();
+}
+function diffLines(a, b){
+  var A = a.split("\n"), B = b.split("\n"), out = [], n = Math.max(A.length, B.length);
+  for (var i = 0; i < n; i++){
+    if (A[i] === B[i]) out.push({t:"same", v:A[i]});
+    else {
+      if (A[i] !== undefined) out.push({t:"del", v:A[i]});
+      if (B[i] !== undefined) out.push({t:"add", v:B[i]});
+    }
+  }
+  return out;
+}
+function renderDiff(){
+  var d = diffLines(STATE.baseline || "", $("editBody").value || "");
+  var added = d.filter(function(x){ return x.t === "add"; }).length;
+  var del = d.filter(function(x){ return x.t === "del"; }).length;
+  var h = '<div class="muted" style="margin-bottom:6px">+ ' + added + ' 行 / - ' + del + ' 行'
+        + (added + del === 0 ? '（正文与载入时一致）' : '（改动后必须重新批准才能安装）') + '</div>';
+  h += d.map(function(x){
+    var p = x.t === "add" ? "+ " : (x.t === "del" ? "- " : "  ");
+    return '<span class="' + x.t + '">' + esc(p + (x.v==null?"":x.v)) + '</span>';
+  }).join("");
+  $("editDiff").innerHTML = h;
+}
+function updateStat(){
+  var t = $("editBody").value || "";
+  var secs = (t.match(/^##\s+/gm) || []).length;
+  $("editStat").textContent = t.split("\n").length + " 行 · " + t.length + " 字符 · " + secs + " 个二级标题"
+    + (STATE.loadedArea ? " · 来源区 " + STATE.loadedArea : "");
+}
+async function doSave(){
+  var id = $("editPick").value || STATE.current;
+  if (!id) { toast("先选一个技能", "err"); return false; }
+  var d = await patch("/api/skill-studio/drafts/" + encodeURIComponent(id), {
+    actor:"teacher", text: currentDoc()
+  });
+  if (!d.ok) { toast("保存失败：" + (d.error||"") + (d.gate ? "（gate=" + d.gate + "）" : ""), "err"); return false; }
+  STATE.baseline = $("editBody").value;
+  renderDiff();
+  toast("已保存草稿", "ok");
+  await refreshAll();
+  return true;
+}
+async function doValidate(){
+  var id = $("editPick").value || STATE.current;
+  if (!id) { toast("先选一个技能", "err"); return; }
+  if (!(await doSave())) return;
+  var d = await post("/api/skill-studio/drafts/" + encodeURIComponent(id) + "/validate", {});
+  $("editResult").innerHTML = d.ok
+    ? '<span class="badge ok">结构校验通过</span>'
+      + '<div class="mono muted" style="margin-top:6px">' + esc(d.content_hash||"") + '</div>'
+      + (d.sections_required && d.sections_required.length
+          ? '<div class="muted" style="margin-top:6px">七段结构要求：' + esc(d.sections_required.join("、")) + '</div>' : "")
+    : '<span class="badge err">' + ((d.problems||[]).length || 1) + ' 个问题</span>'
+      + '<ul>' + ((d.problems||[d.error||"未知错误"]).map(function(p){ return '<li class="fail">' + esc(p) + '</li>'; }).join("")) + '</ul>';
+}
+
+/* ─────────────────────────── 已安装库 ─────────────────────────── */
+function renderLibrary(){
+  var f = ($("libFilter").value || "").trim().toLowerCase();
+  var rows = STATE.skills.filter(function(s){ return !f || (s.name||"").toLowerCase().indexOf(f) > -1; });
+  $("libScope").textContent = STATE.libScope ? ("可见范围：" + STATE.libScope) : "";
+  if (!rows.length) { $("libTable").innerHTML = '<div class="empty">没有技能</div>'; return; }
+  var h = '<table><thead><tr><th>技能</th><th>状态</th><th>版本</th><th>可加载</th><th>资源</th><th></th></tr></thead><tbody>';
+  rows.forEach(function(s){
+    h += '<tr>'
+      + '<td><b>' + esc(s.name) + '</b>' + (s.title ? '<div class="muted">' + esc(s.title) + '</div>' : '') + '</td>'
+      + '<td><span class="pill ' + esc(s.status||"") + '">' + esc(s.status||"") + '</span></td>'
+      + '<td>' + esc(s.version||"—") + '</td>'
+      + '<td>' + (s.loadable ? '<span class="pass">是</span>' : '<span class="muted" title="' + esc(s.loadable_reason||"") + '">否</span>') + '</td>'
+      + '<td class="muted">' + (s.files==null ? "—" : esc(s.files)) + '</td>'
+      + '<td style="white-space:nowrap">'
+      +  '<button class="btn" onclick="showLib(\'' + esc(s.name) + '\')">详情</button> '
+      +  '<button class="btn" onclick="enqueueSync(\'' + esc(s.name) + '\')">同步入队</button>'
+      + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  $("libTable").innerHTML = h;
+}
+async function showLib(id){
+  var st = await get("/api/skill-studio/status/" + encodeURIComponent(id));
+  var vs = await get("/api/skill-studio/versions/" + encodeURIComponent(id));
+  var pol = await get("/api/skill-studio/export-policy/" + encodeURIComponent(id));
+  var h = '<div class="kv">'
+    + '<div>状态</div><div><span class="pill ' + esc(st.state||"") + '">' + esc(st.studio_state||st.state) + '</span></div>'
+    + '<div>当前版本</div><div>' + esc(vs.current_version||"—") + '</div>'
+    + '<div>历史版本</div><div>' + (vs.count||0) + ' 个（被替代 ' + (vs.superseded_count||0) + ' 个）</div>'
+    + '<div>可进团队库</div><div>' + (pol.allowed ? '<span class="pass">允许</span>' : '<span class="fail">不允许：' + esc((pol.reasons||[]).join("；")) + '</span>') + '</div>'
+    + '<div>风险等级</div><div>' + esc(pol.risk||"—") + '</div>'
+    + '</div>';
+  if (vs.versions && vs.versions.length){
+    h += '<h2 style="margin-top:14px">版本历史</h2><table><thead><tr><th>版本</th><th>激活</th><th>被谁替代</th><th>时间</th></tr></thead><tbody>'
+      + vs.versions.map(function(v){
+          return '<tr><td class="mono">' + esc(v.version) + '</td>'
+            + '<td>' + (v.active ? '<span class="pass">激活</span>' : '<span class="muted">已替代</span>') + '</td>'
+            + '<td class="mono">' + esc(v.superseded_by||"—") + '</td>'
+            + '<td class="muted">' + esc(v.superseded_at||"—") + '</td></tr>';
+        }).join("") + '</tbody></table>';
+  }
+  $("libDetail").innerHTML = h;
+  $("libDetailCard").style.display = "";
+}
+async function enqueueSync(id){
+  var d = await post("/api/skill-studio/sync/" + encodeURIComponent(id) + "/enqueue", {actor:"teacher"});
+  if (!d.ok) { toast("入队被拒：" + ((d.reasons||[]).join("；") || d.error || ""), "err"); return; }
+  toast("已进入同步队列：" + id, "ok");
+  await loadOutbox(); await loadOverview();
+}
+async function loadOutbox(){
+  var d = await get("/api/skill-studio/sync/outbox");
+  if (!d.ok || !d.count) { $("outboxBox").innerHTML = '<span class="muted">队列为空（未同步任何技能）</span>'; return; }
+  $("outboxBox").innerHTML = '<table><thead><tr><th>技能</th><th>版本</th><th>内容哈希</th><th>入队时间</th></tr></thead><tbody>'
+    + d.items.map(function(x){
+        return '<tr><td><b>' + esc(x.skill) + '</b></td><td>' + esc(x.version||"—") + '</td>'
+          + '<td class="mono">' + esc((x.content_hash||"").slice(0,22)) + '…</td>'
+          + '<td class="muted">' + esc(x.enqueued_at||"") + '</td></tr>';
+      }).join("") + '</tbody></table>';
+}
+
+/* ─────────────────────────── 审计 ─────────────────────────── */
+async function loadAudit(){
+  var d = await get("/api/skill-studio/audit" + q({skill:$("auditSkill").value, event:$("auditEvent").value, limit:100}));
+  var rows = (d && d.records) || [];
+  if (!rows.length) { $("auditTable").innerHTML = '<div class="empty">没有匹配的审计记录</div>'; return; }
+  $("auditTable").innerHTML = '<table><thead><tr><th>事件</th><th>技能</th><th>操作者</th><th>结果</th><th>闸门</th></tr></thead><tbody>'
+    + rows.map(function(r){
+        var res = r.result || {};
+        return '<tr><td class="mono">' + esc(r.event) + '</td><td>' + esc(r.skill||r.candidate_id||"—") + '</td>'
+          + '<td>' + esc(r.actor||"—") + '</td>'
+          + '<td>' + (res.ok ? '<span class="pass">' + esc(res.code||"ok") + '</span>' : '<span class="fail">' + esc(res.code||"fail") + '</span>') + '</td>'
+          + '<td class="muted mono">' + esc(Object.keys(r.gates||{}).length ? JSON.stringify(r.gates) : "—") + '</td></tr>';
+      }).join("") + '</tbody></table>';
+}
+async function verifyChain(){
+  var d = await get("/api/skill-create/verify-chain");
+  toast(d.ok ? ("哈希链校验通过（" + (d.records||0) + " 条记录）") : ("哈希链有问题：" + (d.error||"")), d.ok?"ok":"err");
+}
+async function loadSafeImport(){
+  var d = await get("/api/skill-studio/safe-import");
+  if (!d.ok) { $("safeImportBox").textContent = "读取失败"; return; }
+  $("safeImportBox").innerHTML = '<div class="kv">'
+    + '<div>允许导入的根目录</div><div class="mono">' + (d.import_roots||[]).map(esc).join("<br>") + '</div>'
+    + '<div>允许的后缀</div><div class="mono">' + esc((d.allowed_suffixes||[]).join(" ")) + '</div>'
+    + '<div>禁止的后缀</div><div class="mono">' + esc((d.denied_suffixes||[]).join(" ")) + '</div>'
+    + '<div>skill id 规则</div><div class="mono">' + esc(d.skill_id_regex||"") + '</div>'
+    + '<div>单文件上限</div><div>' + esc(d.max_import_bytes||0) + ' 字节</div>'
+    + '</div>'
+    + '<div class="muted" style="margin-top:8px">客户端传的本机绝对路径一律拒绝（doc 34 §5.5）；相对路径按导入根解析。</div>';
+}
+
+/* ─────────────────────────── 页签与刷新 ─────────────────────────── */
+function switchTab(name){
+  document.querySelectorAll("nav.tabs button").forEach(function(b){
+    b.classList.toggle("active", b.dataset.tab === name);
+  });
+  document.querySelectorAll(".panel").forEach(function(p){
+    p.classList.toggle("active", p.id === "panel-" + name);
+  });
+  if (name === "review") loadReview();
+  if (name === "edit") { if (!$("editForm").innerHTML) loadEdit(); }
+  if (name === "library") { renderLibrary(); loadOutbox(); }
+  if (name === "audit") { loadAudit(); loadSafeImport(); }
+}
+async function refreshAll(){
+  await loadOverview();
+  await loadSkills();
+  await loadCandidates();
+  await loadReviewPick(STATE.current);
+  renderLibrary();
+  await loadOutbox();
+}
+document.querySelectorAll("nav.tabs button").forEach(function(b){
+  b.addEventListener("click", function(){ switchTab(b.dataset.tab); });
+});
+$("candFilter").addEventListener("input", renderCandidates);
+$("candOnlyReady").addEventListener("change", renderCandidates);
+$("libFilter").addEventListener("input", renderLibrary);
+$("editBody").addEventListener("input", function(){ renderDiff(); updateStat(); renderPreview(); });
+document.addEventListener("input", function(e){
+  if (e.target.closest && e.target.closest("#editForm")) { renderPreview(); renderDiff(); }
+});
+refreshAll().then(function(){
+  // 支持锚点：/static/skill-studio.html#<技能名>  → 直接打开该技能的审查页
+  //           #candidates / #library / #audit / #edit → 直接切到对应页签
+  var want = "";
+  try { want = decodeURIComponent(String(location.hash || "").replace(/^#/, "")); } catch (e) { want = ""; }
+  var TABS = {candidates:"candidates", review:"review", edit:"edit",
+              library:"library", audit:"audit"};
+  if (TABS[want]) {
+    switchTab(TABS[want]);
+  } else if (want) {
+    STATE.current = want;
+    if ($("reviewPick")) $("reviewPick").value = want;
+    if ($("editPick")) $("editPick").value = want;
+    switchTab("review");
+  } else if (STATE.skills.some(function(s){ return s.status === "submitted"; })) {
+    switchTab("review");
+  }
+});
+</script>
+</body>
+</html>
